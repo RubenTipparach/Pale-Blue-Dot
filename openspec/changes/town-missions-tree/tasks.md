@@ -108,3 +108,7 @@ for 4.1, their missions reading NOT YET.
       row in its own icon), `lost-compass.jpg` and `lost-compass-close.png`
       (the red pin on the compass), `lost-map.jpg` (LOST VILLAGER on the map),
       in `docs/screenshots/town-missions-tree/`.
+
+## 7. A toast when the tree opens (design 12)
+
+- [ ] 7.1 `TownMissions::opened_toast` raised where the record opens; the desktop shows "Town missions unlocked" in the toast column. Verify: a toasts test that a note toast keeps its own row beside an item's; the bot's "Find a town" shot logs `TOAST town missions`.

@@ -27,6 +27,9 @@
     // Seconds new ground detail takes to dissolve in over the old when a new
     // fine set lands, rather than switching in one frame (detail-fade).
     lod_fade_s: 1.0,
+    // Seconds a piece taken by hand (a pebble, a bush) sinks into the ground,
+    // and rises again when it grows back (gather-by-hand).
+    taken_sink_s: 0.25,
     // The share of each fine band, inward from its edge, across which the two
     // detail levels cross-fade with distance through complementary dither
     // masks, as Unity's LOD cross-fade does (distance-lod-fade). 0 is hard.

@@ -54,3 +54,21 @@
 - [ ] Compaction.
 - [ ] A seed per world, and the state machine that lets one be built on a load.
 - [ ] The flight pose.
+
+## 9. The worlds list scrolls (owner's playtest, 2026-11-22; `docs/plans/2026-11-22-playtest-todo.md`)
+
+- [x] 9.1 A scroll area for the rows, with the wheel and a bar; NAME, NEW WORLD and BACK fixed under it.
+  Built in `desktop/menu.rs`: the rows sit in a `WorldsScroll` area (up to
+  270 native px, ten rows, then it scrolls) between the WORLDS lintel and a
+  fixed `SaveFoot` that holds the trouble line, NAME and NEW WORLD, with BACK
+  under that. The wheel scrolls it (`wheel_scroll`, now clamped to the
+  content as the wheel turns); a stone `slider-track` groove with the oak
+  `slider-knob` grip stands on its right edge only while the rows overflow,
+  and a press or drag on it scrolls to the cursor. A rebuild keeps the
+  offset (only the rows are rebuilt; the area keeps its `ScrollPosition`),
+  a DELETE confirm stands in the rows' place without touching it so CANCEL
+  returns to the same rows, the page opens at the top, and the open world's
+  CONTINUE row is drawn first (`draw_order`). Pinned by
+  `the_worlds_list_scrolls_and_keeps_its_place`, `the_open_world_is_drawn_first`
+  and `the_worlds_grip_follows_the_scroll`. Not yet seen in the game: 9.2.
+- [ ] 9.2 Screenshots with 12 and 30 worlds.

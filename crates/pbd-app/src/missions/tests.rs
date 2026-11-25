@@ -142,8 +142,9 @@ fn every_kind_counts_from_its_message() {
 }
 
 /// The shipped tree on a new world (which owns no tools since
-/// `tool-crafting`) opens on "Gather by hand", and the HUD's line follows
-/// the digging; three fish are counted one at a time once fishing opens.
+/// `tool-crafting`) opens on "Gather by hand", then "Open your pack",
+/// and the HUD's line follows the digging; three fish are counted one at a
+/// time once fishing opens.
 #[test]
 fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
     let mut app = app(None);
@@ -181,11 +182,15 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
     }
     app.update();
     assert!(done(&app, "gather"));
+    assert_eq!(line(&app).as_deref(), Some("Open your pack 0/1"));
+    app.world_mut()
+        .write_message(Did::new(Kind::Open, "pack", 1));
+    app.update();
     assert_eq!(line(&app).as_deref(), Some("Craft an axe 0/1"));
     let missions = app.world().resource::<Missions>();
     assert_eq!(
         missions.notice.as_ref().map(|(t, _)| t.as_str()),
-        Some("Gather by hand")
+        Some("Open your pack")
     );
     // The axe was locked until the gathering was done.
     let locks = app.world().resource::<RecipeLocks>();
@@ -195,12 +200,14 @@ fn a_new_world_starts_at_the_first_mission_and_the_line_follows() {
     {
         let mut missions = app.world_mut().resource_mut::<Missions>();
         for id in [
+            "pack",
             "axe",
             "wood",
             "planks-rope",
             "crafting-table",
             "stone-tools",
             "fire",
+            "storage",
             "rod",
         ] {
             missions.progress.done.insert(id.into());
@@ -288,7 +295,10 @@ fn an_old_world_joins_with_what_it_holds_and_a_record_reads_back() {
             .progress
             .line(chain)
             .as_deref(),
-        Some("Go fishing 0/3")
+        // Every mission before the ones its tools closed is done with them
+        // (`starter-missions`, "The first mission: open the pack"), so the
+        // trunk's chest, after the fire, is next.
+        Some("A chest: Make a chest 0/1, Set it down 0/1, Store a stack 0/1")
     );
 }
 

@@ -174,3 +174,54 @@ needs either a taller coastal band or the rivers, and the design takes both.
   took 3 s with six points and about 14 s with the rings (this container,
   under load from other jobs, so a rough figure). The owner's machine
   should measure tier build time before and after (task 4.3).
+
+## Swamp water is not cached the way rivers are (owner, 2026-11-22)
+
+The owner, playtesting: "Does the swamp water follow same cache rules as
+river? They seem slow to load".
+
+**No, it does not (found by reading the code; not yet timed).**
+- The river cache (`river-cache` design 11) memoizes every river term:
+  - the drainage map;
+  - `carve`, the water tops, the far sheets and the settled water;
+  - it saves them to `saves/cache/`;
+  - after `READY` it fills them ahead along every river within 600 m.
+- Nothing of a swamp is in it. Each time a swamp cell's top is made
+  (`planet_gen::top_material`, `Biome::Swamp`), on every rebuild of the fine
+  set and on every launch:
+  - `swamp_patch`, a noise sample;
+  - for a pool candidate, `swamp_pool_held`, three rings of 16 points: 48
+    calls to `surface_altitude`. Each is the full height noise (continent
+    6 octaves, ridges 4, hills 3, detail 2), then `rivers::carve`;
+  - the carve's memo is keyed by the exact point, so the 48 ring points are
+    48 new keys a cell. The unrivered noise under them is never cached;
+  - whether the cell is a swamp at all asks `rivers::beside` for a river's
+    swamp (`at_widened`, a scan of the map round the point), also uncached.
+- So a swamp's pools cost something like 50 height evaluations a top cell, on
+  every load near one, where a river's terms after the first visit are memo
+  hits. That fits "slow to load". It is a reading, not a measurement.
+
+**Plan (a performance change; no permission needed, CLAUDE.md, the write-up
+first):**
+1. **Measure.** A `SWAMP_TIME` instrument counts the calls to
+   `swamp_pool_held` and `rivers::beside` in a fine-set rebuild and their
+   time, and logs them beside the rebuild's total. It runs on the owner's
+   desktop after the playtest: a cold launch and a warm one, standing in a
+   swamp and standing by a river, on the same world.
+2. **Cache it as the river is, exact by construction.**
+   - `swamp_pool_held` memoized by its inputs (the direction's bits and the
+     floored surface) and the swamp test's `beside` by the direction's bits.
+     Both go in the river cache's store, written to its file with the rest,
+     under the same digest of the config, so a change to the generator
+     makes a new file.
+   - A hit is the value the call would have returned, so no cell's
+     material, water or save changes.
+   - Tests: a tier's columns the same cold, warm and read back from the
+     file, in a swamp.
+3. **Filled ahead.** The background fill after `READY` takes the swamp cells
+   within 600 m as it takes river corridors, at low priority.
+4. **Measure again** in the same sitting, and report before and after.
+
+**Not in the plan:** fewer ring points or a cheaper pool test. Either would
+change which cells hold water, which is a change to the ground, so a new
+generator version (CLAUDE.md, "Saved games survive every change").

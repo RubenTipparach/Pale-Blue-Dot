@@ -927,3 +927,56 @@ have always used) is an upright cylinder on the tree's cell centre. In
 plums while the crosshair is on the grass beside the drawn trunk: the hit
 cylinder and the drawn trunk do not quite agree. This is not new (E picked
 the plums there too); the prompt now shows it. Left for its own change.
+
+## Tab closes what is open; an X on every stone panel (owner, 2026-11-22)
+
+The owner, playtesting: "Tab should by default close out of menu if a menu
+is open. If no menu is open then tab opens pack." And: "Crafting menu could
+use a little x in the corner too. Maybe you can add a little x to all the
+stone menus".
+
+**Tab.**
+- In the world, Tab opens the pack, as now.
+- With any screen open over the world, Tab closes it to the world: the pack,
+  a station (workbench, forge, kitchen), a chest, the missions, the map, the
+  guide, breeding and the pause menu.
+- On the title, settings and the worlds page Tab does nothing; those are
+  left to Esc and their BACK buttons.
+- I keeps its own toggle (pack, or pack from missions), and O, M, J and B are
+  unchanged.
+
+**The X.**
+- Every stone panel's carved lintel (`menu::lintel`) gets a small oak
+  plaque with an X in its top-right corner, the kit's plaque at 22 x 22 px.
+- Pressing it does what Esc does on that screen (`MenuAction::Back`,
+  `Screen::back`): a panel over the world closes to the world, settings and
+  the worlds page step back as BACK does.
+- One place builds it, so a new panel with a lintel has its X too.
+- The X is a key in the locale file (`menu.close`), like every other word.
+- On the pack and the craft panel the lintel sits on the panel's top band, so
+  the X is at that band's corner.
+
+Check: screenshots of the pack, the workbench, a chest, the forge, the
+kitchen, the map, the pause menu and the worlds page, each with its X, in
+`docs/screenshots/stone-and-wood-ui/`. The X's place is tuned from them.
+
+## What a recipe takes, against what is carried (owner, 2026-11-22)
+
+The owner: "When showing items for recipe you just show one number. Need to
+show x/3 stone for example for making an axe".
+
+An input's well shows how many the recipe takes ("3"), and the carried
+count is only in its tooltip ("stone: need 3, have 1"). Change: every input
+shows carried over needed, "1/3", on the hands' panel, the workbench, the
+forge and the campfire. Outputs keep their plain count, shown only above one.
+- The pack and workbench wells are repainted every frame already, so they
+  take it there (`craft::paint`, `have_of_need`).
+- The forge's and kitchen's lists were written once when spawned. Their input
+  counts carry a `NeedCount(item, n)` and are repainted while the station is
+  open (`craft::paint_need_counts`), from the same pack-and-hotbar count.
+- The number is digits and a slash, no words, so it needs no locale key.
+- A two-digit carried count ("12/3") may run past a 16 px well. Seen on the
+  screenshots; if it crowds, the carried count is capped at "9+".
+
+Check: screenshots of the stone axe with 0, 1 and 3 stone carried, and of the
+forge, in `docs/screenshots/stone-and-wood-ui/`.

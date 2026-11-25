@@ -12,6 +12,7 @@
 
 use bevy::prelude::*;
 use pbd_app::drops::Drops;
+use pbd_app::held::stroke::Meets;
 use pbd_app::planet::Applied;
 use pbd_app::planet::NearField;
 use pbd_app::planet::surface_height;
@@ -50,6 +51,12 @@ pub struct Mining {
     /// version. A lookup finds the record and may build its column, so it is
     /// done once per target rather than every frame of a hold.
     lookup: Option<(Block, Digger, u64, Result<f32, Refusal>)>,
+    /// What the held button's stroke met last frame (`held-swing` decision
+    /// 11): a block or tree that breaks, the air, or a refusal. Drawn only.
+    meets: Meets,
+    /// The tree the stroke is on, its cell key, kept through the pause
+    /// after a log: each impact shakes it (`tree-punch-shake`). Drawn only.
+    tree_worked: Option<u32>,
 }
 
 impl Mining {
@@ -163,9 +170,11 @@ pub(super) fn tree_standing(save: &WorldSave, axe_logs: u16, cell: u32) -> bool 
 }
 
 /// Whether `block` is the ground a standing tree grows from: its cell grows a
-/// tree the axe has not felled, and the block is the cell's top (solid, with
-/// air over it). That ground is not dug or tilled until the tree is cut down
-/// (`tool-crafting` decision 3a).
+/// tree the axe has not felled, and the block is the one the tree is rooted
+/// in, the cell's generated top (the layer under its surface height), still
+/// solid. That one block is not dug or tilled until the tree is cut down
+/// (`tool-crafting` decision 3a); the rest of the column is ground like any
+/// other (`tool-crafting`, "A standing tree holds only its own block").
 pub(super) fn under_standing_tree(
     fine: &PlanetFine,
     save: &WorldSave,
@@ -186,8 +195,9 @@ pub(super) fn under_standing_tree(
     if !tree_standing(save, axe_logs, cell) {
         return false;
     }
-    material_of(fine, save, (cell, layer)).is_some_and(|m| m != Material::Air && !m.is_water())
-        && material_of(fine, save, (cell, layer + 1)) == Some(Material::Air)
+    pbd_core::column::layer_at(r.direction_height[3] - 0.5) == Some(layer)
+        && material_of(fine, save, (cell, layer))
+            .is_some_and(|m| m != Material::Air && !m.is_water())
 }
 
 /// Which cell and layer a world point is in, and whether it is solid.
@@ -253,10 +263,7 @@ fn why_unsampled(contact: &PlanetContact, point: Vec3) -> Option<Unsampled> {
 /// The record index of a cell by its key. The march answers in keys because
 /// that is what an edit is saved by; applying one needs the slot.
 pub(super) fn record_of(fine: &PlanetFine, cell: u32) -> Option<usize> {
-    fine.set
-        .finest_records()
-        .iter()
-        .position(|record| record.key() == cell)
+    fine.set.finest_index_of(cell)
 }
 
 /// What the player's hands do as part of an edit: a core rule's input
@@ -417,6 +424,41 @@ pub fn apply_edit(
         }
         return None;
     }
+    // A chest broken (`storage-chests` design 4): what it holds floats out
+    // at its cell, each stack on a line of its own, and its record is
+    // written empty, before the dig's line drops the chest itself. First,
+    // so the chest's own drop takes the next id after the spilled ones.
+    if was == Material::Chest && material != Material::Chest {
+        let centre = fine
+            .set
+            .finest_records()
+            .get(record)
+            .map(|cell| Vec3::from_slice(&cell.direction_height[..3]))
+            .and_then(Vec3::try_normalize)
+            .map(|direction| {
+                direction.as_dvec3().normalize()
+                    * (f64::from(PLANET_RADIUS) + f64::from(column::layer_altitude(layer)) + 0.5)
+            });
+        let Some(centre) = centre else {
+            error!("edit BLOCKED: chest at cell {cell} has no direction to spill at");
+            return None;
+        };
+        match pbd_app::chests::spill(save, cell, layer as u16, centre, *now_s, &slots.0) {
+            Some(spilled) => {
+                if !spilled.is_empty() {
+                    info!(
+                        "CHEST_SPILL {} stacks from cell {cell} layer {layer}",
+                        spilled.len()
+                    );
+                }
+                drops.live.extend(spilled);
+            }
+            None => {
+                error!("edit BLOCKED: the save did not accept the chest's spill at cell {cell}");
+                return None;
+            }
+        }
+    }
     let mut moved = taken.slots;
     let taken_floats = taken.floats;
     // What floats out does so at the cell's centre, and the magnet brings it
@@ -542,6 +584,43 @@ pub fn apply_edit(
     Some(was)
 }
 
+/// The tree being worked shakes on each impact of the stroke in hand, the
+/// fist's or a tool's, one shake per impact (`tree-punch-shake`, "On the
+/// stroke's impact"; `held-swing` decision 10): what is seen to land and
+/// what moves agree. Drawn only: the impacts read the dig's beat, and no
+/// rule reads the shake.
+pub fn shake_on_impact(
+    mut impacts: MessageReader<pbd_app::held::StrokeImpact>,
+    mining: Res<Mining>,
+    fine: Option<Res<PlanetFine>>,
+    time: Res<Time>,
+    shake: Option<ResMut<pbd_app::tree_shake::TreeShake>>,
+    // The bark dust and leaves let go on each impact (`tree_fx`).
+    (tools, fx): (
+        Option<Res<pbd_app::fish::ToolSlot>>,
+        Option<ResMut<pbd_app::tree_fx::TreeFxQueue>>,
+    ),
+) {
+    let landed = impacts.read().filter(|i| i.meets == Meets::Breaks).count();
+    let (Some(tree), Some(fine), Some(mut shake)) = (mining.tree_worked, fine, shake) else {
+        return;
+    };
+    if landed == 0 {
+        return;
+    }
+    if let Some(id) = pbd_app::tree_shake::tree_id(&fine, tree) {
+        let now = time.elapsed_secs();
+        shake.hit(tree, id, now);
+        if let Some(mut fx) = fx {
+            let by_axe = tools
+                .as_deref()
+                .is_some_and(|t| matches!(t.digging(), Some((Tool::Axe, _))));
+            fx.0.push(pbd_app::tree_fx::TreeFxEvent::Hit { cell: tree, by_axe });
+        }
+        debug!("TREE_SHAKE hit tree {id} at cell {tree}, {now:.3} s");
+    }
+}
+
 /// The in-process server carves its columns with the tier's own worms
 /// (`multiplayer` design 18), so the cell it decides on is the cell the
 /// player sees. Without touching the save's change ticks: nothing about the
@@ -596,37 +675,68 @@ pub fn dig_and_place(
         MessageWriter<pbd_app::missions::Did>,
         Option<ResMut<pbd_app::walking::Lift>>,
     ),
+    // The fell's dust and leaves (`tree_fx`).
+    mut tree_fx: Option<ResMut<pbd_app::tree_fx::TreeFxQueue>>,
 ) {
     if let Some(ground) = ground.as_mut() {
         ground.0 = None;
     }
     let dt = time.delta_secs();
     let between = dig.0.between_s;
+    // The walker has the pointer, and a digger is in hand (bare hands or a
+    // digging tool; the rod casts).
+    let captured = walking
+        .as_deref()
+        .is_some_and(|readout| readout.active && readout.captured);
+    let a_digger = tools.bare_handed() || tools.digging().is_some();
     // The tool in hand strokes on the dig's beat (`held-swing` decision 5):
     // last frame's answer, a frame behind, which nobody can see. While a
     // block breaks, its time and how far in; in the pause after it, on
-    // past the break.
+    // past the break. Held on anything else, it swings on a free beat with
+    // what the click meets (decision 11).
     if let Some(mut swinging) = swinging {
+        use pbd_app::held::stroke::DigBeat;
         let was = swinging.0;
         let beat = match mining.breaking.timing() {
-            Some((break_s, elapsed_s)) => pbd_app::held::stroke::DigBeat {
+            Some((break_s, elapsed_s)) => DigBeat {
                 working: true,
+                meets: Meets::Breaks,
                 break_s,
                 between_s: between,
                 local_s: elapsed_s,
             },
-            None if was.working && mining.breaking.pause_left() > 0.0 => {
-                pbd_app::held::stroke::DigBeat {
+            None if was.working
+                && was.meets == Meets::Breaks
+                && mining.breaking.pause_left() > 0.0 =>
+            {
+                DigBeat {
                     local_s: was.break_s + (between - mining.breaking.pause_left()).max(0.0),
                     ..was
                 }
             }
-            None => pbd_app::held::stroke::DigBeat::default(),
+            None if captured
+                && a_digger
+                && buttons.pressed(MouseButton::Left)
+                && mining.meets != Meets::Breaks =>
+            {
+                DigBeat {
+                    working: true,
+                    meets: mining.meets,
+                    ..DigBeat::default()
+                }
+            }
+            None => DigBeat::default(),
         };
         if was != beat {
             swinging.0 = beat;
         }
     }
+    // The tree the stroke is on is kept through the pause after a log, so
+    // the impact on the break shakes it.
+    if mining.breaking.pause_left() <= 0.0 {
+        mining.tree_worked = None;
+    }
+    mining.meets = Meets::Air;
     let Some((transform, _)) = cameras.iter().find(|(_, camera)| camera.is_active) else {
         mining.breaking.step(dt, false, None, between);
         return;
@@ -636,7 +746,7 @@ pub fn dig_and_place(
     // is not a dig: Bevy's UI does not consume the raw button, so without the
     // capture test a click on a menu row swings the shovel through the button
     // at whatever is behind it.
-    if !walking.is_some_and(|readout| readout.active && readout.captured) {
+    if !captured {
         aimed.target = None;
         mining.breaking.step(dt, false, None, between);
         return;
@@ -695,21 +805,14 @@ pub fn dig_and_place(
             Some(Digger::Tool(Tool::Axe, tier)) => {
                 wood / dig.0.tier_speeds[usize::from(tier.digit())]
             }
-            _ => wood / dig.0.hand_speed,
+            _ => wood / dig.0.hand_log_speed,
         };
         let step = mining
             .breaking
             .step(dt, true, Some(((tree, TREE_LAYER), secs)), between);
-        // A hit shakes the tree: each log, and every half second the button
-        // is held on it (`tree-punch-shake` design 4).
-        let now = time.elapsed_secs();
-        if let Some(shake) = shake.as_mut()
-            && (matches!(step, Step::Broken(_)) || shake.due(tree, now))
-            && let Some(id) = pbd_app::tree_shake::tree_id(&fine, tree)
-        {
-            shake.hit(tree, id, now);
-            debug!("TREE_SHAKE hit tree {id} at cell {tree}, {now:.3} s");
-        }
+        // The stroke's impacts shake it (`shake_on_impact`).
+        mining.meets = Meets::Breaks;
+        mining.tree_worked = Some(tree);
         if let Step::Broken(_) = step {
             take_log(
                 &mut edits,
@@ -721,6 +824,7 @@ pub fn dig_and_place(
                 time.elapsed_secs(),
                 &mut gained,
                 &mut did,
+                tree_fx.as_deref_mut(),
             );
         }
         return;
@@ -777,6 +881,15 @@ pub fn dig_and_place(
             Refusal::NotADiggingTool | Refusal::NotABlock => {}
         }
     }
+    // What the stroke meets (`held-swing` decision 11): a block under a
+    // standing tree, or one too hard for the digger, is a thud; a cell
+    // that is not a block (water) is the air.
+    mining.meets = match secs {
+        _ if rooted => Meets::Refused,
+        Ok(_) => Meets::Breaks,
+        Err(Refusal::NotByHand | Refusal::TierTooLow(_)) => Meets::Refused,
+        Err(Refusal::NotADiggingTool | Refusal::NotABlock) => Meets::Air,
+    };
     let secs = secs.ok();
     let step = mining
         .breaking
@@ -1014,8 +1127,11 @@ pub fn dig_and_place(
         let underfoot = underfoot(&contact, eye, place);
         if underfoot && !head_room(&fine, &edits, place) {
             info!(
-                "PLACE refused: no room over the head to stand on {material:?} at cell {} layer {}",
-                place.cell, place.layer
+                "PLACE refused: no room over the head to stand on {material:?} at cell {} layer {} (over it: {:?}, {:?})",
+                place.cell,
+                place.layer,
+                material_of(&fine, &edits, (place.cell, place.layer + 1)),
+                material_of(&fine, &edits, (place.cell, place.layer + 2)),
             );
             note.say(wall_s, tr("digging.no_room_above"));
             return;
@@ -1154,6 +1270,7 @@ fn take_log(
     wall_s: f32,
     gained: &mut MessageWriter<pbd_app::hotbar::Gained>,
     did: &mut MessageWriter<pbd_app::missions::Did>,
+    fx: Option<&mut pbd_app::tree_fx::TreeFxQueue>,
 ) {
     use pbd_core::gather::{TREE_KIND, TREE_SCHEMA, TreeSpent, TreeTaken};
     let taken: TreeTaken = save
@@ -1174,6 +1291,11 @@ fn take_log(
         note.say(wall_s, tr("farm.no_room"));
         return;
     }
+    // Bark fibre with each log (owner, 2026-11-21: "cutting down trees
+    // should get me fibers too"; `gather-by-hand`): one, when there is room
+    // for it; the log is not held back for want of room for the fibre.
+    let fibre = Item::Good(pbd_core::goods::Good::FIBRE);
+    let got_fibre = moved.give(fibre, 1) == 0;
     let record = pbd_core::records::Record::of(
         TREE_KIND,
         u64::from(tree),
@@ -1192,6 +1314,13 @@ fn take_log(
         count: 1,
         how: pbd_app::hotbar::How::Found,
     });
+    if got_fibre {
+        gained.write(pbd_app::hotbar::Gained {
+            item: fibre,
+            count: 1,
+            how: pbd_app::hotbar::How::Found,
+        });
+    }
     // The toast says it (`item-toasts` decision 6).
     info!("took log {} from the tree at cell {tree}", taken.logs + 1);
     // The last log fells the tree, by axe or by hand (`starter-missions`
@@ -1203,6 +1332,9 @@ fn take_log(
             1,
         ));
         info!("felled the tree at cell {tree}");
+        if let Some(fx) = fx {
+            fx.0.push(pbd_app::tree_fx::TreeFxEvent::Felled { cell: tree });
+        }
     }
 }
 
@@ -1909,7 +2041,8 @@ mod felled_tree_tests {
     /// stroke ("No more wood") and nothing was dug.
     #[test]
     fn the_ground_at_a_felled_tree_s_foot_digs() {
-        let (logs, dug) = hold_at_the_foot(false, 200);
+        // A log by hand takes 4.8 s (`dig.hand_log_speed`): 360 frames at 60 Hz.
+        let (logs, dug) = hold_at_the_foot(false, 360);
         assert_eq!(logs, 1, "a standing tree is worked by the hold");
         assert_eq!(dug, 0, "and its ground is not dug");
         let axe_logs = pbd_app::config::GatherConfig::default().0.axe_logs;

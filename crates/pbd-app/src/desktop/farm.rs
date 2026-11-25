@@ -194,6 +194,11 @@ pub fn wild_at(
     if wild_picked(save, cell, now_s) {
         return None;
     }
+    // No wild plant shares a tree's cell (`farming-and-smelting`, "No wild
+    // plant in a tree's cell").
+    if digging::record_of(fine, cell).is_some_and(|r| grows_tree(&fine.set.finest_records()[r])) {
+        return None;
+    }
     farm.0
         .wild_crop(save.identity.seed, cell, climate_at(fine, cell, layer))
 }
@@ -205,6 +210,15 @@ pub fn wild_picked(save: &WorldSave, cell: u32, now_s: f64) -> bool {
     save.records
         .get(WILD_KIND, u64::from(cell))
         .is_some_and(|r| r.read::<Picked>().is_none_or(|p| !p.grown_back(now_s)))
+}
+
+/// Whether a cell's record grows a tree, by the foliage pass's own rule.
+fn grows_tree(record: &pbd_app::planet::GpuCell) -> bool {
+    pbd_core::flora::grows_tree(
+        &pbd_app::planet::terrain_config().trees,
+        record.spare[0],
+        record.metadata[1],
+    )
 }
 
 /// Pick a wild plant: its seeds and one of its produce, and a record that it
@@ -744,12 +758,18 @@ pub fn use_key(
         ResMut<Drops>,
         Res<pbd_app::sky::Sun>,
     ),
+    (mut open_chest, walkers): (
+        Option<ResMut<super::pack::OpenChest>>,
+        Query<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>,
+    ),
 ) {
     if !keys.just_pressed(KeyCode::KeyF) {
         return;
     }
-    // F shuts a station's panel as it opened it.
-    if matches!(*screen, Screen::Forge | Screen::Kitchen) {
+    // F shuts a station's panel as it opened it, and a chest's.
+    if matches!(*screen, Screen::Forge | Screen::Kitchen)
+        || (*screen == Screen::Pack && open_chest.as_deref().is_some_and(|open| open.0.is_some()))
+    {
         *screen = Screen::Playing;
         return;
     }
@@ -808,6 +828,25 @@ pub fn use_key(
         return;
     };
     let (cell, layer, material) = match act {
+        // A chest opens beside the pack (`storage-chests` design 3), within
+        // the hold's reach of the walker.
+        FarmAct::Open { cell, layer, row } if row.material == Some(Material::Chest) => {
+            let centre = frame.as_deref().copied().unwrap_or_default();
+            let near = walkers
+                .iter()
+                .next()
+                .map(|p| p.0.as_dvec3() - centre.physics_center())
+                .and_then(|walker| super::pack::chest_distance(&fine, walker, cell, layer as u16))
+                .is_some_and(|d| d <= super::pack::HOLD_REACH_M);
+            if let (true, Some(open)) = (near, open_chest.as_deref_mut()) {
+                open.0 = Some((cell, layer as u16));
+                *screen = Screen::Pack;
+                info!("CHEST_OPEN cell {cell} layer {layer}");
+            } else {
+                note.say(wall_s, tr("farm.too_far"));
+            }
+            return;
+        }
         FarmAct::Open { cell, layer, row } => {
             station_at.0 = Some((cell, layer as u16));
             // The kitchen's stations have their own panel (`cooking` design S4).
@@ -1420,7 +1459,7 @@ pub fn show(
             continue;
         }
         let cell = record.key();
-        if wanted.contains_key(&cell) || wild_picked(&save, cell, now_s) {
+        if wanted.contains_key(&cell) || wild_picked(&save, cell, now_s) || grows_tree(record) {
             continue;
         }
         let height = column::layer_altitude(top) + 1.0;
@@ -1480,8 +1519,9 @@ pub fn show(
                 MeshMaterial3d(looks.stages[crop.index()][stage.index()].clone()),
             ));
     }
-    // The forges and workbenches: every such block an edit placed, near the
-    // eye. A campfire is a light, drawn by the column pass (`cooking` S2).
+    // The forges, workbenches and chests: every such block an edit placed,
+    // near the eye. A campfire is a light, drawn by the column pass
+    // (`cooking` S2).
     let mut wanted: HashMap<(u32, u16), (usize, bool, Material)> = HashMap::new();
     for edit in save.edits.all() {
         if !matches!(
@@ -1492,6 +1532,7 @@ pub fn show(
                 | Material::DraftingTable
                 | Material::Grinder
                 | Material::Mixer
+                | Material::Chest
         ) {
             continue;
         }
@@ -1538,6 +1579,38 @@ pub fn show(
         let Some(transform) = standing(&fine, index, usize::from(layer), 0.0).map(drawn) else {
             continue;
         };
+        if material == Material::Chest {
+            // A chest (`storage-chests` design 1): an iron strap across the
+            // lid and a dark iron hasp at its edge, on the wood block; lit
+            // as the ground is, with no outline.
+            commands
+                .spawn((
+                    transform,
+                    Visibility::default(),
+                    LitByField,
+                    LitLikeTerrain,
+                    Faded(1.0),
+                    ForgeView {
+                        cell,
+                        layer,
+                        working: false,
+                        leaving: false,
+                    },
+                ))
+                .with_children(|chest| {
+                    chest.spawn((
+                        Mesh3d(looks.board.clone()),
+                        MeshMaterial3d(looks.iron.clone()),
+                        Transform::from_xyz(0.0, 0.01, 0.0).with_scale(Vec3::new(1.6, 0.5, 0.5)),
+                    ));
+                    chest.spawn((
+                        Mesh3d(looks.vise.clone()),
+                        MeshMaterial3d(looks.iron.clone()),
+                        Transform::from_xyz(1.12, 0.08, 0.0).with_scale(Vec3::new(0.8, 0.7, 1.0)),
+                    ));
+                });
+            continue;
+        }
         if material == Material::DraftingTable {
             // Its board tipped to the front with a sheet on it
             // (`building-planner` design 3), in the plank and the linen.

@@ -56,6 +56,19 @@ pub struct OceanPlaces {
     /// `true` (version 9) only a channel's mouth (where it cuts land, as
     /// version 7 asks) or a version 8 river's own reach.
     pub reef_mouths_only: bool,
+    /// The reef's zones (design B30): where a patch field `reef_patch_m`
+    /// across is over `reef_patch_above`, a reef reaches down to
+    /// `reef_patch_depth_m` rather than `reef_depth_m`, on the same warm
+    /// water. Off (version 7 and 9) when `reef_patch_depth_m` is no deeper
+    /// than `reef_depth_m`. A reef is asked before kelp, so in warm water
+    /// the reef takes a cell kelp's depth would have had.
+    pub reef_patch_m: f32,
+    pub reef_patch_depth_m: f32,
+    pub reef_patch_above: f32,
+    /// Where kelp's rule holds but the coldest sea is at least this warm, C,
+    /// the cell is a reef instead (design B30): kelp keeps the colder water.
+    /// `f32::INFINITY` (version 7 and 9) never.
+    pub reef_over_kelp_c: f32,
 }
 
 impl OceanPlaces {
@@ -81,6 +94,10 @@ impl OceanPlaces {
         boundary_rate: 0.2,
         coast_cells: 2.0,
         reef_mouths_only: false,
+        reef_patch_m: 0.0,
+        reef_patch_depth_m: 6.0,
+        reef_patch_above: 1.0,
+        reef_over_kelp_c: f32::INFINITY,
     };
 
     /// Version 9's rules (`ocean-environments` B15): version 7's, with a
@@ -89,6 +106,23 @@ impl OceanPlaces {
     pub const V9: Self = Self {
         reef_mouths_only: true,
         ..Self::V7
+    };
+
+    /// Version 16's rules (design B30, "reefs should increase to 10%"):
+    /// version 9's, with a reef on warm water down to 18 C, where real reefs
+    /// stop (20 C before), down to 12 m, and to 25 m in zones of a 120 m
+    /// field over its median; where kelp's rule holds on water whose coldest
+    /// day is 12 C or warmer the reef takes the cell, so kelp keeps the
+    /// colder water. Measured on 400,000 directions: reef 9.7% of the sea
+    /// (0.23% on version 15), kelp 5.7% (10.9%), open 78.7% (83.0%).
+    pub const V16: Self = Self {
+        reef_coldest_c: 18.0,
+        reef_depth_m: 12.0,
+        reef_patch_m: 120.0,
+        reef_patch_depth_m: 25.0,
+        reef_patch_above: 0.5,
+        reef_over_kelp_c: 12.0,
+        ..Self::V9
     };
 }
 
@@ -250,6 +284,24 @@ fn river_within(cfg: &TerrainConfig, places: &OceanPlaces, d: Vec3, metres: f32)
         })
 }
 
+/// Salt of the reef's zone field (design B30).
+const REEF_ZONE_SALT: u64 = 0x2EEF_2016;
+
+/// Whether `depth` is inside a reef's depth: `reef_depth_m` everywhere, and
+/// `reef_patch_depth_m` inside the reef's zones (design B30).
+fn reef_depth(cfg: &TerrainConfig, places: &OceanPlaces, d: Vec3, depth: f32) -> bool {
+    if depth <= places.reef_depth_m {
+        return true;
+    }
+    depth <= places.reef_patch_depth_m
+        && planet_gen::noise01(
+            cfg.seed ^ REEF_ZONE_SALT,
+            d,
+            cfg.scale_of(places.reef_patch_m),
+            3,
+        ) > places.reef_patch_above
+}
+
 /// The cell width, m, every body shares (CLAUDE.md, "Hex size is fixed").
 const CELL_M: f32 = 2.833;
 
@@ -305,7 +357,7 @@ fn place_at(cfg: &TerrainConfig, d: Vec3, altitude: f32, with_coast: bool) -> Op
             return Some(Environment::Trench);
         }
     }
-    if depth <= places.reef_depth_m
+    if reef_depth(cfg, places, d, depth)
         && coldest >= places.reef_coldest_c
         && !river_within(cfg, places, d, places.reef_clear_m)
     {
@@ -317,6 +369,10 @@ fn place_at(cfg: &TerrainConfig, d: Vec3, altitude: f32, with_coast: bool) -> Op
         && warmest >= places.kelp_warmest_c.0
         && warmest <= places.kelp_warmest_c.1
     {
+        if coldest >= places.reef_over_kelp_c && !river_within(cfg, places, d, places.reef_clear_m)
+        {
+            return Some(Environment::Reef);
+        }
         return Some(Environment::Kelp);
     }
     Some(if coast(Some(places)) {

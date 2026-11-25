@@ -152,7 +152,7 @@ fn a_bite_struck_in_its_window_puts_the_fish_in_the_slots() {
                     &roster,
                     Some(&mut hotbar),
                     Some(&mut save),
-                    line.float,
+                    false,
                     false,
                 );
                 if matches!(event, Event::Caught { .. }) {
@@ -189,10 +189,40 @@ fn a_bite_struck_in_its_window_puts_the_fish_in_the_slots() {
         &roster,
         None,
         None,
-        Vec3::ZERO,
+        false,
         false,
     );
     assert!(status.text.contains("got away"), "{}", status.text);
+
+    // A river catch counts as fresh water by where it bit, though landing
+    // reels the float to the bank at the sea's level (`starter-missions`,
+    // "River catches counted as sea", 2026-11-22).
+    let up = Vec3::Y;
+    let river = up * (crate::planet::PLANET_RADIUS + 9.0);
+    let bank_at_sea = up * (crate::planet::PLANET_RADIUS - 0.64);
+    assert!(is_fresh(river));
+    assert!(!is_fresh(bank_at_sea));
+    let waters = |bit_fresh: bool| {
+        let mut hotbar = Hotbar::default();
+        let mut save = WorldSave::memory_only();
+        report(
+            &mut FishingStatus::default(),
+            Event::Caught {
+                species: minnow as u16,
+                length_cm: 10,
+            },
+            &roster,
+            Some(&mut hotbar),
+            Some(&mut save),
+            bit_fresh,
+            false,
+        )
+        .into_iter()
+        .find(|d| d.0.kind == pbd_core::missions::Kind::Waters)
+        .map(|d| d.0.what)
+    };
+    assert_eq!(waters(true).as_deref(), Some("fresh"));
+    assert_eq!(waters(false).as_deref(), Some("sea"));
 }
 
 /// A world with no roster for its body has nothing in the water, and the rod

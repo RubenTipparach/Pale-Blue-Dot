@@ -9,6 +9,7 @@ pub mod beaver;
 pub mod bounce;
 pub mod building;
 pub mod cell_key;
+pub mod chest;
 pub mod cloud_puffs;
 pub mod column;
 pub mod cooking;

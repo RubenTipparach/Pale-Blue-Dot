@@ -797,6 +797,12 @@ pub fn field(cfg: &TerrainConfig) -> Option<&'static RiverField> {
 /// read: the app calls it off the frame every half minute and on exit.
 /// Returns the entries written.
 pub fn save_caches() -> usize {
+    save_caches_grown_by(0.0)
+}
+
+/// [`save_caches`], for the worlds whose memos have grown by `share` over
+/// their file (`river_cache::grown_by`): the save while playing.
+pub fn save_caches_grown_by(share: f64) -> usize {
     let Some(dir) = river_cache::dir() else {
         return 0;
     };
@@ -806,7 +812,7 @@ pub fn save_caches() -> usize {
         let Some(map) = w.map.get() else {
             continue;
         };
-        if !river_cache::grown(&w.field) {
+        if !river_cache::grown_by(&w.field, share) {
             continue;
         }
         let path = river_cache::path_for(&dir, w.cfg.seed, w.digest);
@@ -1398,16 +1404,22 @@ mod tests {
         field
             .settled
             .put(42, vec![(130u16, 1u8), (131, 9)].into_boxed_slice());
+        // A swamp pool's answers, both kinds kept (`swamps`).
+        field.pool.put([3, 3, 3, 3], true);
+        field.pool.put([4, 4, 4, 4], false);
         let dir = std::env::temp_dir().join(format!("pbd-river-cache-{}", std::process::id()));
         let path = river_cache::path_for(&dir, cfg.seed, 99);
         let size = (map.width as u32, map.height as u32);
         let written = river_cache::write(&path, 99, size, &map.filed(), &field).unwrap();
-        assert_eq!(written, 4);
+        assert_eq!(written, 6);
         let back = RiverField::new();
         let (size, nodes) = river_cache::read(&path, 99, &back).expect("read back");
         let again = RiverMap::from_filed(&settings, size, nodes).expect("the map");
         assert!(again == *map, "the map read back differs");
         assert_eq!(back.counts(), [1, 1, 1, 1]);
+        assert_eq!(back.pools(), 2);
+        assert_eq!(back.pool.get(&[3, 3, 3, 3]), Some(true));
+        assert_eq!(back.pool.get(&[4, 4, 4, 4]), Some(false));
         assert_eq!(back.carve.get(&[1, 2, 3, 4]), Some(5.5));
         assert_eq!(
             back.settled.get(&42).as_deref(),

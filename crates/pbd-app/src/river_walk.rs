@@ -355,15 +355,18 @@ impl HexRoute {
                 .expect("cells")
         };
         let (start, end) = (nearest(here), nearest(goal));
-        let off: Vec<bool> = dirs
-            .iter()
-            .enumerate()
-            .map(|(i, &d)| {
+        // Whether a cell is never taken, asked only of the cells the search
+        // reaches (`bot-path-planner` 13: asking every cell in the disc first
+        // was most of a 50 to 100 ms route). The same answers, so the same
+        // route.
+        let mut off: Vec<Option<bool>> = vec![None; dirs.len()];
+        let mut is_off = |i: usize| {
+            *off[i].get_or_insert_with(|| {
                 i != start
                     && i != end
-                    && (avoid(d) || (dry && wet[i] && heights[i] - ground[i] > WADE_M))
+                    && ((dry && wet[i] && heights[i] - ground[i] > WADE_M) || avoid(dirs[i]))
             })
-            .collect();
+        };
         let metres = |a: usize, b: usize| dirs[a].angle_between(dirs[b]) * PLANET_RADIUS;
         let mut cost = vec![f32::INFINITY; dirs.len()];
         let mut from = vec![usize::MAX; dirs.len()];
@@ -376,7 +379,7 @@ impl HexRoute {
                 break;
             }
             for &b in &cells[a].cell.neighbors {
-                if b == usize::MAX || b >= dirs.len() || off[b] {
+                if b == usize::MAX || b >= dirs.len() || is_off(b) {
                     continue;
                 }
                 let rise = heights[b] - heights[a];

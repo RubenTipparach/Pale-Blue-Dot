@@ -25,6 +25,8 @@ block:
     name: campfire
   candle:
     name: candle
+  chest:
+    name: chest
   carpenter:
     name: "carpenter's bench"
   desert_sand:
@@ -411,7 +413,6 @@ craft:
   done: "{recipe} done"
   furniture: FURNITURE
   hands_busy: Your hands are busy
-  have_tool: You already have this tool
   locked: LOCKED
   made: "{thing} made"
   need_have: "{item}: need {need}, have {have}"
@@ -468,6 +469,7 @@ farm:
   seeds_need_tilled: Seeds need tilled soil
   till_under_block: "Can't till under a block"
   tilled: Tilled
+  too_far: Too far
   tree_first: Cut down the tree first
   wrong_climate: "{crop} does not grow in a {climate} climate"
 farming:
@@ -912,6 +914,7 @@ map:
   clouds_and_rain: Clouds and rain
   east: E
   help: M close  Esc close  wheel zoom  drag pan  right-click mark  Home find me
+  herds: Herds
   lat_lon: "{lat}{ns} {lon}{ew}"
   layer:
     biomes: Biomes
@@ -947,6 +950,7 @@ menu:
   bloom: Bloom
   cancel: CANCEL
   click_key_then_press_new: Click a key, then press the new one. Esc cancels.
+  close: X
   continue: CONTINUE
   could_not_delete: "could not delete {world}: {error}"
   could_not_make_world: "could not make a world: {error}"
@@ -1151,6 +1155,11 @@ mission:
       "0": Dig ore
       "1": Dig coal
     title: Find ore
+  pack:
+    help: Press Tab to open your pack and craft with what you gathered.
+    objective:
+      "0": Open the pack
+    title: Open your pack
   pen:
     help: Set fences on the cell edges round a yard, close it with a gate, and lead your animal in.
     objective:
@@ -1169,10 +1178,10 @@ mission:
       "0": Plant wheat seeds
     title: Plant a field
   reef:
-    help: Swim down where the sea is warm and shallow.
+    help: Dive to a warm reef and mine some reef rock with a pickaxe.
     objective:
-      "0": Reach a reef
-    title: See a reef
+      "0": Mine reef rock
+    title: Get a reef
   rod:
     help: Make a rod at the workbench from planks, rope and fiber.
     objective:
@@ -1195,6 +1204,13 @@ mission:
       "0": Make a stone pickaxe
       "1": Make a stone shovel
     title: Stone tools
+  storage:
+    help: "At the workbench (F), make a chest from eight planks. Set it down, open it with F and put a stack in it."
+    objective:
+      "0": Make a chest
+      "1": Set it down
+      "2": Store a stack
+    title: A chest
   swim:
     help: Walk into deep water and swim.
     objective:
@@ -1312,10 +1328,10 @@ overlay:
     speed: "m/s"
     temperature: C
 pack:
+  chest: CHEST
   hold: HOLD
   hotbar: HOTBAR
   pack: PACK
-  trash: TRASH
 planner:
   adopted: Your house
   bill: Materials
@@ -1502,6 +1518,8 @@ recipe:
     name: TORCH X2
   wheel:
     name: WHEEL
+  wood-chest:
+    name: CHEST
   workbench:
     name: WORKBENCH
 roads:
@@ -1721,6 +1739,8 @@ species:
 station:
   campfire:
     name: campfire
+  chest:
+    name: chest
   carpenter:
     name: "carpenter's bench"
   forge:
@@ -1791,6 +1811,7 @@ time:
   night: NIGHT
   title: TIME
 toasts:
+  town_missions: Town missions unlocked
   words: "{item} x{count}"
 tool:
   axe:

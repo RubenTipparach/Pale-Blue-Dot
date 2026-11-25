@@ -119,8 +119,15 @@ enum Click {
     Cell(usize),
     /// A mission tree card, by its mission index.
     Card(usize),
-    /// The pack's trash plaque.
-    Trash,
+    /// A map legend's row: a raster layer by its index in `MapLayers`.
+    MapLayer(usize),
+    /// Nothing: every control's press left standing is let go, so a click
+    /// off the panels lands on the background (a stack held is dropped).
+    Clear,
+    /// A button of the talk, trade or board panel.
+    Talk(super::talk::TalkAction),
+    /// The open container's coins.
+    Coins,
 }
 
 /// One frame's inputs.
@@ -251,6 +258,10 @@ impl path::Ground for LiveGround<'_, '_> {
             Some(m) if m.is_lamp() || pbd_core::station::station_of(m).is_some() => {
                 path::Block::Never
             }
+            // A field's tilled soil is walked on, never dug through: under
+            // a crop, digging it uproots the crop (2026-11-22: the first
+            // chili sown, uprooted three seconds later by the walk on).
+            Some(Material::Tilled) => path::Block::Never,
             // A standing tree's own ground is not dug until it is felled.
             Some(_)
                 if digging::under_standing_tree(
@@ -275,7 +286,9 @@ impl path::Ground for LiveGround<'_, '_> {
 /// 2026-11-20: at 2 and 4 the bot tunnelled after a hen, 20 digs a plan,
 /// and never tamed her).
 fn dig_cost(m: Material) -> f32 {
-    3.0 * match m {
+    // Doubled (2026-11-21): on a 200 m walk to a herd the bot still cut a
+    // trench through a hill, met rock and sank into a stone slot.
+    6.0 * match m {
         Material::Soil
         | Material::Grass
         | Material::Dirt
@@ -300,6 +313,24 @@ enum Goal {
 
 #[derive(Default)]
 struct Bot {
+    /// Townsfolk talked to in this run, by site and index (`Talk`).
+    talked: HashSet<(u32, u32)>,
+    /// The townsperson F was just pressed at, until the talk opens.
+    talking_to: Option<(u32, u32)>,
+    /// A town sought once for want of townsfolk (`Talk`).
+    sought_town: bool,
+    /// Townsfolk asked who did not offer TRADE (`Trade`).
+    not_trader: HashSet<(u32, u32)>,
+    /// Townsfolk asked who did not offer WORK (`Job`).
+    not_giver: HashSet<(u32, u32)>,
+    /// Jobs taken and given back as not the bot's kind (`Job`).
+    skipped_jobs: HashSet<u64>,
+    /// The job whose work was last set going, and how many times.
+    job_worked: Option<(u64, u32)>,
+    /// Pieces F was pressed at that did not take the bot (`Furniture`).
+    pieces_passed: HashSet<u64>,
+    /// The piece F was last pressed at, until it takes the bot.
+    piece_pressed: Option<u64>,
     started: Option<f32>,
     ended: Option<f32>,
     failed: bool,
@@ -322,6 +353,9 @@ struct Bot {
     sel: (u32, f32),
     /// Making room (`drop-and-trash` design 4): the step and its clock.
     room: (u32, f32),
+    /// A `Store` act under way: one junk stack into the chest, pack or no
+    /// pack full (`starter-missions`, "A chest").
+    store_now: bool,
     sel_from: usize,
     walk_anchor: Option<(Vec3, f32)>,
     /// The watchdog: the goal walked to, the nearest it came, and when.
@@ -332,8 +366,12 @@ struct Bot {
     /// Where an `Away` began, and the point it walks to next.
     away_from: Option<Vec3>,
     away_to: Option<Vec3>,
-    /// The place `Mark` puts the map's mark on.
+    /// The place `Mark` and `MapGoal` put the map's mark on.
     mark_goal: Option<Vec3>,
+    /// `MapGoal`: the zoom at the last turn of the wheel, and the turns.
+    map_zoom: (f32, u32),
+    /// `Swim`: the swim under way.
+    swim: Option<SwimRun>,
     /// The piece of clutter `PickUp` is going for: its cell's key, kind and
     /// middle.
     clutter_goal: Option<(u32, pbd_core::scatter::Kind, Vec3)>,
@@ -345,6 +383,18 @@ struct Bot {
     fail_frames: u32,
     /// Where the bot started: what it roams round before it has a bench.
     home: Option<Vec3>,
+    /// The chest it is storing junk in (`storage-chests` design 6).
+    room_chest: Option<(u32, usize, Vec3)>,
+    /// The stack it picked up to store.
+    room_item: Option<Item>,
+    /// The pack slot a junk stack was swapped out of.
+    room_from: usize,
+    /// The climate a seek went for: fresh ground is dug and tilled only
+    /// where the game's own rule gives it (`mission-playthrough` 5.3).
+    climate: Option<pbd_core::farming::Climate>,
+    /// Until when a long walk leaves the surface route for the planner (it
+    /// was held on the surface).
+    surface_off_until: f32,
     roam_s: f32,
     /// The first cast's water and stand, for casting round it.
     fish_from: Option<(Vec3, Vec3)>,
@@ -362,6 +412,9 @@ struct Bot {
     /// Going up and out of a hole (`bot-path-planner` design 5.1): until the
     /// sky is open over the head.
     climbing_out: bool,
+    /// The never-dug block last found over the head on a climb out, logged
+    /// once.
+    never_over: Option<(u32, usize)>,
     /// Up to this altitude, m, when the watchdog sends it up: the goal's
     /// height, so a pit under a tree on its rim is climbed out of too.
     climb_to: Option<f32>,
@@ -401,9 +454,39 @@ struct Bot {
     /// walker's feet started on.
     mine_dir: Option<Vec3>,
     mine_from: Option<usize>,
+    /// `Mine`: the stair's turns since a block last came out, and the
+    /// seconds left of a walk away from a spot it cannot start in.
+    mine_turns: u32,
+    mine_walk_s: f32,
+    /// `select`: the stack lifted out of a full hotbar goes to the trash,
+    /// the pack having no room for it.
+    sel_trash: bool,
+    /// `Tame`: turf already dug once for an animal nothing carried fed.
+    fed_turf: bool,
+    /// `Fresh`: walks on to find a river or lake not in the loaded ground.
+    fresh_walks: u32,
+    /// Tame: the centre of the nearest herd of the wanted kind, walked to.
+    herd_goal: Option<Vec3>,
     /// The hex route being walked (`mission-playthrough` 3.7), the goal it
     /// was planned to, and when.
     route: Option<(pbd_app::river_walk::HexRoute, Vec3, f32)>,
+    /// When the last route plan found none: the next waits a second
+    /// (2026-11-23: a failed plan cleared the route and its half-second
+    /// wait with it, and the bot planned every frame, 32 ms each).
+    route_failed_at: Option<f32>,
+    /// When the last cell plan found no way or an empty leg: the next waits
+    /// a second (2026-11-23: "planned 0 steps" every frame by the forge's
+    /// pit, the game stalled).
+    plan_failed_at: Option<f32>,
+    /// Seconds in water on a walk, for swimming out at the shore.
+    water_s: f32,
+    /// The shore it swims out to, and when it was found (found again every
+    /// 5 s, not every frame: the search logs and costs).
+    water_land: Option<(Vec3, f32)>,
+    /// The nearest the swim out has come to the shore, and when; and the
+    /// quarter turns taken round a wall.
+    water_best: Option<(f32, f32)>,
+    water_turns: u32,
     /// Where the feet were, newest last, for "moved in the last second".
     trail: Vec<(f32, Vec3)>,
     /// Cells the walker could not get into, by centre: planned round.
@@ -446,6 +529,8 @@ struct Sight<'a> {
     chain: &'a pbd_core::missions::Chain,
     recipes: &'a pbd_app::config::Recipes,
     land: &'a [pbd_core::husbandry::LandSpecies],
+    /// Where wild herds are placed (the bot heads for one it knows of).
+    herds: &'a pbd_core::husbandry::HerdSettings,
     farm: &'a pbd_app::config::FarmConfig,
     gather: &'a pbd_app::config::GatherConfig,
     picker: Option<Tool>,
@@ -463,6 +548,31 @@ struct Sight<'a> {
     cards: Vec<(usize, Vec2)>,
     /// The rod's cast: charge time, speeds and lift (`fauna.ron`).
     fishing: &'a pbd_core::fauna::FishingSettings,
+    /// What the map has drawn (`MapGoal`): the base level's texels, the
+    /// legend's raster layers, the layer chosen, and the legend's layer rows
+    /// on screen, logical pixels, by layer index.
+    map_texels: Option<std::sync::Arc<Vec<pbd_core::map::Texel>>>,
+    map_layers: Vec<pbd_app::world_map::RasterLayer>,
+    map_overlay: Option<super::map_screen::MapOverlay>,
+    legend: Vec<(usize, Vec2)>,
+    /// Every town's middle, a direction from the planet's centre.
+    towns: Vec<Vec3>,
+    /// The townsfolk drawn near: site, index, and their feet (planet-local).
+    talkers: Vec<(u32, u32, Vec3)>,
+    /// The town tree, once it is open (`town-missions-tree`).
+    town: Option<&'a pbd_core::missions::Progress>,
+    /// The talk, trade or board panel's buttons now spawned.
+    talk_buttons: Vec<super::talk::TalkAction>,
+    /// The towns' pieces: id, kind, the point to aim at, and the town's site.
+    pieces: Vec<(u64, pbd_core::furniture::Kind, Vec3, Option<u32>)>,
+    /// Whether the player sits or lies on a piece.
+    sitting: bool,
+    /// The container open under the pack: id, coins, its first filled slot.
+    store_open: Option<(u64, u64, Option<usize>)>,
+    /// The town jobs taken: id, kind, how many it asks, and whether done.
+    jobs: Vec<(u64, pbd_core::economy::jobs::JobKind, u32, bool)>,
+    /// Aboard a craft.
+    aboard: bool,
 }
 
 fn tangent(v: Vec3, up: Vec3) -> Vec3 {
@@ -533,10 +643,49 @@ impl Bot {
         s.fine.set.finest_records().get(i)
     }
 
+    /// Whether a cell's ground as it is now is earth a shovel tills, with
+    /// open air over it.
+    fn tillable_now(&mut self, s: &Sight, key: u32) -> bool {
+        let Some(top) = self.top_of(s, key) else {
+            return false;
+        };
+        let Some(layer) = pbd_core::column::layer_at(top.length() - PLANET_RADIUS - 0.5) else {
+            return false;
+        };
+        digging::material_of(s.fine, s.save, (key, layer)).is_some_and(pbd_core::farming::tillable)
+            && digging::material_of(s.fine, s.save, (key, layer + 1)) == Some(Material::Air)
+    }
+
     fn top_of(&mut self, s: &Sight, key: u32) -> Option<Vec3> {
         let r = self.record(s, key)?;
         let d = Vec3::from_slice(&r.direction_height[..3]).normalize_or(s.up);
-        Some(d * (PLANET_RADIUS + r.direction_height[3]))
+        let generated = d * (PLANET_RADIUS + r.direction_height[3]);
+        if s.save.edits.for_cell(key).is_empty() {
+            return Some(generated);
+        }
+        // Edited: the ground as it is now, a dug cell's floor or a built
+        // one's top, within six layers of the generated ground (2026-11-22:
+        // a field tilled in the floor of the bot's own pit).
+        let Some(mut layer) = pbd_core::column::layer_at(r.direction_height[3] - 0.5) else {
+            return Some(generated);
+        };
+        let solid = |l: usize| {
+            digging::material_of(s.fine, s.save, (key, l))
+                .is_some_and(|m| m != Material::Air && !m.is_water())
+        };
+        for _ in 0..6 {
+            if solid(layer) || layer == 0 {
+                break;
+            }
+            layer -= 1;
+        }
+        for _ in 0..6 {
+            if !solid(layer + 1) {
+                break;
+            }
+            layer += 1;
+        }
+        Some(d * (PLANET_RADIUS + pbd_core::column::layer_altitude(layer) + 1.0))
     }
 
     /// Turn the look toward a direction and pitch, smoothly. Whether it is
@@ -544,7 +693,9 @@ impl Bot {
     fn steer(&mut self, s: &Sight, out: &mut Intent, toward: Vec3, pitch: f32) -> bool {
         let want = tangent(toward, s.up).normalize_or(s.heading);
         let yaw = signed_angle(s.heading, want, s.up);
-        let dp = pitch.clamp(-1.45, 1.45) - s.pitch;
+        // Up to 88 degrees, under the walker's own 89: straight down onto
+        // the column the feet stand on (the pillar, design 10).
+        let dp = pitch.clamp(-1.535, 1.535) - s.pitch;
         let ease = (s.dt * 7.0).min(1.0);
         let max = TURN_RATE * s.dt;
         let step_yaw = (yaw * ease).clamp(-max, max);
@@ -602,6 +753,69 @@ impl Bot {
         } else {
             self.stuck_s = 0.0;
         }
+        // Twenty seconds swimming on a walk: out at the nearest shore's
+        // standing place, then on (2026-11-23: treading water at a cliff
+        // drifts enough that "no headway" never held; eight minutes in the
+        // sea 121 m from the goal, the planner finding no way by water).
+        // The sea is not in the columns (open air under its level is the
+        // sea), so "wet feet" alone missed it (2026-11-23: no swim out at all
+        // under the sea against a wall).
+        let in_sea = s.feet.length() - PLANET_RADIUS < 0.0 && surface_height(s.up) < 0.0;
+        if feet_wet(s) || in_sea {
+            self.water_s += s.dt;
+        } else {
+            self.water_s = 0.0;
+            self.water_best = None;
+            self.water_turns = 0;
+        }
+        if self.water_s > 20.0 && dist > 5.0 {
+            if self.water_land.is_none_or(|(_, at)| s.now - at > 5.0) {
+                // The shore the search finds, but after the first 15 s
+                // swimming at it that come no nearer, a quarter turn each time
+                // round the wall that holds the way (2026-11-23: under the
+                // sea against a wall, the shore on top of it).
+                // MEASUREMENT (2026-11-23: a 2.6 s main-thread frame a moment
+                // after a shore search, at sea): the search's own time.
+                let started = std::time::Instant::now();
+                let land = shore(s, false).map_or_else(|| dry_ground(s), |(_, stand)| stand);
+                let took = started.elapsed().as_secs_f32() * 1000.0;
+                if took > 20.0 {
+                    info!("showcase: SHORE_TIME {took:.0} ms");
+                }
+                let near = tangent(land - s.feet, s.up).length();
+                let held = self
+                    .water_best
+                    .is_some_and(|(best, since)| near > best - 2.0 && s.now - since > 15.0);
+                let land = if held {
+                    self.water_turns += 1;
+                    let way = tangent(land - s.feet, s.up).normalize_or(s.heading);
+                    let turned = Quat::from_axis_angle(
+                        s.up,
+                        std::f32::consts::FRAC_PI_2 * self.water_turns as f32,
+                    ) * way;
+                    info!("showcase: the shore not nearer in 15 s; a quarter turn round");
+                    self.water_best = Some((near, s.now));
+                    s.feet + turned * 15.0
+                } else {
+                    if self.water_best.is_none_or(|(best, _)| near < best - 2.0) {
+                        self.water_best = Some((near, s.now));
+                    }
+                    land
+                };
+                self.water_land = Some((land, s.now));
+            }
+            let land = self.water_land.map_or(s.feet, |(p, _)| p);
+            out.held.insert(KeyCode::Space);
+            out.held.insert(KeyCode::KeyW);
+            self.steer(s, out, tangent(land - s.feet, s.up), 0.3);
+            if (s.now % 3.0) < s.dt {
+                info!(
+                    "showcase: in the water {:.0} s; out at the nearest shore",
+                    self.water_s
+                );
+            }
+            return Walked::Going;
+        }
         // Stuck under ground: up and out first, a block under the feet at a
         // time (owner, 2026-11-20: "dig straight up and place dirt blocks
         // below feet").
@@ -613,11 +827,35 @@ impl Bot {
         if s.eye.length() - PLANET_RADIUS < -0.2 && surface_height(s.up) < 0.5 {
             out.held.insert(KeyCode::Space);
             out.held.insert(KeyCode::KeyW);
-            self.steer(s, out, to, 0.3);
+            // Held at a bank too high the way of the point: out at the
+            // lowest bank near instead (2026-11-23: 9 minutes in a lake
+            // swimming at a bank toward a herd 148 m off).
+            let toward = if self.stuck_s > 6.0 {
+                tangent(dry_ground(s) - s.feet, s.up)
+            } else {
+                to
+            };
+            self.steer(s, out, toward, 0.3);
             if (s.now % 3.0) < s.dt {
                 info!("showcase: under water; swimming up and on");
             }
             return Walked::Going;
+        }
+        // A long walk goes over the surface (`bot-path-planner` design 9):
+        // the planner's legs tunnel where a walk round is longer (2026-11-22:
+        // a quarter of an hour under a desert, 190 m short). The planner takes
+        // the last 40 m, the walker below ground, and 20 s after the surface
+        // route is held.
+        let below_surface = s.feet.length() - PLANET_RADIUS < surface_height(s.up) - 1.5;
+        if dist > 40.0 && !below_surface && s.now >= self.surface_off_until {
+            if self.stuck_s > 4.0 {
+                info!("showcase: held on the surface route; the planner for 20 s");
+                self.surface_off_until = s.now + 20.0;
+                self.route = None;
+            } else if let Some(walked) = self.follow_route(s, out, point) {
+                self.plan = None;
+                return walked;
+            }
         }
         // The planned walk over cells and layers (`bot-path-planner`); the
         // older heuristics below only when no plan is found.
@@ -724,7 +962,7 @@ impl Bot {
         let Some(here) = s
             .contact
             .finest_key(s.up)
-            .and_then(|key| records.iter().position(|r| r.key() == key))
+            .and_then(|key| s.fine.set.finest_index_of(key))
         else {
             self.climbing_out = false;
             return false;
@@ -747,8 +985,49 @@ impl Bot {
             .into_iter()
             .all(|n| ground.block(n, feet + 1).solid());
         // Sent up by the watchdog: until the feet are at the goal's height.
-        let below = self.climb_to.is_some_and(|to| altitude < to - 0.5);
+        // Or in a pit of its own digging, open to the sky but deeper than a
+        // step, and held: up to the ground's surface, a block under the feet
+        // at a time (2026-11-22: five minutes in a pit by the turnip field
+        // facing a two-block wall, the same plan made every six seconds).
+        // Only a walk sends it here; a mine's stair down is not a pit.
+        let in_pit = altitude < surface_height(s.up) - 1.5 && self.stuck_s > 6.0;
+        let below = self.climb_to.is_some_and(|to| altitude < to - 0.5) || in_pit;
         let covered = covered || walled || below;
+        // In water the way out is to swim up, not to build: the pack does
+        // not open there, so the block to stand on never comes to hand
+        // (2026-11-21: 5 m down in a flooded pit, 6 minutes picking a block).
+        let in_water = ground.block(here, feet) == path::Block::Water
+            || ground.block(here, feet + 1) == path::Block::Water;
+        if in_water && !self.lmb_down {
+            if self.climbing_out {
+                info!("showcase: up and out: in water; swimming up instead");
+            }
+            self.climbing_out = false;
+            self.climb_out_s = 0.0;
+            if covered {
+                out.held.insert(KeyCode::Space);
+            }
+            // Held in water above the sea's level (a lake): the walk's swim
+            // is for water under it, so out at the lowest bank near, up and
+            // on (2026-11-23: in a lake, this and the dig out took turns
+            // every frame for six minutes).
+            // Twenty seconds in water on a walk: out at the nearest shore's
+            // standing place, swimming (2026-11-23: treading water at a
+            // cliff drifts enough that "no headway" never held, eight
+            // minutes in the sea 121 m from the goal).
+            if self.stuck_s > 6.0 {
+                out.held.insert(KeyCode::Space);
+                out.held.insert(KeyCode::KeyW);
+                if self.water_land.is_none_or(|(_, at)| s.now - at > 5.0) {
+                    let land = shore(s, false).map_or_else(|| dry_ground(s), |(_, stand)| stand);
+                    self.water_land = Some((land, s.now));
+                }
+                let land = self.water_land.map_or(s.feet, |(p, _)| p);
+                self.steer(s, out, tangent(land - s.feet, s.up), 0.3);
+                return true;
+            }
+            return false;
+        }
         if !covered {
             if self.climbing_out {
                 info!("showcase: up and out: open sky over the head");
@@ -776,9 +1055,29 @@ impl Bot {
         }
         let centre = Vec3::from_slice(&records[here].direction_height[..3]).normalize();
         let key = records[here].key();
-        // The head room first: the block over the head, dug.
-        let over = feet + 2;
-        if let path::Block::Dig(_) = ground.block(here, over) {
+        // The head room first: the whole column over the head dug to the sky,
+        // lowest first, with each block's tool (the owner, 2026-11-22, out of
+        // the bot's tunnel: the pickaxe, the column dug to the grass, then a
+        // block under the feet at a time).
+        // From the head's own layer up: the game's head room for a block
+        // under the feet is the two layers over it, and the head's layer read
+        // off the feet can be one short (2026-11-22: "No room above", 400
+        // places refused in a shaft, the block over the head never dug).
+        // Dug on the way up: what the planner digs, and tilled soil over the
+        // head (a field's edge the planner walks on, `Never` to it).
+        let in_the_way = |cell: usize, l: usize| {
+            matches!(ground.block(cell, l), path::Block::Dig(_))
+                || digging::material_of(s.fine, s.save, (records[cell].key(), l))
+                    == Some(Material::Tilled)
+        };
+        let over = (feet + 1..feet + 12)
+            .find(|&l| in_the_way(here, l))
+            .unwrap_or(feet + 2);
+        // Only what the arm reaches: a block up past an open gap (an
+        // overhang, a cliff's lip) is not dug at, it is built up to
+        // (owner, 2026-11-23: "bot stuck digging blocks it cant reach").
+        let reachable = over <= feet + 4;
+        if in_the_way(here, over) && reachable {
             let material =
                 digging::material_of(s.fine, s.save, (key, over)).unwrap_or(Material::Soil);
             if self.fetch_tool(s, out, Self::tool_for(material)) {
@@ -789,16 +1088,58 @@ impl Bot {
             out.lmb = aimed || self.lmb_down;
             return true;
         }
-        if ground.block(here, over) == path::Block::Never {
-            // A station or unloaded ground over the head: not this way.
+        // Out of reach it is no bar: built up to, as above (2026-11-23: an
+        // unreachable block that is never dug gave up and began again every
+        // frame, the bot held in its pit for minutes).
+        if reachable && ground.block(here, over) == path::Block::Never {
+            // Something never dug over the head (a station, a lamp, a tree's
+            // ground, unloaded ground): out sideways, not up. Giving up here
+            // began the climb again the next frame (2026-11-23: in a tunnel
+            // of its own planning, "building up" logged 5408 times in four
+            // minutes, the bot never moving).
+            if self.never_over != Some((key, over)) {
+                info!(
+                    "showcase: up and out: {:?} over the head at layer {over} (feet {feet}); out sideways",
+                    digging::material_of(s.fine, s.save, (key, over))
+                );
+                self.never_over = Some((key, over));
+            }
+            let neighbours = ground.neighbours(here);
+            let room =
+                |n: usize| !ground.block(n, feet).solid() && !ground.block(n, feet + 1).solid();
+            if let Some(n) = neighbours.iter().copied().find(|&n| room(n)) {
+                let to =
+                    ground.centre(n) * (PLANET_RADIUS + pbd_core::column::layer_altitude(feet));
+                self.steer(s, out, tangent(to - s.feet, s.up), 0.0);
+                out.held.insert(KeyCode::KeyW);
+                return true;
+            }
+            // None open: dig into the nearest that can be dug, chest first.
+            let dig = neighbours.iter().copied().find_map(|n| {
+                [feet + 1, feet]
+                    .into_iter()
+                    .find(|&l| matches!(ground.block(n, l), path::Block::Dig(_)))
+                    .map(|l| (n, l))
+            });
+            if let Some((n, l)) = dig {
+                let material = digging::material_of(s.fine, s.save, (records[n].key(), l))
+                    .unwrap_or(Material::Soil);
+                if self.fetch_tool(s, out, Self::tool_for(material)) {
+                    return true;
+                }
+                let at =
+                    ground.centre(n) * (PLANET_RADIUS + pbd_core::column::layer_altitude(l) + 0.5);
+                let aimed = self.aim_at(s, out, at);
+                out.lmb = aimed || self.lmb_down;
+                return true;
+            }
             self.climbing_out = false;
             return false;
         }
-        // Then a block under the feet: bare hands, a block in the slot,
-        // the look straight down.
-        if self.fetch_tool(s, out, None) {
-            return true;
-        }
+        // Then a block under the feet, looking straight down (88 degrees:
+        // at 83 the look met a neighbour's top from the rim, and every place
+        // was refused), bare hands and a block in the slot; the game lifts
+        // the walker onto it. The stair below if no block comes to hand.
         let block = |item: Item| {
             matches!(
                 item,
@@ -809,22 +1150,111 @@ impl Bot {
                         | Material::Stone
                         | Material::Sand
                         | Material::DryGrass
+                        | Material::JungleGrass
+                        | Material::DesertSand
                 )
             )
         };
-        match self.select(s, out, &block) {
-            Status::Running => return true,
-            Status::Fail(why) => {
-                warn!("showcase: up and out: no block to stand on ({why})");
-                self.climbing_out = false;
-                return false;
+        // The game asks for room over the cell under the EYE, which from a
+        // cell's rim is a neighbour of the feet's (2026-11-22: "No room
+        // above", the feet's column clear, the eye's not): its two layers
+        // over the feet's ground dug too, each with its own tool.
+        if let Some(eye_key) = s.contact.finest_key(s.eye.normalize_or(s.up))
+            && eye_key != key
+            && let Some(eye_cell) = records.iter().position(|r| r.key() == eye_key)
+        {
+            let eye_centre = ground.centre(eye_cell);
+            for layer in [feet, feet + 1] {
+                if in_the_way(eye_cell, layer) {
+                    let material = digging::material_of(s.fine, s.save, (eye_key, layer))
+                        .unwrap_or(Material::Soil);
+                    if self.fetch_tool(s, out, Self::tool_for(material)) {
+                        return true;
+                    }
+                    let at = eye_centre
+                        * (PLANET_RADIUS + pbd_core::column::layer_altitude(layer) + 0.5);
+                    let aimed = self.aim_at(s, out, at);
+                    out.lmb = aimed || self.lmb_down;
+                    return true;
+                }
             }
-            Status::Done => {}
         }
-        let below = centre * (PLANET_RADIUS + pbd_core::column::layer_altitude(feet) - 0.05);
-        let aimed = self.aim_at(s, out, below);
-        if aimed && (s.now % 0.5) < s.dt * 1.5 {
-            out.rmb_tap = true;
+        let carried_block = (0..CARRIED).any(|k| s.slots.get(k).is_some_and(|st| block(st.item)));
+        if carried_block && self.climb_out_s % 30.0 < 20.0 {
+            if self.fetch_tool(s, out, None) {
+                return true;
+            }
+            match self.select(s, out, &block) {
+                Status::Running => return true,
+                Status::Fail(_) => {}
+                Status::Done => {
+                    self.steer(s, out, s.heading, -1.535);
+                    if s.pitch < -1.5 && (s.now % 0.6) < s.dt * 1.5 {
+                        out.rmb_tap = true;
+                    }
+                    return true;
+                }
+            }
+        }
+        // Then a stair up, dug with the right tool (owner, 2026-11-22: "the
+        // only reason youd be stuck is if you used the wrong tool"): the next
+        // cell along the heading, its two layers over the feet's dug open
+        // with the pickaxe for stone and the shovel for earth, then walked
+        // into, the walker's auto step taking the one block up. No jump and
+        // no block set under the feet: in the bot's own tunnels both failed
+        // for an hour (design 7), the walker held fast.
+        let step_up = feet + 1;
+        let fits = |n: usize| {
+            ground.block(n, feet).solid()
+                && [step_up, step_up + 1]
+                    .iter()
+                    .all(|&l| ground.block(n, l) == path::Block::Open || in_the_way(n, l))
+        };
+        let along = |n: usize| {
+            let c = ground.centre(n);
+            tangent(c - centre, s.up).normalize_or_zero().dot(s.heading)
+        };
+        let Some(next) = ground
+            .neighbours(here)
+            .into_iter()
+            .filter(|&n| fits(n))
+            .max_by(|&a, &b| along(a).total_cmp(&along(b)))
+        else {
+            warn!("showcase: up and out: no cell round to stair up into");
+            self.climbing_out = false;
+            return false;
+        };
+        let next_key = records[next].key();
+        let next_centre = ground.centre(next);
+        // The step's blocks, highest first, so nothing falls on the walker.
+        for layer in [step_up + 1, step_up] {
+            if in_the_way(next, layer) {
+                let material = digging::material_of(s.fine, s.save, (next_key, layer))
+                    .unwrap_or(Material::Soil);
+                if self.fetch_tool(s, out, Self::tool_for(material)) {
+                    return true;
+                }
+                let at =
+                    next_centre * (PLANET_RADIUS + pbd_core::column::layer_altitude(layer) + 0.5);
+                let aimed = self.aim_at(s, out, at);
+                out.lmb = aimed || self.lmb_down;
+                if (s.now % 2.0) < s.dt {
+                    info!(
+                        "showcase: up and out: digging {material:?} at {next_key}/{layer} for a stair up"
+                    );
+                }
+                return true;
+            }
+        }
+        // Open: walk into it, the auto step lifts the walker a block.
+        let to = tangent(
+            next_centre * PLANET_RADIUS - s.feet.normalize_or(s.up) * PLANET_RADIUS,
+            s.up,
+        );
+        self.steer(s, out, to, -0.1);
+        out.held.insert(KeyCode::KeyW);
+        if (s.now % 0.8) < s.dt * 1.5 {
+            out.taps.push(KeyCode::Space);
         }
         true
     }
@@ -838,8 +1268,7 @@ impl Bot {
     fn follow_plan(&mut self, s: &Sight, out: &mut Intent, point: Vec3) -> Option<Walked> {
         // Cells by key: the contact tier holds its own (maybe older) set, so
         // its indices are not the fine set's; a key is the same in both.
-        let records = s.fine.set.finest_records();
-        let index_of = |key: u32| records.iter().position(|r| r.key() == key);
+        let index_of = |key: u32| s.fine.set.finest_index_of(key);
         let Some(here) = s.contact.finest_key(s.up).and_then(index_of) else {
             if (s.now % 5.0) < s.dt {
                 info!("showcase: plan: the feet's cell is not in the fine set");
@@ -928,14 +1357,29 @@ impl Bot {
             if self.plan.as_ref().is_some_and(|run| s.now - run.made < 0.5) {
                 return Some(Walked::Going);
             }
+            if self.plan_failed_at.is_some_and(|at| s.now - at < 1.0) {
+                return None;
+            }
             let was = self
                 .plan
                 .as_ref()
                 .filter(|run| run.goal.distance(point) <= 1.5)
                 .map_or(s.tools.held(), |run| run.was);
-            let Some(plan) = path::plan(&ground, here, feet, goal_cell, PLANET_RADIUS) else {
+            // MEASUREMENT (owner's F3, 2026-11-22: p99 287 ms on the walk to
+            // a reef): the planner's own time, logged when it is long.
+            let started = std::time::Instant::now();
+            let planned = path::plan(&ground, here, feet, goal_cell, PLANET_RADIUS);
+            let took_ms = started.elapsed().as_secs_f32() * 1000.0;
+            if took_ms > 8.0 {
+                info!(
+                    "showcase: PLAN_TIME {took_ms:.1} ms ({} steps)",
+                    planned.as_ref().map_or(0, |p| p.steps.len())
+                );
+            }
+            let Some(plan) = planned else {
                 info!("showcase: plan: no plan from {here}/{feet} to {goal_cell}");
                 self.plan = None;
+                self.plan_failed_at = Some(s.now);
                 return None;
             };
             info!(
@@ -949,8 +1393,10 @@ impl Bot {
             if plan.steps.is_empty() && !plan.arrives {
                 self.plan_avoid.clear();
                 self.plan = None;
+                self.plan_failed_at = Some(s.now);
                 return None;
             }
+            self.plan_failed_at = None;
             if let Some(first) = plan.steps.first() {
                 let d = ground.centre(first.cell);
                 info!(
@@ -1008,7 +1454,16 @@ impl Bot {
                 self.plan = Some(run);
                 return Some(Walked::Going);
             }
+            // A leg run out where its only step was done as soon as it was
+            // planned (2026-11-22: a field's tilled cell as the goal, the
+            // same one-step leg planned every frame for five minutes): the
+            // straight walk takes over, as when no plan is found.
+            let empty_leg = !arrived && s.now - run.made < 1.0;
             self.plan = Some(run);
+            if empty_leg {
+                self.plan = None;
+                return None;
+            }
             return if arrived { None } else { Some(Walked::Going) };
         };
         let records = s.fine.set.finest_records();
@@ -1020,16 +1475,61 @@ impl Bot {
             .find(|&(c, l)| matches!(ground.block(c, l), path::Block::Dig(_)));
         // A block out of reach: walked toward first (a step behind, or the
         // walker short of where the plan began).
-        let solid_dig = solid_dig.filter(|&(c, l)| {
+        if let Some((c, l)) = solid_dig {
             let at = centre(c) * (PLANET_RADIUS + pbd_core::column::layer_altitude(l) + 0.5);
-            if at.distance(s.eye) <= 3.5 {
-                return true;
+            if at.distance(s.eye) > 3.5 {
+                let to = tangent(at - s.feet, s.up);
+                // Held short of it by a block between (design 6): the block
+                // the level look meets on the way, dug with its own tool.
+                let between = (self.stuck_s > 1.5)
+                    .then(|| self.aimed_cell(s))
+                    .flatten()
+                    .filter(|&cl| cl != (records[c].key(), l))
+                    .and_then(|cl| digging::material_of(s.fine, s.save, cl).map(|m| (cl, m)))
+                    .filter(|(cl, m)| {
+                        m != &Material::Air
+                            && !m.is_water()
+                            && !m.is_lamp()
+                            && pbd_core::station::station_of(*m).is_none()
+                            && !digging::under_standing_tree(
+                                s.fine,
+                                s.save,
+                                s.gather.0.axe_logs,
+                                *cl,
+                            )
+                    });
+                match between {
+                    Some(((key, layer), material)) if run.dig_since <= 12.0 => {
+                        if !self.fetch_tool(s, out, Self::tool_for(material)) {
+                            self.steer(s, out, to, 0.0);
+                            out.lmb = true;
+                        }
+                        run.dig_since += s.dt;
+                        run.step_since = s.now;
+                        if (run.dig_since % 2.0) < s.dt {
+                            info!(
+                                "showcase: plan: digging {material:?} at {key}/{layer}, between the walker and the planned dig"
+                            );
+                        }
+                    }
+                    Some(_) => {
+                        info!(
+                            "showcase: plan: the block between will not come out; planning round it"
+                        );
+                        self.plan_avoid.push(c);
+                        self.plan = None;
+                        return Some(Walked::Going);
+                    }
+                    None => {
+                        run.dig_since = 0.0;
+                        self.steer(s, out, to, if self.stuck_s > 1.5 { 0.0 } else { -0.12 });
+                        out.held.insert(KeyCode::KeyW);
+                    }
+                }
+                self.plan = Some(run);
+                return Some(Walked::Going);
             }
-            let to = tangent(at - s.feet, s.up);
-            self.steer(s, out, to, -0.12);
-            out.held.insert(KeyCode::KeyW);
-            false
-        });
+        }
         if solid_dig.is_none()
             && step
                 .digs
@@ -1056,6 +1556,26 @@ impl Bot {
                         && !m.is_lamp()
                         && pbd_core::station::station_of(*m).is_none()
                 });
+            // In the way and not to be dug (a standing tree's ground, "Cut
+            // down the tree first"), or held on past any break time: round it
+            // (2026-11-21: the walk to the mark held on a rooted block).
+            let rooted = self.aimed_cell(s).is_some_and(|c| {
+                c != (key, layer)
+                    && digging::under_standing_tree(s.fine, s.save, s.gather.0.axe_logs, c)
+            });
+            if (rooted && run.dig_since > 1.0) || run.dig_since > 12.0 {
+                info!(
+                    "showcase: plan: {key}/{layer} will not come out ({}); planning round it",
+                    if rooted {
+                        "a tree's ground in the way"
+                    } else {
+                        "held too long"
+                    }
+                );
+                self.plan_avoid.push(cell);
+                self.plan = None;
+                return Some(Walked::Going);
+            }
             let material = blocker.unwrap_or(planned);
             let want = Self::tool_for(material);
             if self.fetch_tool(s, out, want) {
@@ -1173,6 +1693,7 @@ impl Bot {
                 .route
                 .as_ref()
                 .is_none_or(|(_, _, at)| s.now - at > 0.5)
+            && self.route_failed_at.is_none_or(|at| s.now - at > 1.0)
         {
             let records = s.fine.set.finest_records();
             let holes = self.holes.clone();
@@ -1209,6 +1730,7 @@ impl Bot {
                     digging::under_standing_tree(s.fine, s.save, axe_logs, (key, layer))
                 })
             };
+            let started = std::time::Instant::now();
             let planned = HexRoute::plan_where(
                 s.feet.normalize_or(s.up),
                 goal_dir,
@@ -1216,6 +1738,10 @@ impl Bot {
                 true,
                 &avoid,
             );
+            let took_ms = started.elapsed().as_secs_f32() * 1000.0;
+            if took_ms > 8.0 {
+                info!("showcase: ROUTE_TIME {took_ms:.1} ms");
+            }
             match planned {
                 Some(route) => {
                     if self
@@ -1226,9 +1752,11 @@ impl Bot {
                         self.blocked_here = 0;
                     }
                     self.route = Some((route, point, s.now));
+                    self.route_failed_at = None;
                 }
                 None => {
                     self.route = None;
+                    self.route_failed_at = Some(s.now);
                     return None;
                 }
             }
@@ -1477,6 +2005,18 @@ impl Bot {
     /// Have `want` in hand, fetched by G and the wheel as a player picks a
     /// tool. Whether it is still fetching (the act waits for it).
     fn fetch_tool(&mut self, s: &Sight, out: &mut Intent, want: Option<Tool>) -> bool {
+        // No pickaxe: the shovel still breaks stone, slowly, where bare
+        // hands break none (2026-11-21: in a stone shaft with no pickaxe,
+        // digging by hand for a quarter of an hour).
+        let want = match want {
+            Some(Tool::Pickaxe)
+                if !s.tools.tools().contains(&Tool::Pickaxe)
+                    && s.tools.tools().contains(&Tool::Shovel) =>
+            {
+                Some(Tool::Shovel)
+            }
+            w => w,
+        };
         if s.tools.held() == want || want.is_some_and(|t| !s.tools.tools().contains(&t)) {
             self.fetching = None;
             return false;
@@ -1580,60 +2120,267 @@ impl Bot {
     /// (`drop-and-trash` design 4). Whether it is still at it.
     fn make_room(&mut self, s: &Sight, out: &mut Intent) -> bool {
         let free = (0..CARRIED).filter(|&k| s.slots.get(k).is_none()).count();
-        // Only a full stack of junk: a handful is the slot being filled by
-        // the dig (owner, 2026-11-20: "you cant be trashing stuff at 2, you
-        // should way at least till 64 or 99 whatever full stacks are").
-        let junk = (0..CARRIED).find(|&k| {
-            s.slots.get(k).is_some_and(|st| {
-                st.count >= st.item.stack_limit()
-                    && matches!(
-                        st.item,
-                        Item::Block(
-                            Material::Sand
-                                | Material::Soil
-                                | Material::Dirt
-                                | Material::Grass
-                                | Material::DryGrass
-                                | Material::JungleGrass
-                                | Material::DesertSand
-                        )
-                    )
-            })
-        });
-        let (phase, since) = &mut self.room;
-        if *phase == 0 && (free >= 2 || junk.is_none()) {
+        // Junk: the ground's own blocks, any count, stored (owner,
+        // 2026-11-22: "I would remove the trash icon and opt for a storage
+        // system instead"; `storage-chests` design 6).
+        let is_junk = |item: Item| {
+            matches!(
+                item,
+                Item::Block(
+                    Material::Sand
+                        | Material::Soil
+                        | Material::Dirt
+                        | Material::Grass
+                        | Material::DryGrass
+                        | Material::JungleGrass
+                        | Material::DesertSand
+                        | Material::Stone
+                        | Material::Rock
+                )
+            )
+        };
+        let junk = (0..CARRIED)
+            .filter(|&k| s.slots.get(k).is_some_and(|st| is_junk(st.item)))
+            .max_by_key(|&k| s.slots.get(k).map_or(0, |st| st.count));
+        let (phase, since) = self.room;
+        // A chest's making already queued: let it run.
+        if phase == 0 && !self.injected.is_empty() {
             return false;
         }
-        *since += s.dt;
-        match *phase {
+        if phase == 0 && ((free >= 2 && !self.store_now) || junk.is_none()) {
+            return false;
+        }
+        self.room.1 += s.dt;
+        let since = since + s.dt;
+        // A step that never finishes starts over (and closes the pack).
+        if phase != 0 && since > 20.0 {
+            warn!("showcase: storing stuck at step {phase}; starting over");
+            if s.screen == Screen::Pack {
+                out.taps.push(KeyCode::Escape);
+            }
+            self.room = (0, 0.0);
+            self.room_chest = None;
+            return true;
+        }
+        let to = |bot: &mut Self, p: u32| bot.room = (p, 0.0);
+        match phase {
             0 => {
-                info!("showcase: the pack is full; a stack of junk into the trash");
+                // The nearest chest of the bot's own within 60 m, else one
+                // made (design 6).
+                self.room_chest = self
+                    .stations(s, Material::Chest)
+                    .filter(|(_, _, at)| at.distance(s.feet) < 60.0);
+                if self.room_chest.is_some() {
+                    info!("showcase: the pack is full; junk into the chest");
+                    to(self, 10);
+                } else {
+                    info!("showcase: the pack is full and no chest near; making one");
+                    to(self, 20);
+                }
+            }
+            10 => {
+                let Some((_, _, at)) = self.room_chest else {
+                    to(self, 0);
+                    return true;
+                };
+                if self.walk_to(s, out, at, 2.2) == Walked::There {
+                    to(self, 11);
+                }
+            }
+            11 => {
+                let Some((_, _, at)) = self.room_chest else {
+                    to(self, 0);
+                    return true;
+                };
+                if s.screen == Screen::Pack {
+                    to(self, 13);
+                    return true;
+                }
+                let aimed = self.aim_at(s, out, at);
+                if aimed && since > 0.4 && (since % 1.5) < s.dt * 1.5 {
+                    out.taps.push(KeyCode::KeyF);
+                }
+            }
+            13 if since > 0.5 => match junk {
+                Some(k) => {
+                    self.room_item = s.slots.get(k).map(|st| st.item);
+                    out.click = Some(Click::Cell(k));
+                    out.lmb_tap = true;
+                    to(self, 14);
+                }
+                None => to(self, 16),
+            },
+            14 if since > 0.4 => {
+                let Some((cell, layer, _)) = self.room_chest else {
+                    to(self, 16);
+                    return true;
+                };
+                let chest = pbd_app::chests::read(s.save, cell, layer as u16);
+                let held = self.room_item;
+                let into = chest.slots.iter().position(|slot| match (slot, held) {
+                    (None, _) => true,
+                    (Some(st), Some(h)) => st.item == h && st.count < st.item.stack_limit(),
+                    _ => false,
+                });
+                match into {
+                    Some(j) => {
+                        out.click = Some(Click::Cell(CARRIED + j));
+                        out.lmb_tap = true;
+                        to(self, if free >= 3 || self.store_now { 16 } else { 13 });
+                    }
+                    None => {
+                        warn!("showcase: the chest is full");
+                        // Put the stack back and make another chest.
+                        if let Some(k) = junk {
+                            out.click = Some(Click::Cell(k));
+                            out.lmb_tap = true;
+                        }
+                        to(self, 16);
+                    }
+                }
+            }
+            16 if since > 0.4 => {
+                if s.screen == Screen::Pack {
+                    out.taps.push(KeyCode::Escape);
+                }
+                self.room_chest = None;
+                self.store_now = false;
+                to(self, 0);
+            }
+            20 => {
+                // Room to make one first: a junk stack dropped (Q), as a
+                // player drops; then planks, the chest at the workbench, and
+                // the chest set down here.
+                // One free slot is room for the chest the bench makes. No
+                // chest can be made in the water or with no wood carried
+                // (2026-11-22: on a reef, crafts failing over and over): a
+                // junk stack is dropped instead, and that is the room.
+                // Enough for a chest (8 planks) and a workbench (6), a log
+                // making 4 planks.
+                let planks = |g| s.slots.count(pbd_core::inventory::Item::Good(g));
+                let wood =
+                    planks(pbd_core::goods::Good::PLANKS) + 4 * planks(pbd_core::goods::Good::LOG);
+                // A chest is made only for a `Store` act; else a junk stack
+                // is dropped (Q), as a player clears a full pack (2026-11-23:
+                // the nearest bench 40 m up a cliff, walked at for eight
+                // minutes between pack swaps that never finished).
+                let can_make = self.store_now && wood >= 14 && !feet_wet(s);
+                if free >= 1 && can_make {
+                    to(self, 21);
+                    return true;
+                }
+                // A junk stack already on the hotbar: its number key brings it
+                // to hand with no swap (a full pack has no room to swap one
+                // in: 2026-11-22, the select looping).
+                let Some(k) = (0..SLOTS)
+                    .filter(|&k| s.slots.get(k).is_some_and(|st| is_junk(st.item)))
+                    .max_by_key(|&k| s.slots.get(k).map_or(0, |st| st.count))
+                else {
+                    // None on the hotbar: a junk stack swapped onto it from
+                    // the pack first, as a player would (2026-11-22: the
+                    // hotbar all fish, seeds and tools, the junk in the pack).
+                    info!("showcase: no junk on the hotbar; swapping a stack onto it");
+                    to(self, 30);
+                    return true;
+                };
+                let item = s.slots.get(k).map(|st| st.item);
+                match self.select(s, out, &|i| Some(i) == item) {
+                    Status::Done => {
+                        out.taps.push(KeyCode::KeyQ);
+                        if can_make {
+                            to(self, 21);
+                        } else {
+                            info!("showcase: no chest can be made here; dropped a junk stack");
+                            self.room = (0, 0.0);
+                            return false;
+                        }
+                    }
+                    Status::Fail(_) => to(self, 0),
+                    Status::Running => {}
+                }
+            }
+            30 => {
                 if s.screen != Screen::Pack {
                     out.taps.push(KeyCode::KeyI);
                 }
-                *phase = 1;
-                *since = 0.0;
+                // Pack and hotbar both full: no swap can be made, so the junk
+                // stack is dropped from the pack itself, picked up and let go
+                // off the panels (`drop-and-trash` design 3), as a player
+                // clears a full pack (2026-11-23: the swap looped for minutes,
+                // "select stuck at step 11").
+                let pack_full = (SLOTS..CARRIED).all(|k| s.slots.get(k).is_some());
+                to(self, if pack_full { 40 } else { 31 });
             }
-            1 if *since > 0.6 => {
-                if let Some(k) = junk {
+            40 if since > 0.6 => match junk {
+                Some(k) => {
                     out.click = Some(Click::Cell(k));
                     out.lmb_tap = true;
+                    to(self, 41);
                 }
-                *phase = 2;
-                *since = 0.0;
+                None => to(self, 34),
+            },
+            41 if since > 0.4 => {
+                // The pointer to the window's left edge, off both panels.
+                out.pointer = Some(Vec2::new(6.0, 300.0));
+                to(self, 42);
             }
-            2 if *since > 0.5 => {
-                out.click = Some(Click::Trash);
+            42 if since > 0.3 => {
+                out.pointer = Some(Vec2::new(6.0, 300.0));
+                out.click = Some(Click::Clear);
                 out.lmb_tap = true;
-                *phase = 3;
-                *since = 0.0;
+                info!("showcase: pack and hotbar full; a junk stack dropped from the pack");
+                to(self, 34);
             }
-            3 if *since > 0.5 => {
-                if s.screen == Screen::Pack {
-                    out.taps.push(KeyCode::KeyI);
+            31 if since > 0.6 => match junk {
+                Some(k) => {
+                    self.room_from = k;
+                    out.click = Some(Click::Cell(k));
+                    out.lmb_tap = true;
+                    to(self, 32);
                 }
-                *phase = 0;
-                *since = 0.0;
+                None => to(self, 34),
+            },
+            32 if since > 0.4 => {
+                out.click = Some(Click::Cell(SLOTS - 1));
+                out.lmb_tap = true;
+                to(self, 33);
+            }
+            33 if since > 0.4 => {
+                out.click = Some(Click::Cell(self.room_from));
+                out.lmb_tap = true;
+                to(self, 34);
+            }
+            34 if since > 0.4 => {
+                if s.screen == Screen::Pack {
+                    out.taps.push(KeyCode::Escape);
+                }
+                to(self, 20);
+            }
+            21 if since > 0.4 => {
+                // A workbench near to make it at, else one made (6 planks)
+                // and set down first (2026-11-22: "no Workbench placed").
+                let bench_near = self
+                    .stations(s, Material::Workbench)
+                    .is_some_and(|(_, _, at)| at.distance(s.feet) < 40.0);
+                let planks_needed = if bench_near { 8 } else { 14 };
+                if carried(s.slots, "planks") < planks_needed {
+                    self.injected
+                        .push_back(file::Act::Craft("planks".into(), 2));
+                }
+                if !bench_near {
+                    self.injected
+                        .push_back(file::Act::Craft("workbench".into(), 1));
+                    self.injected.push_back(file::Act::Hand("hand".into()));
+                    self.injected
+                        .push_back(file::Act::Place("block:workbench".into()));
+                }
+                self.injected
+                    .push_back(file::Act::Bench("wood-chest".into(), 1));
+                self.injected.push_back(file::Act::Hand("hand".into()));
+                self.injected
+                    .push_back(file::Act::Place("block:chest".into()));
+                self.room = (0, 0.0);
+                return false;
             }
             _ => {}
         }
@@ -1643,6 +2390,18 @@ impl Bot {
     /// Put an item in the selected slot: its number key, or the pack first
     /// when it is not in the hotbar. `Done` when it is in hand.
     fn select(&mut self, s: &Sight, out: &mut Intent, pick: &dyn Fn(Item) -> bool) -> Status {
+        // Pack and hotbar both full, the item in the pack: room made first,
+        // junk into a chest (`storage-chests` design 6), before the swap.
+        let all_full = (0..CARRIED).all(|k| s.slots.get(k).is_some());
+        let in_hotbar_now = (0..SLOTS).any(|k| s.slots.get(k).is_some_and(|st| pick(st.item)));
+        if self.sel.0 == 0
+            && self.room.0 == 0
+            && all_full
+            && !in_hotbar_now
+            && self.make_room(s, out)
+        {
+            return Status::Running;
+        }
         let (phase, since) = &mut self.sel;
         *since += s.dt;
         // A step that never finishes starts the move over (seen: the pack
@@ -1691,23 +2450,104 @@ impl Bot {
                 // player makes room (a drop onto a different stack does not
                 // swap).
                 let full = (0..SLOTS).all(|k| s.slots.get(k).is_some());
-                *phase = if full { 10 } else { 1 };
+                // Both full: a junk stack in the pack dropped off the panels
+                // first, to make the room the swap needs (2026-11-23: "select
+                // stuck at step 11" for minutes, no pack slot to take the
+                // hotbar's stack).
+                let pack_full = (SLOTS..CARRIED).all(|k| s.slots.get(k).is_some());
+                *phase = if full && pack_full {
+                    50
+                } else if full {
+                    10
+                } else {
+                    1
+                };
+                *since = 0.0;
+                Status::Running
+            }
+            50 if *since > 0.6 => {
+                let junk = |item: Item| {
+                    matches!(
+                        item,
+                        Item::Block(
+                            Material::Sand
+                                | Material::Dirt
+                                | Material::Grass
+                                | Material::Soil
+                                | Material::DryGrass
+                                | Material::JungleGrass
+                                | Material::DesertSand
+                                | Material::Stone
+                                | Material::Rock
+                        )
+                    )
+                };
+                let Some(k) = (SLOTS..CARRIED).filter(|&k| k != self.sel_from).find(|&k| {
+                    s.slots
+                        .get(k)
+                        .is_some_and(|st| junk(st.item) && !pick(st.item))
+                }) else {
+                    return Status::Fail("pack and hotbar full, no junk to drop".into());
+                };
+                out.click = Some(Click::Cell(k));
+                out.lmb_tap = true;
+                *phase = 51;
+                *since = 0.0;
+                Status::Running
+            }
+            51 if *since > 0.4 => {
+                out.pointer = Some(Vec2::new(6.0, 300.0));
+                *phase = 52;
+                *since = 0.0;
+                Status::Running
+            }
+            52 if *since > 0.3 => {
+                out.pointer = Some(Vec2::new(6.0, 300.0));
+                out.click = Some(Click::Clear);
+                out.lmb_tap = true;
+                info!("showcase: pack and hotbar full; a junk stack dropped to make room");
+                *phase = 1;
                 *since = 0.0;
                 Status::Running
             }
             10 if *since > 0.6 => {
+                // The ground's own blocks, dug on the way; stone last (it
+                // builds the way up out of a hole). 2026-11-22: the seed for
+                // the chili never came to hand, the pack full and its only
+                // blocks dry grass and stone, neither counted as junk.
                 let junk = [
                     Item::Block(Material::Sand),
                     Item::Block(Material::Dirt),
                     Item::Block(Material::Grass),
                     Item::Block(Material::Soil),
+                    Item::Block(Material::DryGrass),
+                    Item::Block(Material::JungleGrass),
+                    Item::Block(Material::DesertSand),
+                    Item::Block(Material::Stone),
                 ];
-                let out_of = junk
-                    .iter()
-                    .find_map(|j| {
-                        (0..SLOTS).find(|&k| s.slots.get(k).is_some_and(|st| st.item == *j))
+                let junk_at = junk.iter().find_map(|j| {
+                    (0..SLOTS).find(|&k| s.slots.get(k).is_some_and(|st| st.item == *j))
+                });
+                // Pack and hotbar both full (2026-11-21: a forge made with
+                // nowhere to go): the stack taken out is trashed, so it must
+                // be one to spare: junk, or a block carried twice over.
+                let spare_at = junk_at.or_else(|| {
+                    (0..SLOTS).find(|&k| {
+                        s.slots.get(k).is_some_and(|st| {
+                            matches!(st.item, Item::Block(_))
+                                && (0..CARRIED).any(|o| {
+                                    o != k && s.slots.get(o).is_some_and(|ot| ot.item == st.item)
+                                })
+                        })
                     })
-                    .unwrap_or(SLOTS - 1);
+                });
+                let pack_full = (SLOTS..CARRIED).all(|k| s.slots.get(k).is_some());
+                self.sel_trash = pack_full && spare_at.is_some();
+                let out_of = if pack_full {
+                    spare_at.unwrap_or(SLOTS - 1)
+                } else {
+                    junk_at.unwrap_or(SLOTS - 1)
+                };
                 out.click = Some(Click::Cell(out_of));
                 out.lmb_tap = true;
                 *phase = 11;
@@ -1716,6 +2556,15 @@ impl Bot {
             }
             11 if *since > 0.5 => {
                 let Some(into) = (SLOTS..CARRIED).find(|&k| s.slots.get(k).is_none()) else {
+                    if self.sel_trash {
+                        // storage-chests 2.1: the bot stores in a chest. The
+                        // trash is gone; until then this clicks nothing.
+                        info!("showcase: pack and hotbar full; no trash to clear it");
+                        self.sel_trash = false;
+                        *phase = 1;
+                        *since = 0.0;
+                        return Status::Running;
+                    }
                     return Status::Fail("the pack is full".into());
                 };
                 out.click = Some(Click::Cell(into));
@@ -1772,6 +2621,9 @@ impl Bot {
         let toward = s.feet.normalize_or(Vec3::Y);
         let cos = (far / PLANET_RADIUS).cos();
         let mut out = Vec::new();
+        // MEASUREMENT (`mission-playthrough` 5.4): why cells are refused.
+        let mut why = [0u32; 8];
+        let mut seen: Vec<(u32, f32)> = Vec::new();
         // Not beside a station: a hole there is a hole the bot must stand
         // in to use it.
         let stations: Vec<u32> = s
@@ -1795,18 +2647,37 @@ impl Bot {
             let key = r.key();
             let material = r.metadata[1] & 0xff;
             // Earth a spade takes: soil, grass of any kind, sand and dirt
-            // (bait worms come out of a beach's sand), down to just over
-            // the water's edge.
-            if !matches!(material, 2 | 3 | 6 | 7 | 8 | 11)
-                || r.direction_height[3] < 1.2
-                || pbd_core::flora::grows_tree(
+            // (bait worms come out of a beach's sand), and a desert's sand
+            // (29: tillable, the only ground a desert has; left out, no
+            // desert cell was ever dug, 2026-11-22), down to just over the
+            // water's edge.
+            // The record's material can say water over grass (2026-11-22: a
+            // whole field of "4" at 60 m, green in the game): the top block
+            // is asked of the ground as the game's own dig and till ask it.
+            let real_top = pbd_core::column::layer_at(r.direction_height[3] - 0.5)
+                .and_then(|layer| digging::material_of(s.fine, s.save, (key, layer)));
+            let earth = matches!(material, 2 | 3 | 6 | 7 | 8 | 11 | 29)
+                || real_top.is_some_and(pbd_core::farming::tillable);
+            if !earth || r.direction_height[3] < 1.2 {
+                why[0] += 1;
+                if seen.len() < 6 {
+                    seen.push((material, r.direction_height[3]));
+                }
+                continue;
+            }
+            if pbd_core::flora::grows_tree(
                     &pbd_app::planet::terrain_config().trees,
                     r.spare[0],
                     r.metadata[1],
                 )
                 || self.used.contains(&key)
-                || !s.save.edits.for_cell(key).is_empty()
+                // Edited ground is left alone, except for a field in a
+                // sought climate: there the dug floor is tilled too, when its
+                // top is earth with open air over it.
+                || (!s.save.edits.for_cell(key).is_empty()
+                    && (self.climate.is_none() || !self.tillable_now(s, key)))
             {
+                why[1] += 1;
                 continue;
             }
             // Never a cell by the water: a hole there floods, and the bot
@@ -1816,6 +2687,7 @@ impl Bot {
             if pbd_core::column::layer_at(r.direction_height[3] - 0.5)
                 .is_some_and(|layer| digging::by_water(s.fine, s.save, &s.gather.0, (key, layer)))
             {
+                why[2] += 1;
                 continue;
             }
             // Digging for bait: earth by a river or the sea, as the game's
@@ -1827,7 +2699,36 @@ impl Bot {
             {
                 continue;
             }
-            let top = d * (PLANET_RADIUS + r.direction_height[3]);
+            // Not a standing tree's ground, by the game's own rule ("Cut
+            // down the tree first": 2026-11-22, ten minutes in a jungle on
+            // cells the tree-growth test passed).
+            if pbd_core::column::layer_at(r.direction_height[3] - 0.5).is_some_and(|layer| {
+                digging::under_standing_tree(s.fine, s.save, s.gather.0.axe_logs, (key, layer))
+            }) {
+                why[3] += 1;
+                continue;
+            }
+            // The ground as it is: a dug cell's floor, not the generated top
+            // metres over it (the rise test refused every pit floor).
+            let top = if s.save.edits.for_cell(key).is_empty() {
+                d * (PLANET_RADIUS + r.direction_height[3])
+            } else {
+                self.top_of(s, key)
+                    .unwrap_or(d * (PLANET_RADIUS + r.direction_height[3]))
+            };
+            // Sown where it grows: the climate a seek went for, by the
+            // game's rule for the cell at its ground's real layer, as the
+            // sowing asks it (2026-11-22: fields 23 and 37 m off a desert
+            // home refused every chili; then, read at the record's stored
+            // height, two cells in three refused round a hot home).
+            if let Some(want) = self.climate
+                && pbd_core::column::layer_at(top.length() - PLANET_RADIUS - 0.5)
+                    .and_then(|layer| super::farm::climate_at(s.fine, key, layer))
+                    != Some(want)
+            {
+                why[4] += 1;
+                continue;
+            }
             let dist = tangent(top - s.feet, s.up).length();
             let rise = (top - s.feet).dot(s.up);
             if dist < near
@@ -1837,6 +2738,7 @@ impl Bot {
                 || (dist < 6.0 && rise.abs() > 1.6)
                 || stations.iter().any(|st| st.distance(top) < 4.5)
             {
+                why[5] += 1;
                 continue;
             }
             // Not at the water's edge, where a roam ends in the sea.
@@ -1846,9 +2748,17 @@ impl Bot {
                 .iter()
                 .any(|o| surface_height((top + *o * 3.5).normalize()) < 0.3);
             if wet {
+                why[6] += 1;
                 continue;
             }
             out.push((key, top, dist));
+        }
+        if self.climate.is_some() && out.is_empty() && (s.now % 3.0) < s.dt {
+            info!(
+                "showcase: fresh ground {near}..{far} m: none; refused for material {}, a tree grows, used or edited {}, water {}, a tree {}, climate {}, distance or rise {}, the shore {}",
+                why[0], why[1], why[2], why[3], why[4], why[5], why[6]
+            );
+            info!("showcase: fresh ground: refused materials and heights {seen:?}");
         }
         out
     }
@@ -1954,7 +2864,7 @@ impl Bot {
     fn until_met(&self, s: &Sight, until: &Until) -> bool {
         match until {
             Until::Have(name, n) => carried(s.slots, name) >= *n,
-            Until::Mission(id) => s.missions.progress.is_done(id),
+            Until::Mission(id) => mission_done(s, id),
             Until::Times(n) => self.count >= *n,
         }
     }
@@ -2034,6 +2944,27 @@ pub struct World<'w, 's> {
     /// Render space to planet-local (`movement-smoothness` design 6.1).
     frame: Option<Res<'w, pbd_app::planet::PlanetRenderFrame>>,
     windows: Query<'w, 's, Entity, With<PrimaryWindow>>,
+    /// The town tree's record (a shot's `until` may name its missions).
+    town_missions: Option<Res<'w, pbd_app::town_missions::TownMissions>>,
+    /// The talk panel's buttons (`Trade`).
+    talk_buttons: Query<'w, 's, &'static super::talk::TalkAction>,
+    /// The pieces in reach, the seat taken and the container open
+    /// (`Furniture`).
+    pieces: Res<'w, super::furniture::Pieces>,
+    sitting: Res<'w, super::furniture::Sitting>,
+    store_view: Res<'w, super::furniture::StoreView>,
+    /// The town jobs taken (`Job`).
+    economy: Option<Res<'w, pbd_app::economy::Economy>>,
+    /// The townsfolk one can talk to (`Talk`).
+    talkers: Query<
+        'w,
+        's,
+        (
+            &'static pbd_app::economy::Talker,
+            &'static GlobalTransform,
+            Option<&'static Visibility>,
+        ),
+    >,
     fine: Option<Res<'w, PlanetFine>>,
     contact: Option<Res<'w, PlanetContact>>,
     save: Res<'w, WorldSave>,
@@ -2059,6 +2990,23 @@ pub struct World<'w, 's> {
     interact: Option<Res<'w, pbd_app::interact::Interact>>,
     /// The cast's speeds and charge, to see where a float would land.
     fauna: Res<'w, pbd_app::config::FaunaConfig>,
+    /// The world's towns (the `Seek("town")` act walks to the nearest).
+    towns: Option<Res<'w, pbd_app::towns::Towns>>,
+    /// The craft the player is aboard, if any.
+    aboard: Option<Res<'w, pbd_app::vehicles::Aboard>>,
+    /// The map: its base's texels, its layers, what the legend chose and
+    /// where the legend's rows are (the `MapGoal` act).
+    map_raster: Option<Res<'w, super::map_screen::MapRaster>>,
+    map_layers: Option<Res<'w, pbd_app::world_map::MapLayers>>,
+    map_choice: Option<Res<'w, super::map_screen::MapChoice>>,
+    legend: Query<
+        'w,
+        's,
+        (
+            &'static super::map_screen::MapButton,
+            &'static bevy::ui::UiGlobalTransform,
+        ),
+    >,
     /// The mission tree's cards, where they are drawn (the `Focus` act
     /// clicks one).
     cards: Query<
@@ -2182,6 +3130,7 @@ pub fn drive(
         chain: &chain.0,
         recipes: &w.recipes,
         land: w.land.0.roster(pbd_core::fauna::HOME_BODY),
+        herds: &w.land.0.herds,
         farm: &w.farm,
         gather: &w.gather,
         picker: w.picker.highlight,
@@ -2197,6 +3146,73 @@ pub fn drive(
         odds: w.scatter.as_deref().map(pbd_app::clutter::odds),
         day: pbd_app::clutter::day_of(w.sun.clock.seconds),
         fishing: &w.fauna.0.fishing,
+        map_texels: w.map_raster.as_deref().and_then(|r| r.base_texels()),
+        map_layers: w
+            .map_layers
+            .as_deref()
+            .map_or_else(Vec::new, |l| l.rasters.clone()),
+        map_overlay: w.map_choice.as_deref().map(|c| c.overlay),
+        legend: {
+            let scale = hands.pointer.single().map_or(1.0, |w| w.scale_factor());
+            w.legend
+                .iter()
+                .filter_map(|(button, t)| match button {
+                    super::map_screen::MapButton::Overlay(
+                        super::map_screen::MapOverlay::Layer(k),
+                    ) => Some((*k, t.translation / scale)),
+                    _ => None,
+                })
+                .collect()
+        },
+        towns: w.towns.as_deref().map_or_else(Vec::new, |t| {
+            t.held
+                .iter()
+                .map(|h| h.point(PLANET_RADIUS).normalize_or(Vec3::Y))
+                .collect()
+        }),
+        talkers: w
+            .talkers
+            .iter()
+            .filter(|(_, _, v)| v.is_none_or(|v| *v != Visibility::Hidden))
+            .map(|(t, g, _)| {
+                (
+                    t.site,
+                    t.index,
+                    pbd_app::render_origin::local_of(w.frame.as_deref(), g.translation()),
+                )
+            })
+            .collect(),
+        town: w.town_missions.as_deref().and_then(|t| t.progress()),
+        talk_buttons: w.talk_buttons.iter().cloned().collect(),
+        pieces: w
+            .pieces
+            .all
+            .iter()
+            .map(|p| {
+                let site = match &p.owner {
+                    super::furniture::Owner::Town { site, .. } => Some(*site),
+                    super::furniture::Owner::Player => None,
+                };
+                let aim = p.point(Vec3::new(0.0, p.kind.height_m().min(1.0) * 0.6, 0.0));
+                (p.id, p.kind, aim, site)
+            })
+            .collect(),
+        sitting: w.sitting.0.is_some(),
+        store_open: w.store_view.open.as_ref().map(|o| {
+            let first = o.store.slots.iter().position(|s| s.is_some());
+            (o.id, o.store.coins, first)
+        }),
+        jobs: w.economy.as_deref().map_or_else(Vec::new, |e| {
+            e.jobs
+                .taken
+                .iter()
+                .map(|j| {
+                    let count = j.objectives.first().map_or(1, |o| o.count);
+                    (j.id, j.kind, count, e.jobs.is_done(j.id))
+                })
+                .collect()
+        }),
+        aboard: w.aboard.as_deref().is_some_and(|a| a.0.is_some()),
         cards: {
             let scale = hands.pointer.single().map_or(1.0, |w| w.scale_factor());
             w.cards
@@ -2273,6 +3289,7 @@ pub fn drive(
                             .map(|m| format!("{m:?}")),
                         "f": w.interact.as_deref().and_then(|i| i.now.as_ref()).map(|o| String::from(o.words())),
                         "in_hand": format!("{:?}", sight.tools.held()),
+                        "aboard": sight.aboard,
                         "selected": sight.slots.held().map(|st| format!("{:?} x{}", st.item, st.count)),
                         "screen": format!("{:?}", sight.screen),
                         "mission": mission,
@@ -2403,13 +3420,20 @@ pub fn drive(
     // The shot's missions done: the shot is over, whatever acts are left
     // (a world resumed part way through a mission, or a mission met sooner
     // than its acts expected). Not with a panel open: it is shut first.
+    // Nor in the middle of a station's job: what was ordered is waited for
+    // and taken out first (2026-11-21: the iron pickaxe counted when queued,
+    // the shot ended, and the bot walked off without it or its old one).
+    let at_station = bot.injected.is_empty()
+        && matches!(
+            shot.acts.get(bot.act),
+            Some(file::Act::Bench(..) | file::Act::Smelt(..) | file::Act::Cook(..))
+        )
+        && bot.phase > 0;
     if !shot.until.is_empty()
         && *w.screen == Screen::Playing
+        && !at_station
         && bot.act < shot.acts.len()
-        && shot
-            .until
-            .iter()
-            .all(|id| sight.missions.progress.is_done(id))
+        && shot.until.iter().all(|id| mission_done(&sight, id))
     {
         bot.act = shot.acts.len();
     }
@@ -2452,11 +3476,7 @@ pub fn drive(
             )
         }
         None => {
-            if shot
-                .until
-                .iter()
-                .all(|id| sight.missions.progress.is_done(id))
-            {
+            if shot.until.iter().all(|id| mission_done(&sight, id)) {
                 Status::Done
             } else if shot.repeat {
                 bot.act = 0;
@@ -2467,7 +3487,7 @@ pub fn drive(
                     "its acts ended with {:?} not done",
                     shot.until
                         .iter()
-                        .filter(|id| !sight.missions.progress.is_done(id))
+                        .filter(|id| !mission_done(&sight, id))
                         .collect::<Vec<_>>()
                 ))
             }
@@ -2563,6 +3583,9 @@ impl Bot {
         self.look_goal = None;
         self.mine_dir = None;
         self.mine_from = None;
+        self.mine_turns = 0;
+        self.herd_goal = None;
+        self.mine_walk_s = 0.0;
         self.away_from = None;
         self.route = None;
         self.route_block.clear();
@@ -2570,14 +3593,45 @@ impl Bot {
         self.stuck_s = 0.0;
         self.through = None;
         self.ore_goal = None;
+        self.map_zoom = (0.0, 0);
+        self.swim = None;
     }
 }
 
 /// Press what the frame asks for.
-fn apply(bot: &mut Bot, hands: &mut Hands, w: &World, pending: &mut PendingClick, out: Intent) {
+fn apply(bot: &mut Bot, hands: &mut Hands, w: &World, pending: &mut PendingClick, mut out: Intent) {
+    // Never the dig button on a field's tilled soil, whichever act asks: the
+    // walk's fallbacks dug the bot's own fields out (owner, 2026-11-22,
+    // watching: "hes just digging lol"; the log: "dug Tilled", cell after
+    // cell, between sowings).
+    // Only at or under the feet: a tilled block over the head is in the way
+    // out and is dug (2026-11-22: a field's edge over the bot in a hollow,
+    // "No room above" four hundred times).
+    let feet_layer = w
+        .walkers
+        .single()
+        .ok()
+        .map(|p| w.space.origin().query_point(p.0).length() - PLANET_RADIUS)
+        .and_then(|alt| pbd_core::column::layer_at(alt + 0.2));
+    if (out.lmb || out.lmb_tap)
+        && let (Some(target), Some(fine)) = (w.aim.target, w.fine.as_deref())
+        && digging::material_of(fine, &w.save, (target.dig.cell, target.dig.layer))
+            == Some(Material::Tilled)
+        && feet_layer.is_none_or(|f| target.dig.layer < f + 1)
+    {
+        out.lmb = false;
+        out.lmb_tap = false;
+    }
+    // Every key an act may hold (Space, A and D were left out, so a held
+    // jump never reached the walker: 2026-11-22, the climb out).
     for key in [
         KeyCode::KeyW,
         KeyCode::KeyS,
+        KeyCode::KeyA,
+        KeyCode::KeyD,
+        KeyCode::KeyQ,
+        KeyCode::KeyE,
+        KeyCode::Space,
         KeyCode::ShiftLeft,
         KeyCode::KeyG,
     ] {
@@ -2645,17 +3699,19 @@ pub fn press_controls(
         Option<&super::kitchen::CookPlaque>,
         Option<&super::pack::PackCell>,
         Option<&super::forge::RecipePlaque>,
-        (
-            Option<&super::mission_tree::Card>,
-            Option<&super::pack::TrashCell>,
-        ),
+        Option<&super::mission_tree::Card>,
+        Option<&super::map_screen::MapButton>,
+        Option<&super::talk::TalkAction>,
+        Option<&super::furniture::StoreCoins>,
     )>,
 ) {
     let Some(click) = pending.0.take() else {
         return;
     };
     let mut hit = false;
-    for (mut interaction, row, button, well, cook, cell, smelt, (card, trash)) in &mut controls {
+    for (mut interaction, row, button, well, cook, cell, smelt, card, legend, talk, coins) in
+        &mut controls
+    {
         let this = match &click {
             Click::Recipe(k) => row.is_some_and(|r| r.0 == *k),
             Click::CraftHand => button.is_some_and(|b| b.0 == "hand"),
@@ -2667,7 +3723,17 @@ pub fn press_controls(
             Click::Smelt(code) => smelt.is_some_and(|c| &c.0 == code),
             Click::Cell(k) => cell.is_some_and(|c| c.0 == *k),
             Click::Card(k) => card.is_some_and(|c| c.0 == *k),
-            Click::Trash => trash.is_some(),
+            Click::MapLayer(k) => legend.is_some_and(|b| {
+                *b == super::map_screen::MapButton::Overlay(super::map_screen::MapOverlay::Layer(
+                    *k,
+                ))
+            }),
+            Click::Clear => {
+                hit = true;
+                false
+            }
+            Click::Talk(action) => talk.is_some_and(|t| t == action),
+            Click::Coins => coins.is_some(),
         };
         if this {
             *interaction = Interaction::Pressed;
@@ -2700,6 +3766,8 @@ fn run(
         Act::Walk(_)
             | Act::Away(_)
             | Act::ToMark
+            | Act::Swim(_)
+            | Act::Seek(_)
             | Act::Shore
             | Act::Fresh
             | Act::Fish(_)
@@ -2712,13 +3780,20 @@ fn run(
             | Act::PickUp(_)
             | Act::Harvest(_)
             | Act::Tame(_)
+            | Act::Talk(_)
+            | Act::Trade(..)
+            | Act::Job
+            | Act::Furniture(_)
             | Act::Pen
             | Act::Lead(_)
             | Act::Collect(_)
     );
-    // Not while making room in the pack (it opened it on purpose).
+    // Not while making room in the pack, nor while fetching an item from it
+    // (it opened it on purpose; 2026-11-21: food for a woolback fetched for
+    // a quarter of an hour, the pack shut by this the frame it opened).
     if in_world
         && bot.room.0 == 0
+        && bot.sel.0 == 0
         && matches!(
             s.screen,
             Screen::Pack
@@ -2754,7 +3829,29 @@ fn run(
                 .away_to
                 .is_none_or(|to| tangent(to - s.feet, s.up).length() < 2.0);
             if reached || bot.phase_s > 12.0 {
-                bot.away_to = Some(dry_ground(s));
+                // Straight on away from where the act began, 25 m a leg; a
+                // leg held 12 s turns 60 degrees (2026-11-23: a dry cell
+                // nearby each time, any way, wandered 8 minutes and never
+                // got 80 m off).
+                let out_dir = tangent(s.feet - from, s.up);
+                let out_dir = if out_dir.length() > 3.0 {
+                    out_dir.normalize()
+                } else {
+                    s.heading
+                };
+                let turn = if reached {
+                    0.0
+                } else {
+                    std::f32::consts::FRAC_PI_3
+                };
+                let dir = Quat::from_axis_angle(s.up, turn) * out_dir;
+                let ahead = (s.feet.normalize_or(s.up) * PLANET_RADIUS + dir * 25.0).normalize();
+                let to = ahead * (PLANET_RADIUS + surface_height(ahead).max(0.0));
+                bot.away_to = Some(if surface_height(ahead) < 0.0 {
+                    dry_ground(s)
+                } else {
+                    to
+                });
                 bot.phase_s = 0.0;
             }
             if let Some(to) = bot.away_to {
@@ -2819,8 +3916,12 @@ fn run(
             let name = name.clone();
             bot.select(s, out, &|item| wanted(&name, item))
         }
+        // Room in the pack first: a dig's blocks, a harvest's produce and
+        // seed (2026-11-22: "No room in the pack" on the chili field).
+        Act::Dig(..) | Act::Mine(..) | Act::Harvest(_) | Act::Chop(_) if bot.make_room(s, out) => {
+            Status::Running
+        }
         Act::Chop(until) => chop(bot, until, s, out),
-        Act::Dig(..) | Act::Mine(..) if bot.make_room(s, out) => Status::Running,
         Act::Dig(until, depth) => dig(bot, until, *depth, s, out),
         Act::Mine(until, depth) => mine(bot, until, *depth, s, out),
         Act::Focus(id) => focus(bot, id, s, out),
@@ -2848,20 +3949,12 @@ fn run(
             _ => Status::Running,
         },
         Act::Mark(metres) => mark(bot, *metres, s, out),
+        Act::MapGoal(layer, class) => map_goal(bot, layer, class, s, out),
         Act::ToMark => match super::map_screen::marks_of(s.save).last().copied() {
             None => Status::Fail("no mark on the map".into()),
-            Some(mark) => {
-                let d = mark.direction();
-                let to = d * (PLANET_RADIUS + surface_height(d).max(0.0));
-                if mark.reached_far(s.feet, PLANET_RADIUS)
-                    || bot.walk_to(s, out, to, pbd_core::map::MARK_NEAR_M * 0.5) == Walked::There
-                {
-                    Status::Done
-                } else {
-                    Status::Running
-                }
-            }
+            Some(mark) => to_mark(bot, mark, s, out),
         },
+        Act::Swim(kind) => swim(bot, kind, s, out),
         Act::Shore | Act::Fresh => match bot.phase {
             0 => match {
                 bot.fresh = matches!(act, Act::Fresh);
@@ -2872,6 +3965,19 @@ fn run(
                     bot.next_phase();
                     Status::Running
                 }
+                // No river or lake in the ground loaded round here: walk on
+                // and look again, five times (2026-11-21: the fresh-water
+                // shot failed at once on a coast with none near).
+                None if bot.fresh && bot.fresh_walks < 5 && bot.injected.is_empty() => {
+                    bot.fresh_walks += 1;
+                    info!(
+                        "showcase: no river or lake near; walking on to look ({} of 5)",
+                        bot.fresh_walks
+                    );
+                    bot.injected.push_back(file::Act::Away(200.0));
+                    Status::Running
+                }
+                None if bot.fresh => Status::Fail("no river or lake found".into()),
                 None => Status::Fail("no sea within 900 m".into()),
             },
             1 => {
@@ -2903,12 +4009,32 @@ fn run(
             }
         },
         Act::Fish(until) => fish(bot, until, s, out),
+        Act::Seek(kind) => seek(bot, kind, s, out),
+        Act::Tap(key) => match key_named(key) {
+            Some(code) => {
+                out.taps.push(code);
+                Status::Done
+            }
+            None => Status::Fail(format!("no key named {key}")),
+        },
+        Act::Hold(key, secs) => match key_named(key) {
+            Some(code) if bot.act_s < *secs => {
+                out.held.insert(code);
+                Status::Running
+            }
+            Some(_) => Status::Done,
+            None => Status::Fail(format!("no key named {key}")),
+        },
         Act::Till(n) => till(bot, *n, s, out),
         Act::Plant(n) => plant(bot, *n, s, out),
         Act::Pick(n) => pick(bot, *n, s, out),
         Act::PickUp(until) => pick_up(bot, until, s, out),
         Act::Harvest(n) => harvest(bot, *n, s, out),
         Act::Tame(species) => tame(bot, species, s, out),
+        Act::Talk(n) => talk(bot, *n, s, out),
+        Act::Trade(sell, buy) => trade(bot, *sell, *buy, s, out),
+        Act::Job => job(bot, s, out),
+        Act::Furniture(what) => furniture(bot, what, s, out),
         Act::Pen => pen(bot, s, out),
         Act::Lead(species) => lead(bot, species, s, out),
         Act::Collect(species) => collect(bot, species, s, out),
@@ -2928,6 +4054,113 @@ fn run(
             1 if bot.phase_s > *secs => {
                 if s.screen == Screen::Missions {
                     out.taps.push(KeyCode::KeyO);
+                }
+                bot.next_phase();
+                Status::Running
+            }
+            2 if bot.phase_s > 0.4 => Status::Done,
+            _ => Status::Running,
+        },
+        // A stack of the ground's own blocks into the nearest chest, through
+        // the pack's chest panel, as `make_room` stores junk.
+        Act::Store => {
+            if bot.phase == 0 {
+                bot.store_now = true;
+                bot.next_phase();
+                Status::Running
+            } else if bot.make_room(s, out) {
+                Status::Running
+            } else if bot.store_now {
+                bot.store_now = false;
+                Status::Fail("nothing to store, or no chest".into())
+            } else {
+                Status::Done
+            }
+        }
+        // The pack cleared of the ground's own blocks, a stack at a time:
+        // picked up and let go off the panels (`drop-and-trash` design 3).
+        Act::Declutter => {
+            let junk = |item: Item| {
+                matches!(
+                    item,
+                    Item::Block(
+                        Material::Sand
+                            | Material::Dirt
+                            | Material::Grass
+                            | Material::Soil
+                            | Material::DryGrass
+                            | Material::JungleGrass
+                            | Material::DesertSand
+                            | Material::Stone
+                            | Material::Rock
+                    )
+                )
+            };
+            let next = (0..CARRIED).find(|&k| s.slots.get(k).is_some_and(|st| junk(st.item)));
+            match bot.phase {
+                0 => {
+                    if s.screen != Screen::Pack {
+                        out.taps.push(KeyCode::Tab);
+                    }
+                    bot.next_phase();
+                    Status::Running
+                }
+                1 if bot.phase_s > 0.6 => match next {
+                    Some(k) if s.screen == Screen::Pack => {
+                        out.click = Some(Click::Cell(k));
+                        out.lmb_tap = true;
+                        bot.next_phase();
+                        Status::Running
+                    }
+                    Some(_) => {
+                        bot.phase = 0;
+                        Status::Running
+                    }
+                    None => {
+                        if s.screen == Screen::Pack {
+                            out.taps.push(KeyCode::Tab);
+                        }
+                        bot.phase = 4;
+                        bot.phase_s = 0.0;
+                        Status::Running
+                    }
+                },
+                2 if bot.phase_s > 0.3 => {
+                    out.pointer = Some(Vec2::new(6.0, 300.0));
+                    bot.next_phase();
+                    Status::Running
+                }
+                3 if bot.phase_s > 0.3 => {
+                    // The cell's press let go first (2026-11-23: one stack
+                    // dropped, then the cell left pressed kept every click
+                    // after it off the background).
+                    out.pointer = Some(Vec2::new(6.0, 300.0));
+                    out.click = Some(Click::Clear);
+                    out.lmb_tap = true;
+                    bot.phase = 1;
+                    bot.phase_s = 0.0;
+                    Status::Running
+                }
+                4 if bot.phase_s > 0.4 => Status::Done,
+                _ if bot.act_s > 60.0 => Status::Fail("the pack never cleared".into()),
+                _ => Status::Running,
+            }
+        }
+        Act::Pack(secs) => match bot.phase {
+            0 => {
+                if s.screen != Screen::Pack {
+                    out.taps.push(KeyCode::Tab);
+                }
+                bot.next_phase();
+                Status::Running
+            }
+            1 if bot.phase_s > 1.0 && bot.stilled.insert("pack") => {
+                bot.want_still = true;
+                Status::Running
+            }
+            1 if bot.phase_s > *secs => {
+                if s.screen == Screen::Pack {
+                    out.taps.push(KeyCode::Tab);
                 }
                 bot.next_phase();
                 Status::Running
@@ -3133,8 +4366,47 @@ fn dig(bot: &mut Bot, until: &Until, depth: u32, s: &Sight, out: &mut Intent) ->
         }
         return Status::Running;
     }
+    // A sea cell wanted by name (reef rock, basalt, a mussel bed) is the only
+    // block taken: the sand round a reef is left (2026-11-22: the pack filled
+    // with it under the water and the reef rock was never reached).
+    let only = match until {
+        Until::Have(name, _) => match pbd_core::station::item_named(name) {
+            Some(pbd_core::inventory::Item::Block(
+                m @ (Material::ReefRock | Material::Basalt | Material::MusselBed),
+            )) => Some(m),
+            _ => None,
+        },
+        _ => None,
+    };
     let Some(Goal::Cell(key)) = bot.goal else {
         bot.tries = 0;
+        // Reef rock: the nearest column of it, gone to along the floor, not a
+        // roam (2026-11-22: the roam left the reef for dry land 14 m up).
+        if only == Some(Material::ReefRock)
+            && let Some(d) = nearest_reef_rock(s.up)
+        {
+            let at = d * (PLANET_RADIUS + surface_height(d));
+            let off = tangent(at - s.feet, s.up).length();
+            if (bot.act_s % 4.0) < s.dt {
+                info!(
+                    "showcase: dig reef rock: {off:.1} m off, {:.1} s",
+                    bot.act_s
+                );
+            }
+            // Within reach, or pinned short of it for 15 s: aimed at from
+            // where the bot is (the dig gives it up if the ray cannot meet it).
+            if off <= 5.0 || bot.act_s > 15.0 {
+                if let Some(key) = s.contact.finest_key(d) {
+                    bot.goal = Some(Goal::Cell(key));
+                    bot.phase = 0;
+                    bot.phase_s = 0.0;
+                }
+            } else {
+                out.held.insert(KeyCode::KeyW);
+                bot.steer(s, out, tangent(at - s.feet, s.up), -0.3);
+            }
+            return Status::Running;
+        }
         match bot.cell_ahead(s, 2.2, 4.2) {
             Some((key, _)) => {
                 bot.goal = Some(Goal::Cell(key));
@@ -3162,6 +4434,7 @@ fn dig(bot: &mut Bot, until: &Until, depth: u32, s: &Sight, out: &mut Intent) ->
     let breakable = bot
         .aimed_cell(s)
         .and_then(|b| digging::material_of(s.fine, s.save, b))
+        .filter(|&m| only.is_none_or(|want| m == want))
         .is_some_and(|m| match s.tools.held() {
             // A pickaxe goes down through the soil to the stone under it, as
             // a player digging into the ground does.
@@ -3170,6 +4443,8 @@ fn dig(bot: &mut Bot, until: &Until, depth: u32, s: &Sight, out: &mut Intent) ->
                 Material::Stone
                     | Material::Rock
                     | Material::Ore
+                    | Material::ReefRock
+                    | Material::Basalt
                     | Material::Grass
                     | Material::DryGrass
                     | Material::JungleGrass
@@ -3225,6 +4500,35 @@ fn mine(bot: &mut Bot, until: &Until, depth: u32, s: &Sight, out: &mut Intent) -
     let Some(feet_layer) = pbd_core::column::layer_at(altitude + 0.2) else {
         return Status::Running;
     };
+    // Hemmed in (trees all round, a ledge it cannot climb): the stair has
+    // turned a dozen times with nothing dug, so walk off a few metres and
+    // start it again there (2026-11-21: 22 minutes turning in a hollow).
+    if bot.mine_turns >= 12 {
+        info!(
+            "showcase: mine: hemmed in after {} turns; walking off to start again",
+            bot.mine_turns
+        );
+        bot.mine_turns = 0;
+        bot.mine_walk_s = 4.0;
+        bot.mine_dir = Some(Quat::from_axis_angle(s.up, 2.1) * s.heading);
+        bot.away_from = None;
+    }
+    if bot.mine_walk_s > 0.0 {
+        bot.mine_walk_s -= s.dt;
+        let away = bot
+            .mine_dir
+            .map_or(s.heading, |d| tangent(d, s.up).normalize_or(s.heading));
+        out.held.insert(KeyCode::KeyW);
+        bot.steer(s, out, away, -0.2);
+        if bot.mine_walk_s < 2.5 && (bot.mine_walk_s + s.dt) >= 2.5 {
+            out.taps.push(KeyCode::Space);
+        }
+        if bot.mine_walk_s <= 0.0 {
+            bot.away_from = None;
+            bot.phase_s = 0.0;
+        }
+        return Status::Running;
+    }
     let dir = *bot.mine_dir.get_or_insert(s.heading);
     let dir = tangent(dir, s.up).normalize_or(s.heading);
     // Mining stays near where it began (the forge and the bench are there):
@@ -3289,7 +4593,12 @@ fn mine(bot: &mut Bot, until: &Until, depth: u32, s: &Sight, out: &mut Intent) -
         {
             let k = records[i].key();
             for l in feet_layer.saturating_sub(1)..=feet_layer + 2 {
-                if !ore_at(k, l) || bot.ore_gave_up.contains(&(k, l)) {
+                // Ore under a standing tree does not dig ("Cut down the
+                // tree first"): leave it in the wall.
+                if !ore_at(k, l)
+                    || bot.ore_gave_up.contains(&(k, l))
+                    || digging::under_standing_tree(s.fine, s.save, s.gather.0.axe_logs, (k, l))
+                {
                     continue;
                 }
                 let at = centre_of(i) * (PLANET_RADIUS + pbd_core::column::layer_altitude(l) + 0.5);
@@ -3313,7 +4622,15 @@ fn mine(bot: &mut Bot, until: &Until, depth: u32, s: &Sight, out: &mut Intent) -
             let at = centre_of(i) * (PLANET_RADIUS + pbd_core::column::layer_altitude(l) + 0.5);
             let aimed = bot.aim_at(s, out, at);
             let on = bot.aimed_cell(s) == Some((k, l));
-            if on && (aimed || bot.lmb_down) {
+            if bot.phase_s > 8.0 {
+                // Held on it far past its break time and it is still there:
+                // something the game refuses (2026-11-21, a rooted vein held
+                // the bot for 100 minutes). Leave it.
+                info!("showcase: mine: ore at cell {k} layer {l} will not break; leaving it");
+                bot.ore_gave_up.insert((k, l));
+                bot.ore_goal = None;
+                bot.phase_s = 0.0;
+            } else if on && (aimed || bot.lmb_down) {
                 out.lmb = true;
             } else if bot.phase_s > 2.5 {
                 // Out of the crosshair's reach from here.
@@ -3337,6 +4654,7 @@ fn mine(bot: &mut Bot, until: &Until, depth: u32, s: &Sight, out: &mut Intent) -
             || solid(layer).is_some_and(|m| pbd_core::station::station_of(m).is_some()))
     {
         bot.mine_dir = Some(Quat::from_axis_angle(s.up, -std::f32::consts::FRAC_PI_3) * dir);
+        bot.mine_turns += 1;
         bot.tries += 1;
         bot.away_from = Some(s.feet);
         if bot.tries > 6 {
@@ -3382,6 +4700,7 @@ fn mine(bot: &mut Bot, until: &Until, depth: u32, s: &Sight, out: &mut Intent) -
                 );
                 bot.mine_dir =
                     Some(Quat::from_axis_angle(s.up, -std::f32::consts::FRAC_PI_3) * dir);
+                bot.mine_turns += 1;
                 bot.phase_s = 0.0;
                 bot.away_from = Some(s.feet);
             }
@@ -3399,6 +4718,7 @@ fn mine(bot: &mut Bot, until: &Until, depth: u32, s: &Sight, out: &mut Intent) -
                 info!("showcase: mine: cannot step into cell {key}; turning the stair");
                 bot.mine_dir =
                     Some(Quat::from_axis_angle(s.up, -std::f32::consts::FRAC_PI_3) * dir);
+                bot.mine_turns += 1;
                 bot.phase_s = 0.0;
                 // Home is here now: the stay-near rule must not turn it
                 // straight back into the cell it could not enter.
@@ -3411,6 +4731,7 @@ fn mine(bot: &mut Bot, until: &Until, depth: u32, s: &Sight, out: &mut Intent) -
     if dug > bot.count {
         bot.count = dug;
         bot.phase_s = 0.0;
+        bot.mine_turns = 0;
     }
     // Each new cell stood in resets it too.
     if !matches!(bot.goal, Some(Goal::Cell(k)) if k == records[c].key()) {
@@ -3579,18 +4900,42 @@ fn craft(bot: &mut Bot, code: &str, times: u32, s: &Sight, out: &mut Intent) -> 
 /// Set the named block down on fresh ground ahead.
 fn place(bot: &mut Bot, name: &str, s: &Sight, out: &mut Intent) -> Status {
     // A station already standing, and none carried: nothing to place
-    // (a shot that sets it down again only if it was taken up).
+    // (a shot that sets it down again only if it was taken up). One far off
+    // counts too: the station act after walks to it (2026-11-21: the iron
+    // age, started on its own, stopped at "block:forge: not carried" with
+    // the forge standing where the bronze was smelted).
     if bot.phase == 0
         && carried(s.slots, name) == 0
         && let Some(Item::Block(m)) = pbd_core::station::item_named(name)
         && pbd_core::station::station_of(m).is_some()
-        && bot
-            .stations(s, m)
-            .is_some_and(|(_, _, at)| at.distance(s.feet) < STATION_NEAR_M)
+        && let Some((_, _, at)) = bot.stations(s, m)
     {
+        // Far off (seen: 66 m off and 19 m down, the walk there looping on
+        // its first step): a new one made at the bench and set down here,
+        // as a player would rather than walk back.
+        if at.distance(s.feet) >= STATION_NEAR_M && bot.injected.is_empty() {
+            info!(
+                "showcase: no {name} carried, the standing one {:.0} m off; making one here",
+                at.distance(s.feet)
+            );
+            if let Some(made) = name.strip_prefix("block:") {
+                bot.injected.push_back(file::Act::Bench(made.into(), 1));
+                bot.injected.push_back(file::Act::Wait(7.0));
+                bot.injected.push_back(file::Act::Place(name.into()));
+                return Status::Running;
+            }
+        }
         return Status::Done;
     }
     if bot.phase == 0 {
+        // A tool in hand uses the right button (the shovel tills): put it
+        // away first, as a player does (2026-11-23: the campfire never set
+        // down, the shovel tilling the grass instead).
+        if s.tools.held().is_some() && bot.injected.is_empty() {
+            info!("showcase: {name}: the tool put away to place it");
+            bot.injected.push_front(file::Act::Hand("hand".into()));
+            return Status::Running;
+        }
         // How many were carried, one over (0 is unset): placed means one
         // fewer of this block, not any block placed (an up-and-out on the
         // way set dry grass, and the forge was taken as placed).
@@ -3621,10 +4966,13 @@ fn place(bot: &mut Bot, name: &str, s: &Sight, out: &mut Intent) -> Status {
             .finest_cell(s.up)
             .and_then(|i| s.fine.set.finest_records().get(i))
             .map(|r| r.key());
+        // 2.2 to 6 m: by a field, a pen and the bot's own pits the 2.6 to
+        // 4.2 m ring held no fresh level cell (2026-11-23, the forge never
+        // set down after 90 s of roaming).
         let best = bot
-            .fresh_cells(s, 2.6, 4.2)
+            .fresh_cells(s, 2.2, 6.0)
             .into_iter()
-            .filter(|(k, top, _)| (*top - s.feet).dot(s.up) < 0.3 && Some(*k) != mine)
+            .filter(|(k, top, _)| (*top - s.feet).dot(s.up) < 1.2 && Some(*k) != mine)
             .map(|(k, top, _)| {
                 let a = signed_angle(s.heading, tangent(top - s.feet, s.up), s.up).abs();
                 (k, a)
@@ -3653,6 +5001,21 @@ fn place(bot: &mut Bot, name: &str, s: &Sight, out: &mut Intent) -> Status {
     let on = bot.aimed_cell(s).is_some_and(|(c, _)| c == key)
         && s.aim
             .is_some_and(|t| t.place.is_some_and(|p| Some(p.cell) != mine));
+    // A walk on may have taken a tool back up (the shovel to dig through):
+    // away again before the right button, or it tills.
+    if s.tools.held().is_some() {
+        bot.fetch_tool(s, out, None);
+        return Status::Running;
+    }
+    // Climbing out on the way sets blocks from another slot and can empty
+    // it (2026-11-23: "the selected slot holds no block", the forge carried
+    // the whole time): the item selected again first.
+    if !s.slots.held().is_some_and(|st| wanted(name, st.item)) {
+        info!("showcase: {name}: no longer selected; selecting it again");
+        bot.phase = 0;
+        bot.goal = None;
+        return Status::Running;
+    }
     if aimed && on && bot.phase_s > 0.3 && bot.tries < 3 {
         out.rmb_tap = true;
         bot.tries += 1;
@@ -3663,7 +5026,10 @@ fn place(bot: &mut Bot, name: &str, s: &Sight, out: &mut Intent) -> Status {
         bot.goal = None;
         bot.tries = 0;
     }
-    if bot.act_s > 30.0 {
+    // A pit by the bench (2026-11-23: the forge's shot, walled round in the
+    // bot's own digging) takes longer to find a cell in: a step up is fine
+    // (the filter above), and a minute and a half.
+    if bot.act_s > 90.0 {
         return Status::Fail(format!("{name} was never placed"));
     }
     Status::Running
@@ -3679,9 +5045,7 @@ fn station(
     s: &Sight,
     out: &mut Intent,
 ) -> Status {
-    let Some((cell, layer, at)) = bot.stations(s, material) else {
-        return Status::Fail(format!("no {material:?} placed"));
-    };
+    let found = bot.stations(s, material);
     // The nearest workbench or campfire far off (across water, past a
     // hill): a new one here, as a player makes one rather than walk back
     // (seen 2026-11-20: a bench 92 m off through the sea, a fire 57 m).
@@ -3696,6 +5060,30 @@ fn station(
     let affordable = carried(s.slots, block) > 0
         || (short_of(s, "hand", made).is_none()
             && (material != Material::Workbench || carried(s.slots, "planks") >= 6));
+    // None placed at all: one made here when it can be (2026-11-22: the
+    // raft's bench step stalled, "no Workbench placed").
+    let Some((cell, layer, at)) = found else {
+        // Planks from logs count: a log makes four.
+        let can = affordable
+            || (material == Material::Workbench
+                && carried(s.slots, "planks") + 4 * carried(s.slots, "log") >= 6);
+        if bot.phase == 0 && !made.is_empty() && bot.injected.is_empty() && can {
+            info!("showcase: no {made} placed; making one here");
+            if carried(s.slots, block) == 0 {
+                if material == Material::Workbench && carried(s.slots, "planks") < 6 {
+                    bot.injected.push_back(file::Act::Craft("planks".into(), 2));
+                }
+                bot.injected.push_back(file::Act::Craft(made.into(), 1));
+                bot.injected.push_back(file::Act::Wait(5.0));
+            }
+            bot.injected.push_back(file::Act::Place(block.into()));
+            return Status::Running;
+        }
+        if !bot.injected.is_empty() {
+            return Status::Running;
+        }
+        return Status::Fail(format!("no {material:?} placed"));
+    };
     if bot.phase == 0
         && !made.is_empty()
         && at.distance(s.feet) > STATION_NEAR_M
@@ -3978,10 +5366,12 @@ fn shore(s: &Sight, fresh: bool) -> Option<(Vec3, Vec3)> {
             let a = a as f32 / 48.0 * std::f32::consts::TAU;
             let along = east * a.cos() + north * a.sin();
             // Open water: this point and the next eight metres on are all
-            // sea, not a damp hollow at the foot of a bank.
+            // sea, not a damp hollow at the foot of a bank, and as deep as
+            // the cast asks (`hold_for_water`, 1.5 m; 2026-11-21: a lagoon
+            // 0.6 m deep passed here, then no cast found water deep enough).
             let open = [0.0_f32, 4.0, 8.0]
                 .iter()
-                .all(|k| surface_height((up * PLANET_RADIUS + along * (r + k)).normalize()) < -0.6);
+                .all(|k| surface_height((up * PLANET_RADIUS + along * (r + k)).normalize()) < -1.6);
             if open {
                 let turn = signed_angle(s.heading, along, up).abs();
                 if best.is_none_or(|b| turn < b.1) {
@@ -4010,7 +5400,10 @@ fn shore(s: &Sight, fresh: bool) -> Option<(Vec3, Vec3)> {
 }
 
 /// The nearest river or lake bank in the live ground: water standing at
-/// least 0.6 m above the sea (what a catch counts as fresh) and 1.2 m deep,
+/// least 0.6 m above the sea (what a catch counts as fresh) and one layer
+/// deep (0.9 m): a swamp's pools are one layer, as are a sixth of a river's
+/// reaches, and river fish live from 0.2 m down (`fishing-anywhere` design
+/// 6; at 1.2 m every swamp pool was passed by for a lake 240 m off),
 /// the stand the dry cell before it on the same bearing.
 fn fresh_shore(s: &Sight, east: Vec3, north: Vec3) -> Option<(Vec3, Vec3)> {
     let up = s.up;
@@ -4018,7 +5411,7 @@ fn fresh_shore(s: &Sight, east: Vec3, north: Vec3) -> Option<(Vec3, Vec3)> {
     let heights = |d: Vec3| pbd_app::river_walk::cell_heights(Some(s.contact), d);
     let open = |d: Vec3| {
         let (ground, top) = heights(d);
-        top > 0.6 && top - ground > 1.2
+        top > 0.6 && top - ground > 0.9
     };
     for r in (4..400).step_by(2) {
         let r = r as f32;
@@ -4161,7 +5554,7 @@ fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
                     }
                 }
                 Walked::There => bot.next_phase(),
-                _ if bot.phase_s > 60.0 => return Status::Fail("never reached the shore".into()),
+                _ if bot.phase_s > 120.0 => return Status::Fail("never reached the shore".into()),
                 _ => {}
             }
         }
@@ -4204,9 +5597,13 @@ fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
                     // Every bearing tried from here: fifteen metres along the
                     // shore and try again (a pit of its own bait digging, a
                     // bank in the way), four stands at most.
-                    None if bot.cast_turns / 100 < 4 => {
+                    // Ten stands, the later ones further apart: a shallow bay
+                    // runs on for more than four short steps (2026-11-21:
+                    // four stands in one bay, then "no water within a cast").
+                    None if bot.cast_turns / 100 < 10 => {
+                        let step = if bot.cast_turns / 100 < 3 { 15.0 } else { 40.0 };
                         let along =
-                            s.up.cross(tangent(water - stand, s.up)).normalize_or_zero() * 15.0;
+                            s.up.cross(tangent(water - stand, s.up)).normalize_or_zero() * step;
                         let moved = (stand + along).normalize();
                         let next = moved * (PLANET_RADIUS + surface_height(moved).max(0.0));
                         info!(
@@ -4293,22 +5690,27 @@ fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
             if phase != Phase::Ready {
                 bot.line_was_out = true;
             }
-            // Twelve casts and nothing: the fish here are caught or shy;
-            // fifteen metres along the shore, as a player moves on (seen
-            // 2026-11-20: two caught, then forty casts and no bite).
+            // Twelve casts and nothing: the fish here are caught or shy; a
+            // hundred metres along the shore, as a player moves on (seen
+            // 2026-11-20: two caught, then forty casts and no bite). Past the
+            // schools' 90 m despawn, so new ones (new kinds) spawn round the
+            // new stand (2026-11-23: eight schools in the first minute, none
+            // after in fifteen, the third kind never there).
             if bot.tries > 0
                 && bot.tries % 12 == 0
                 && phase == Phase::Ready
-                && let Some(Goal::Point(water, stand)) = bot.goal
+                && bot.injected.is_empty()
             {
-                let along = s.up.cross(tangent(water - stand, s.up)).normalize_or_zero() * 15.0;
-                let moved = (stand + along).normalize();
-                let stand = moved * (PLANET_RADIUS + surface_height(moved).max(0.0));
-                info!("showcase: no bite in twelve casts; fifteen metres along the shore");
-                bot.goal = Some(Goal::Point(water + along, stand));
+                // A point along the shore computed from the cast had no route
+                // over land (2026-11-23, "never reached the shore"): the walk
+                // away over dry ground and the shore search a player uses.
+                info!("showcase: no bite in twelve casts; a hundred metres off, then the shore");
+                bot.injected.push_back(file::Act::Away(100.0));
+                bot.injected.push_back(file::Act::Hand("rod".into()));
+                bot.goal = None;
                 bot.fish_from = None;
                 bot.tries += 1;
-                bot.phase = 1;
+                bot.phase = 0;
                 bot.phase_s = 0.0;
                 return Status::Running;
             }
@@ -4323,8 +5725,17 @@ fn fish(bot: &mut Bot, until: &Until, s: &Sight, out: &mut Intent) -> Status {
 /// Till a small field with the shovel: a fresh cell ahead and its grassy
 /// neighbours, F on each.
 fn till(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
+    // The shovel back in hand when a walk on swapped it for the pickaxe
+    // (2026-11-22: stone on the way to a cell, then "the shovel is not in
+    // hand").
     if s.tools.held() != Some(Tool::Shovel) {
-        return Status::Fail("the shovel is not in hand".into());
+        if bot.fetch_tool(s, out, Some(Tool::Shovel)) {
+            return Status::Running;
+        }
+        if !s.tools.tools().contains(&Tool::Shovel) {
+            return Status::Fail("no shovel".into());
+        }
+        return Status::Running;
     }
     let tilled = s.tally.tilled - bot.mark.tilled;
     if tilled > bot.count {
@@ -4339,8 +5750,25 @@ fn till(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
         return Status::Done;
     }
     let Some(Goal::Cell(key)) = bot.goal else {
-        // Next to the field so far, or ahead for the first.
-        let cells = bot.fresh_cells(s, 1.8, 4.6);
+        // Next to the field so far, or ahead for the first. Never a cell a
+        // standing tree holds: the game says "Cut down the tree first" and
+        // tills nothing (owner, 2026-11-23: "do you get the logs where it
+        // says cut down tree first?").
+        let under_tree = |key: u32| {
+            let records = s.fine.set.finest_records();
+            s.fine
+                .set
+                .finest_index_of(key)
+                .and_then(|i| pbd_core::column::layer_at(records[i].direction_height[3] - 0.5))
+                .is_some_and(|layer| {
+                    digging::under_standing_tree(s.fine, s.save, s.gather.0.axe_logs, (key, layer))
+                })
+        };
+        let cells: Vec<_> = bot
+            .fresh_cells(s, 1.8, 4.6)
+            .into_iter()
+            .filter(|c| !under_tree(c.0))
+            .collect();
         let last = bot.field.last().copied();
         let anchor = last.and_then(|k| bot.top_of(s, k));
         let next = match anchor {
@@ -4348,7 +5776,10 @@ fn till(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
                 .into_iter()
                 .min_by(|x, y| x.1.distance(a).total_cmp(&y.1.distance(a)))
                 .map(|c| c.0),
-            None => bot.cell_ahead(s, 2.4, 4.0).map(|c| c.0),
+            None => bot
+                .cell_ahead(s, 2.4, 4.0)
+                .map(|c| c.0)
+                .filter(|&k| !under_tree(k)),
         };
         match next {
             Some(key) => {
@@ -4378,21 +5809,741 @@ fn till(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
         bot.goal = None;
         bot.tries = 0;
     }
-    if bot.act_s > 60.0 {
+    if bot.act_s > 180.0 {
         return Status::Fail(format!("tilled {} of {n}", bot.count));
     }
     Status::Running
 }
 
+/// Whether a cell's top, within a few layers of its generated ground, is
+/// tilled soil with air over it.
+fn bot_top_tilled(s: &Sight, key: u32) -> bool {
+    let Some(r) = s
+        .fine
+        .set
+        .finest_index_of(key)
+        .map(|i| &s.fine.set.finest_records()[i])
+    else {
+        return false;
+    };
+    let Some(base) = pbd_core::column::layer_at(r.direction_height[3] - 0.5) else {
+        return false;
+    };
+    (base.saturating_sub(4)..base + 4).any(|l| {
+        digging::material_of(s.fine, s.save, (key, l)) == Some(Material::Tilled)
+            && digging::material_of(s.fine, s.save, (key, l + 1)) == Some(Material::Air)
+    })
+}
+
 /// Sow the field's tilled cells with the seed in hand.
+/// A key by the name a showcase file gives it.
+fn key_named(name: &str) -> Option<KeyCode> {
+    Some(match name {
+        "F" => KeyCode::KeyF,
+        "W" => KeyCode::KeyW,
+        "A" => KeyCode::KeyA,
+        "S" => KeyCode::KeyS,
+        "D" => KeyCode::KeyD,
+        "E" => KeyCode::KeyE,
+        "Q" => KeyCode::KeyQ,
+        "Space" => KeyCode::Space,
+        _ => return None,
+    })
+}
+
+/// The nearest place of a kind round the walker (`mission-playthrough`
+/// design 5), a direction from the planet's centre: a town's middle, or the
+/// first of 24 bearings on rings 40 m apart out to 4 km that is a reef or
+/// dry ground of the climate asked.
+fn seek_target(kind: &str, s: &Sight) -> Option<Vec3> {
+    use pbd_core::farming::Climate;
+    if kind == "town" {
+        return s
+            .towns
+            .iter()
+            .copied()
+            .min_by(|a, b| a.distance(s.up).total_cmp(&b.distance(s.up)));
+    }
+    let cfg = pbd_app::planet::terrain_config();
+    let want = match kind {
+        "hot" | "desert" => Some(Climate::Hot),
+        "temperate" => Some(Climate::Temperate),
+        "cold" => Some(Climate::Cold),
+        _ => None,
+    };
+    let fits = |d: Vec3| match want {
+        Some(climate) => {
+            let h = surface_height(d);
+            let biome = pbd_core::planet_gen::biome_at(cfg, d, h + 1.0);
+            // A desert: hot and open, no trees to till round (2026-11-22:
+            // jungle, hot too, gave ten minutes of "Cut down the tree first").
+            h > 0.5
+                && Climate::of(biome) == Some(climate)
+                && (kind != "desert" || biome == pbd_core::planet_gen::Biome::Desert)
+        }
+        None => {
+            pbd_core::ocean::places::environment(cfg, d) == Some(pbd_core::fauna::Environment::Reef)
+        }
+    };
+    // A climate holds over the whole patch the field is dug in, not only at
+    // the point (2026-11-22: the point was jungle, the field 6 m off
+    // temperate, and every chili refused): the point and eight bearings at
+    // 8 and 15 m.
+    let patch = |d: Vec3| {
+        if want.is_none() {
+            return fits(d);
+        }
+        let e = d.any_orthonormal_vector();
+        let n = d.cross(e);
+        fits(d)
+            && [8.0_f32, 15.0, 22.0, 30.0].iter().all(|&m| {
+                let a = m / PLANET_RADIUS;
+                (0..8).all(|k| {
+                    let b = k as f32 * std::f32::consts::TAU / 8.0;
+                    fits((d * a.cos() + (e * b.cos() + n * b.sin()) * a.sin()).normalize())
+                })
+            })
+    };
+    if patch(s.up) {
+        return Some(s.up);
+    }
+    if want.is_none() {
+        return nearest_reef_rock(s.up);
+    }
+    let east = s.up.any_orthonormal_vector();
+    let north = s.up.cross(east);
+    for ring in 1..=100 {
+        let angle = ring as f32 * 40.0 / PLANET_RADIUS;
+        for k in 0..24 {
+            let bearing = k as f32 * std::f32::consts::TAU / 24.0;
+            let d = (s.up * angle.cos()
+                + (east * bearing.cos() + north * bearing.sin()) * angle.sin())
+            .normalize();
+            if patch(d) {
+                return Some(d);
+            }
+        }
+    }
+    None
+}
+
+/// The nearest column whose top is reef rock, from `up`: rings every 20 m
+/// out to the far side, a point every 20 m round each, nearest first
+/// (2026-11-22: 24 bearings on 40 m rings out to 4 km were a kilometre apart
+/// at the edge, and found "no reef within 4 km" on a world with reefs).
+fn nearest_reef_rock(up: Vec3) -> Option<Vec3> {
+    let cfg = pbd_app::planet::terrain_config();
+    let is_rock = |d: Vec3| {
+        let surface = pbd_core::planet_gen::surface_altitude(cfg, d).floor();
+        pbd_core::ocean::cells::top(cfg, d, surface) == Some(Material::ReefRock)
+    };
+    if is_rock(up) {
+        return Some(up);
+    }
+    let east = up.any_orthonormal_vector();
+    let north = up.cross(east);
+    // Every 2 m out to 40 m, then every 20 m (2026-11-22: rings every 20 m
+    // from 20 m out missed a rock 2.7 m off and sent the dig 20 m away).
+    let far = PLANET_RADIUS * std::f32::consts::PI;
+    let radii = (1..=20)
+        .map(|k| k as f32 * 2.0)
+        .chain((3..).map(|k| k as f32 * 20.0).take_while(move |&m| m < far));
+    for metres in radii {
+        let angle = metres / PLANET_RADIUS;
+        let spacing = if metres <= 40.0 { 2.0 } else { 20.0 } / PLANET_RADIUS;
+        let round = ((std::f32::consts::TAU * angle.sin()) / spacing)
+            .ceil()
+            .max(6.0) as u32;
+        for k in 0..round {
+            let bearing = k as f32 * std::f32::consts::TAU / round as f32;
+            let d = (up * angle.cos()
+                + (east * bearing.cos() + north * bearing.sin()) * angle.sin())
+            .normalize();
+            if is_rock(d) {
+                return Some(d);
+            }
+        }
+    }
+    None
+}
+
+/// The row of a layer's colour key a class names: the key's last word, or
+/// its last part after an underscore (`reef` is `world_map.place.coral_reef`,
+/// `desert` is `world_map.biome.desert`).
+fn key_row(key: &[(&str, [u8; 3])], class: &str) -> Option<usize> {
+    key.iter().position(|(name, _)| {
+        let last = name.rsplit('.').next().unwrap_or(name);
+        last == class || last.ends_with(&format!("_{class}"))
+    })
+}
+
+/// The pixel of the base level whose class in a layer is `row` nearest
+/// `up`, as a direction from the planet's centre: what the map draws in that
+/// colour, read off the texels it drew it from (`mission-playthrough` 5.8).
+fn nearest_of_class(
+    texels: &[pbd_core::map::Texel],
+    class: fn(&pbd_core::map::Texel) -> Option<usize>,
+    row: usize,
+    up: Vec3,
+) -> Option<Vec3> {
+    let (width, height) = pbd_app::world_map::level_size(pbd_app::world_map::BASE);
+    if texels.len() != width * height {
+        return None;
+    }
+    texels
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| class(t) == Some(row))
+        .map(|(i, _)| pbd_core::geo::pixel_direction(i % width, i / width, width, height))
+        .min_by(|a, b| a.distance(up).total_cmp(&b.distance(up)))
+}
+
+/// The `MapGoal` act (`mission-playthrough` 5.8): plan a far goal from the
+/// map, as a player does. Open it with M, pick the layer by its legend row,
+/// find the pixel of the class nearest the player, zoom out until it is near
+/// the middle of the screen, put the pointer on it and zoom in, look again
+/// at the finer level's pixels round it, right-click a mark there and close
+/// the map. A reef the map shows none of falls back on the generator's
+/// search for reef rock, marked the same way.
+fn map_goal(bot: &mut Bot, layer: &str, class: &str, s: &Sight, out: &mut Intent) -> Status {
+    use super::map_screen::MapOverlay;
+    let name = format!("map.layer.{layer}");
+    let Some(index) = s.map_layers.iter().position(|l| l.name == name) else {
+        return Status::Fail(format!("no map layer {layer}"));
+    };
+    let raster = s.map_layers[index];
+    let Some(row) = key_row(raster.key, class) else {
+        return Status::Fail(format!("no {class} on the map's {layer} layer"));
+    };
+    if bot.phase == 0 {
+        if s.screen != Screen::Map {
+            out.taps.push(KeyCode::KeyM);
+        }
+        bot.next_phase();
+        return Status::Running;
+    }
+    if bot.phase_s < 0.2 {
+        return Status::Running;
+    }
+    if s.screen != Screen::Map && bot.phase < 10 {
+        if bot.phase == 1 && bot.phase_s < 3.0 {
+            return Status::Running;
+        }
+        return Status::Fail("the map is not up".into());
+    }
+    let (Some(view), Some(size)) = (s.map_view, s.window) else {
+        return Status::Fail("the map is not up".into());
+    };
+    let view = view.clamped(size);
+    let on_screen = |goal: Vec3| view.to_screen(pbd_core::geo::project(goal), size);
+    match bot.phase {
+        // The layer's row in the legend, pointed at and clicked.
+        1 if bot.phase_s > 0.8 => {
+            if s.map_overlay == Some(MapOverlay::Layer(index)) {
+                bot.phase = 3;
+                bot.phase_s = 0.0;
+                return Status::Running;
+            }
+            let Some(&(_, at)) = s.legend.iter().find(|(k, _)| *k == index) else {
+                return Status::Fail(format!("no legend row for the {layer} layer"));
+            };
+            out.pointer = Some(at);
+            bot.next_phase();
+        }
+        2 if bot.phase_s > 0.3 => {
+            out.click = Some(Click::MapLayer(index));
+            bot.next_phase();
+        }
+        // The nearest pixel of the class.
+        3 if bot.phase_s > 0.6 => {
+            if s.map_overlay != Some(MapOverlay::Layer(index)) {
+                if bot.phase_s > 4.0 {
+                    return Status::Fail(format!("the legend did not pick the {layer} layer"));
+                }
+                return Status::Running;
+            }
+            let found = match &s.map_texels {
+                Some(texels) => nearest_of_class(texels, raster.class, row, s.up),
+                // The base is still being built or read: a while for it.
+                None if bot.phase_s < 30.0 => return Status::Running,
+                None => None,
+            };
+            let goal = match found {
+                Some(d) => {
+                    info!(
+                        "showcase: map goal {layer}/{class}: the nearest on the map {:.0} m off",
+                        d.distance(s.up) * PLANET_RADIUS
+                    );
+                    d
+                }
+                None if class == "reef" => {
+                    let Some(d) = nearest_reef_rock(s.up) else {
+                        return Status::Fail("no reef on the map, and no reef rock found".into());
+                    };
+                    info!(
+                        "showcase: map goal {layer}/{class}: none on the map; the reef rock search found one {:.0} m off",
+                        d.distance(s.up) * PLANET_RADIUS
+                    );
+                    d
+                }
+                None => return Status::Fail(format!("no {class} on the map")),
+            };
+            bot.mark_goal = Some(goal);
+            bot.map_zoom = (0.0, 0);
+            bot.next_phase();
+        }
+        // Zoom out about the middle until the goal is near it, clear of the
+        // legend at the side, or the whole planet is on screen.
+        4 => {
+            let Some(goal) = bot.mark_goal else {
+                return Status::Fail("lost the map goal".into());
+            };
+            let at = on_screen(goal);
+            let middle = size / 2.0;
+            let near = ((at - middle).abs() - size * 0.3).max_element() <= 0.0;
+            let widest = bot.map_zoom.1 > 0 && view.px_per_turn >= bot.map_zoom.0 - 0.5;
+            if near || widest || bot.map_zoom.1 >= 30 {
+                out.pointer = Some(at);
+                bot.map_zoom = (0.0, 0);
+                bot.next_phase();
+            } else {
+                out.pointer = Some(middle);
+                out.wheel = 1;
+                bot.map_zoom = (view.px_per_turn, bot.map_zoom.1 + 1);
+                bot.phase_s = 0.0;
+            }
+        }
+        // Zoom in about the goal until the finest level's pixel is a screen
+        // pixel, to see it before marking it.
+        5 => {
+            let Some(goal) = bot.mark_goal else {
+                return Status::Fail("lost the map goal".into());
+            };
+            out.pointer = Some(on_screen(goal));
+            let finest = pbd_app::world_map::LEVELS[pbd_app::world_map::LEVELS.len() - 1] as f32;
+            let stopped = bot.map_zoom.1 > 0 && view.px_per_turn <= bot.map_zoom.0 + 0.5;
+            if view.px_per_turn >= finest || stopped || bot.map_zoom.1 >= 30 {
+                bot.next_phase();
+            } else if bot.phase_s > 0.15 {
+                out.wheel = -1;
+                bot.map_zoom = (view.px_per_turn, bot.map_zoom.1 + 1);
+                bot.phase_s = 0.0;
+            }
+        }
+        // Look again at the level drawn now: the pixel of the class nearest
+        // the goal, within six of it.
+        6 if bot.phase_s > 0.3 => {
+            let Some(goal) = bot.mark_goal else {
+                return Status::Fail("lost the map goal".into());
+            };
+            let level = view.level();
+            let (width, height) = pbd_app::world_map::level_size(level);
+            let uv = pbd_core::geo::project(goal);
+            let col = (uv.x * width as f32).floor() as i64;
+            let line = (uv.y * height as f32).floor() as i64;
+            let cfg = pbd_app::planet::terrain_config();
+            let mut best: Option<Vec3> = None;
+            for dy in -6..=6_i64 {
+                for dx in -6..=6_i64 {
+                    let x = (col + dx).rem_euclid(width as i64) as usize;
+                    let y = (line + dy).clamp(0, height as i64 - 1) as usize;
+                    let texel = pbd_app::world_map::pixel_texel(cfg, level, x, y);
+                    if (raster.class)(&texel) != Some(row) {
+                        continue;
+                    }
+                    let d = pbd_core::geo::pixel_direction(x, y, width, height);
+                    if best.is_none_or(|b| d.distance(goal) < b.distance(goal)) {
+                        best = Some(d);
+                    }
+                }
+            }
+            match best {
+                Some(d) => {
+                    info!(
+                        "showcase: map goal {layer}/{class}: seen at {:.1} m a pixel, {:.0} m off",
+                        view.metres_per_pixel(),
+                        d.distance(s.up) * PLANET_RADIUS
+                    );
+                    bot.mark_goal = Some(d);
+                }
+                None => info!(
+                    "showcase: map goal {layer}/{class}: not seen at {:.1} m a pixel; marked where the base showed it",
+                    view.metres_per_pixel()
+                ),
+            }
+            out.pointer = bot.mark_goal.map(on_screen);
+            bot.next_phase();
+        }
+        7 if bot.phase_s > 0.3 => {
+            out.pointer = bot.mark_goal.map(on_screen);
+            out.rmb_tap = true;
+            bot.next_phase();
+        }
+        8 if bot.phase_s > 1.0 => {
+            let set = super::map_screen::marks_of(s.save)
+                .last()
+                .zip(bot.mark_goal)
+                .is_some_and(|(m, goal)| m.direction().distance(goal.normalize()) < 0.01);
+            if !set {
+                // A pin already there: the click took it away; once more
+                // puts it back as the newest.
+                if bot.tries < 2 {
+                    bot.tries += 1;
+                    bot.phase = 7;
+                    bot.phase_s = 0.0;
+                    return Status::Running;
+                }
+                return Status::Fail("the right click set no waypoint".into());
+            }
+            if let Some(goal) = bot.mark_goal {
+                info!(
+                    "showcase: map goal {layer}/{class}: marked, {:.0} m off",
+                    goal.distance(s.up) * PLANET_RADIUS
+                );
+            }
+            if bot.stilled.insert("map goal") {
+                bot.want_still = true;
+            }
+            bot.next_phase();
+        }
+        9 if bot.phase_s > 0.6 => {
+            out.taps.push(KeyCode::KeyM);
+            bot.next_phase();
+        }
+        10 if bot.phase_s > 0.4 && s.screen != Screen::Map => return Status::Done,
+        10 if bot.phase_s > 3.0 => {
+            bot.phase = 9;
+            bot.phase_s = 0.0;
+        }
+        _ => {}
+    }
+    Status::Running
+}
+
+/// Along the ground from the feet toward `d`, every 3 m out to `reach`: the
+/// last dry point before the sea, on the ground, and how far off the sea
+/// starts (`None` when it does not within `reach`).
+fn toward_coast(s: &Sight, d: Vec3, reach: f32) -> (Option<Vec3>, Option<f32>) {
+    let side = tangent(d - s.up, s.up).normalize_or_zero();
+    let mut dry = None;
+    let mut m = 3.0;
+    while m <= reach {
+        let a = m / PLANET_RADIUS;
+        let p = (s.up * a.cos() + side * a.sin()).normalize();
+        let h = surface_height(p);
+        if h < 0.0 {
+            return (dry, Some(m));
+        }
+        dry = Some(p * (PLANET_RADIUS + h));
+        m += 3.0;
+    }
+    (dry, None)
+}
+
+/// The `ToMark` act: walk to the newest waypoint in legs of 120 m (5.6). A
+/// mark at sea is walked to as far as the coast on the way, where the
+/// walk ends with the water a few metres ahead, for a `Swim` (5.7 leg 1).
+fn to_mark(bot: &mut Bot, mark: pbd_core::map::Mark, s: &Sight, out: &mut Intent) -> Status {
+    let d = mark.direction();
+    if mark.reached_far(s.feet, PLANET_RADIUS) {
+        return Status::Done;
+    }
+    let off = d.distance(s.up) * PLANET_RADIUS;
+    if (bot.act_s % 10.0) < s.dt {
+        info!("showcase: to the mark: {off:.0} m off");
+    }
+    if surface_height(d) >= 0.0 {
+        let leg = leg_toward(s, d, 120.0);
+        let there = bot.walk_to(s, out, leg, pbd_core::map::MARK_NEAR_M * 0.5) == Walked::There;
+        return if there && off < 120.0 {
+            Status::Done
+        } else {
+            Status::Running
+        };
+    }
+    if feet_wet(s) || surface_height(s.up) < -0.3 {
+        info!("showcase: to the mark: in the water at the coast, {off:.0} m from the mark at sea");
+        return Status::Done;
+    }
+    let (dry, sea) = toward_coast(s, d, off.min(120.0));
+    if sea.is_some_and(|m| m <= 4.0) {
+        info!("showcase: to the mark: at the coast, {off:.0} m from the mark at sea");
+        return Status::Done;
+    }
+    let leg = match (dry, sea) {
+        // The sea within the leg: the last dry ground before it.
+        (Some(dry), Some(_)) => dry,
+        _ => leg_toward(s, d, 120.0),
+    };
+    let _ = bot.walk_to(s, out, leg, 1.5);
+    Status::Running
+}
+
+/// A `Swim` under way: the place swum to (a direction from the planet's
+/// centre), the nearest it has come and when, the 30 degree turns made for
+/// want of headway, and the last distance logged.
+#[derive(Clone, Copy, Debug)]
+struct SwimRun {
+    target: Vec3,
+    best: f32,
+    since: f32,
+    turns: u32,
+    logged: f32,
+}
+
+/// The `Swim` act (`mission-playthrough` 5.7, legs 2 to 4): from the coast
+/// straight into the water, with no planner; across on the surface, Space
+/// held a beat in every second to keep the head up, steering on the bearing
+/// to the place, 30 degrees turned when 30 s bring it no nearer (a failure
+/// after three turns, logged with the position); within 6 m Space let go to
+/// sink, looking down about 60 degrees for the `Dig` after it.
+fn swim(bot: &mut Bot, kind: &str, s: &Sight, out: &mut Intent) -> Status {
+    if bot.phase == 0 {
+        let mark = super::map_screen::marks_of(s.save)
+            .last()
+            .map(|m| m.direction());
+        let target = match kind {
+            "reef" => nearest_reef_rock(mark.unwrap_or(s.up)),
+            "mark" => mark,
+            _ => return Status::Fail(format!("no swim kind {kind}")),
+        };
+        let Some(target) = target else {
+            return Status::Fail(format!("no {kind} to swim to"));
+        };
+        let off = target.distance(s.up) * PLANET_RADIUS;
+        if off > 2000.0 {
+            return Status::Fail(format!("the {kind} is {off:.0} m off, too far to swim"));
+        }
+        info!("showcase: swim {kind}: {off:.0} m off; into the water");
+        bot.swim = Some(SwimRun {
+            target,
+            best: off,
+            since: s.now,
+            turns: 0,
+            logged: s.now,
+        });
+        bot.next_phase();
+        return Status::Running;
+    }
+    let Some(mut run) = bot.swim else {
+        return Status::Fail("lost the swim".into());
+    };
+    let at = run.target * (PLANET_RADIUS + surface_height(run.target));
+    let off = run.target.distance(s.up) * PLANET_RADIUS;
+    let toward = tangent(at - s.feet, s.up);
+    let altitude = s.feet.length() - PLANET_RADIUS;
+    let in_water = feet_wet(s) || (surface_height(s.up) < -0.3 && altitude < 0.5);
+    let status = if bot.phase == 1 {
+        if off < 6.0 {
+            info!("showcase: swim {kind}: over it, {off:.1} m off; letting go of Space to sink");
+            bot.next_phase();
+            Status::Running
+        } else {
+            if off < run.best - 1.0 {
+                run.best = off;
+                run.since = s.now;
+            } else if s.now - run.since > 30.0 {
+                run.turns += 1;
+                if run.turns > 3 {
+                    let pbd_app::place::Place { lat, lon, .. } = pbd_app::place::Place::of(s.up);
+                    return Status::Fail(format!(
+                        "swim {kind}: no nearer in 30 s after three turns, {off:.0} m off at lat {lat:.4}, lon {lon:.4}, {altitude:.1} m"
+                    ));
+                }
+                info!(
+                    "showcase: swim {kind}: no nearer in 30 s ({off:.0} m off); turning 30 degrees ({} of 3)",
+                    run.turns
+                );
+                run.best = off;
+                run.since = s.now;
+            }
+            let heading =
+                Quat::from_axis_angle(s.up, -(run.turns as f32 * 30.0_f32.to_radians())) * toward;
+            out.held.insert(KeyCode::KeyW);
+            if in_water {
+                if (bot.act_s % 1.0) < 0.35 {
+                    out.held.insert(KeyCode::Space);
+                }
+                bot.steer(s, out, heading, 0.0);
+            } else {
+                // On land, at the start off the beach or on an island or a
+                // spit the line to the reef crosses (2026-11-22: stalled
+                // 604 m off on a shore at 1.9 m): walked by the planner in
+                // short legs toward the place, as any walk on land is; where
+                // the leg ends at the water the walk goes straight on in.
+                out.held.remove(&KeyCode::KeyW);
+                let leg = leg_toward(s, run.target, 40.0);
+                let _ = bot.walk_to(s, out, leg, 2.0);
+            }
+            if s.now - run.logged >= 4.0 {
+                run.logged = s.now;
+                info!(
+                    "showcase: swim {kind}: {off:.0} m off, {}",
+                    if in_water { "swimming" } else { "wading in" }
+                );
+            }
+            Status::Running
+        }
+    } else {
+        // Down to it: no Space, so the swimmer sinks; on toward it while it
+        // is more than 3 m off, looking down at it.
+        if off > 3.0 {
+            out.held.insert(KeyCode::KeyW);
+        }
+        let aimed = bot.steer(s, out, toward, -60.0_f32.to_radians());
+        if (aimed && bot.phase_s > 3.0) || bot.phase_s > 6.0 {
+            info!("showcase: swim {kind}: down at it, {off:.1} m off, {altitude:.1} m");
+            Status::Done
+        } else {
+            Status::Running
+        }
+    };
+    bot.swim = Some(run);
+    status
+}
+
+/// The point at most `max_m` along the ground toward `d` (a direction from
+/// the planet's centre), on the ground there: a long seek walks in legs over
+/// loaded ground (2026-11-22: a reef 2645 m off, the planners asked every
+/// frame for a goal whose cell was not loaded, the game at three and a half
+/// cores and the owner's "game is lagging").
+fn leg_toward(s: &Sight, d: Vec3, max_m: f32) -> Vec3 {
+    let off = d.distance(s.up) * PLANET_RADIUS;
+    let dir = if off <= max_m {
+        d
+    } else {
+        let side = tangent(d - s.up, s.up).normalize_or_zero();
+        let a = max_m / PLANET_RADIUS;
+        (s.up * a.cos() + side * a.sin()).normalize()
+    };
+    dir * (PLANET_RADIUS + surface_height(dir).max(0.0))
+}
+
+/// Go to the nearest place of a kind (`Act::Seek`).
+fn seek(bot: &mut Bot, kind: &str, s: &Sight, out: &mut Intent) -> Status {
+    if !matches!(
+        kind,
+        "hot" | "desert" | "temperate" | "cold" | "reef" | "town"
+    ) {
+        return Status::Fail(format!("no place kind {kind}"));
+    }
+    if bot.phase == 0 {
+        let Some(d) = seek_target(kind, s) else {
+            return Status::Fail(format!("no {kind} found"));
+        };
+        let at = d * (PLANET_RADIUS + surface_height(d).max(0.0));
+        info!(
+            "showcase: seek {kind}: {:.0} m off",
+            d.distance(s.up) * PLANET_RADIUS
+        );
+        bot.goal = Some(Goal::Point(at, at));
+        bot.next_phase();
+        return Status::Running;
+    }
+    let Some(Goal::Point(at, _)) = bot.goal else {
+        return Status::Fail("lost the place sought".into());
+    };
+    let d = at.normalize_or(s.up);
+    let off = d.distance(s.up) * PLANET_RADIUS;
+    match kind {
+        "town" => {
+            let leg = leg_toward(s, d, 120.0);
+            if off < super::missions::TOWN_NEAR_M * 0.5
+                || (bot.walk_to(s, out, leg, super::missions::TOWN_NEAR_M * 0.5) == Walked::There
+                    && off < 120.0)
+            {
+                return Status::Done;
+            }
+        }
+        "reef" => {
+            let cfg = pbd_app::planet::terrain_config();
+            let altitude = s.feet.length() - PLANET_RADIUS;
+            let in_sea = surface_height(s.up) < -1.0 && altitude < 0.5;
+            let on_reef = pbd_core::ocean::places::environment(cfg, s.up)
+                == Some(pbd_core::fauna::Environment::Reef);
+            // At the reef rock sought, not the first reef water swum onto.
+            if on_reef && off < 6.0 && altitude < -0.3 {
+                // Over it a moment, for the count.
+                if bot.phase_s > 1.0 && bot.phase >= 2 {
+                    return Status::Done;
+                }
+                if bot.phase < 2 {
+                    bot.next_phase();
+                }
+                return Status::Running;
+            }
+            if in_sea {
+                // Swimming: on toward it, as a player swims.
+                out.held.insert(KeyCode::KeyW);
+                bot.steer(s, out, tangent(at - s.feet, s.up), 0.0);
+                if (bot.phase_s % 4.0) < s.dt {
+                    info!("showcase: seek reef: swimming, {off:.0} m off");
+                }
+            } else {
+                let _ = bot.walk_to(s, out, leg_toward(s, d, 120.0), 1.0);
+            }
+        }
+        _ => {
+            let leg = leg_toward(s, d, 120.0);
+            if off < 3.0 || (bot.walk_to(s, out, leg, 3.0) == Walked::There && off < 120.0) {
+                // Home from here: the field is dug near home, and home was
+                // the run's start, 40 m back on temperate ground (2026-11-22,
+                // every chili refused).
+                bot.home = Some(at);
+                bot.climate = match kind {
+                    "hot" | "desert" => Some(pbd_core::farming::Climate::Hot),
+                    "temperate" => Some(pbd_core::farming::Climate::Temperate),
+                    "cold" => Some(pbd_core::farming::Climate::Cold),
+                    _ => None,
+                };
+                // MEASUREMENT: the game's own climate under the feet, beside
+                // the seek's.
+                let cell = s.contact.finest_key(s.up);
+                let layer = pbd_core::column::layer_at(s.feet.length() - PLANET_RADIUS - 0.5);
+                let h = surface_height(s.up);
+                info!(
+                    "showcase: seek {kind}: there; the game's climate {:?} (cell {cell:?}, layer {layer:?}), the generated surface {h:.1} m, biome there {:?}, at the layer {:?}",
+                    cell.zip(layer)
+                        .and_then(|(c, l)| super::farm::climate_at(s.fine, c, l)),
+                    pbd_core::planet_gen::biome_at(
+                        pbd_app::planet::terrain_config(),
+                        s.up,
+                        h + 1.0
+                    ),
+                    layer.map(|l| pbd_core::planet_gen::biome_at(
+                        pbd_app::planet::terrain_config(),
+                        s.up,
+                        pbd_core::column::layer_altitude(l) + 1.0
+                    )),
+                );
+                return Status::Done;
+            }
+        }
+    }
+    Status::Running
+}
+
 fn plant(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
     if bot.phase == 0 {
         // Wheat when there is any: the field's bread comes from it.
-        let seed = if carried(s.slots, "wheat-seed") >= n {
+        // A seed already in hand is the one sown (`mission-playthrough`
+        // design 5: turnip and kale after a `Select`).
+        let in_hand = s
+            .slots
+            .held()
+            .map(|st| st.item)
+            .filter(|&item| wanted("seed", item));
+        let seed = if in_hand.is_some() {
+            ""
+        } else if carried(s.slots, "wheat-seed") >= n {
             "wheat-seed"
         } else {
             "seed"
         };
+        if seed.is_empty() {
+            bot.next_phase();
+            return Status::Running;
+        }
         match bot.select(s, out, &|item| wanted(seed, item)) {
             Status::Done => bot.next_phase(),
             Status::Fail(why) => return Status::Fail(format!("seed: {why}")),
@@ -4409,12 +6560,21 @@ fn plant(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
     if bot.count >= n {
         return Status::Done;
     }
-    // Round the field again for a cell it could not see or reach.
-    let unplanted = bot.field.len().saturating_sub(bot.count as usize).max(1);
-    let at = bot.count as usize + (bot.tries as usize / 3) % unplanted;
-    let Some(&key) = bot.field.get(at) else {
+    // The field's cells open to a seed now, by the game's own rules: tilled
+    // soil under air with nothing growing (2026-11-22: a second sowing went
+    // round cells the first had planted, "Something is already growing
+    // here", and cells never tilled, "Seeds need tilled soil", 84 times).
+    // Round them for one it could not see or reach.
+    let open: Vec<u32> = bot
+        .field
+        .iter()
+        .copied()
+        .filter(|&k| super::farm::live_crop(s.fine, s.save, k).is_none() && bot_top_tilled(s, k))
+        .collect();
+    if open.is_empty() {
         return Status::Fail(format!("planted {} of {n}: no tilled cell left", bot.count));
-    };
+    }
+    let key = open[(bot.tries as usize / 3) % open.len()];
     let Some(top) = bot.top_of(s, key) else {
         bot.tries += 3;
         return Status::Running;
@@ -4436,12 +6596,26 @@ fn plant(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
         out.rmb_tap = true;
         bot.tries += 1;
         bot.phase_s = 0.0;
+        // MEASUREMENT (`mission-playthrough` 5.3): the game's climate of
+        // the cell sown, and how far it is from home.
+        if let Some((c, l)) = bot.aimed_cell(s) {
+            info!(
+                "showcase: plant: sowing cell {c} layer {l}, the game's climate {:?}, {:.0} m from home, {:.0} m from the feet",
+                super::farm::climate_at(s.fine, c, l),
+                bot.home
+                    .map_or(-1.0, |h| h.normalize().distance(top.normalize())
+                        * PLANET_RADIUS),
+                off,
+            );
+        }
     } else if bot.phase_s > 4.0 {
         // Out of sight from here: the next cell.
         bot.tries += 3;
         bot.phase_s = 0.0;
     }
-    if bot.act_s > 120.0 {
+    // Five minutes, the seed's fetch from the pack in them (2026-11-22: the
+    // kale seed came to hand ten seconds before a two-minute limit).
+    if bot.act_s > 300.0 {
         return Status::Fail(format!("planted {} of {n}", bot.count));
     }
     Status::Running
@@ -4712,10 +6886,482 @@ fn animals<'a>(
         })
 }
 
+/// The nearest herd of `species` within 1.2 km whose centre is on dry
+/// grass, from the grid the game places wild herds by: its centre on the
+/// ground, in the planet-centred frame the feet are in.
+fn nearest_herd(s: &Sight, species: &str) -> Option<Vec3> {
+    use pbd_core::husbandry::herds;
+    let up = s.feet.normalize_or(s.up);
+    let seed = pbd_app::planet::terrain_config().seed;
+    let config = pbd_app::planet::terrain_config();
+    herds::squares_near(up, 1200.0, PLANET_RADIUS, s.herds)
+        .into_iter()
+        .filter_map(|sq| herds::herd_in(seed, sq, PLANET_RADIUS, s.herds, s.land))
+        .filter(|h| {
+            s.land
+                .get(h.species as usize)
+                .is_some_and(|sp| sp.id == species)
+        })
+        .filter(|h| {
+            pbd_app::planet::surface_height(h.centre) > 0.5
+                && matches!(
+                    pbd_core::planet_gen::top_material(
+                        config,
+                        h.centre,
+                        pbd_core::planet_gen::surface_altitude(config, h.centre)
+                    ),
+                    Material::Grass | Material::DryGrass
+                )
+        })
+        .map(|h| h.centre * (PLANET_RADIUS + pbd_app::planet::surface_height(h.centre)))
+        .min_by(|a, b| a.distance(s.feet).total_cmp(&b.distance(s.feet)))
+}
+
 /// Tame: find a wild animal the carried food suits, food in hand, come near
 /// and stand still, and feed it when it comes, until it trusts.
 /// The tame act's phase while no animal it wants is in sight.
 const LOST: u32 = 99;
+
+/// Whether a mission is done, in the starter tree or the town tree.
+fn mission_done(s: &Sight, id: &str) -> bool {
+    s.missions.progress.is_done(id) || s.town.is_some_and(|t| t.is_done(id))
+}
+
+/// Talk to `n` townsfolk, each one not talked to before (`mission-playthrough`
+/// design 6, "meet"): the nearest, walked up to and looked at, then F; the
+/// talk shut with F, as the player shuts it.
+fn talk(bot: &mut Bot, n: u32, s: &Sight, out: &mut Intent) -> Status {
+    if matches!(s.screen, Screen::Talk | Screen::Trade | Screen::Board) {
+        if let Some(who) = bot.talking_to.take()
+            && bot.talked.insert(who)
+        {
+            bot.count += 1;
+            info!(
+                "showcase: talked to {}:{} ({} of {n})",
+                who.0, who.1, bot.count
+            );
+        }
+        if bot.phase_s > 1.5 {
+            out.taps.push(KeyCode::KeyF);
+            bot.phase_s = 0.0;
+        }
+        return Status::Running;
+    }
+    if bot.count >= n {
+        return Status::Done;
+    }
+    let target = s
+        .talkers
+        .iter()
+        .filter(|(site, index, _)| !bot.talked.contains(&(*site, *index)))
+        .min_by(|a, b| {
+            let d = |p: Vec3| tangent(p - s.feet, s.up).length();
+            d(a.2).total_cmp(&d(b.2))
+        })
+        .copied();
+    let Some((site, index, at)) = target else {
+        // None drawn: walk to the nearest town, once in the run (a failed
+        // seek resets the act, and asking again looped, 2026-11-23: "lost
+        // the place sought" every frame in a town at night, its people
+        // home), then wait for someone to come out.
+        if !bot.sought_town && bot.injected.is_empty() {
+            info!("showcase: talk: no townsfolk in sight; walking to a town");
+            bot.sought_town = true;
+            bot.injected.push_back(file::Act::Seek("town".into()));
+            return Status::Running;
+        }
+        if bot.act_s > 120.0 {
+            return Status::Fail(format!(
+                "no townsfolk left to talk to ({} of {n})",
+                bot.count
+            ));
+        }
+        return Status::Running;
+    };
+    let dist = tangent(at - s.feet, s.up).length();
+    if dist > 1.8 {
+        if bot.walk_to(s, out, at, 1.6) == Walked::Stuck {
+            info!("showcase: talk: stuck on the way to {site}:{index}; another");
+            bot.talked.insert((site, index));
+        }
+        bot.phase_s = 0.0;
+    } else {
+        // At their chest, as the talk's own reach measures it.
+        bot.aim_at(s, out, at + s.up * 1.0);
+        if bot.phase_s > 0.6 && s.screen == Screen::Playing {
+            bot.talking_to = Some((site, index));
+            out.taps.push(KeyCode::KeyF);
+            bot.phase_s = 0.0;
+        }
+    }
+    if bot.act_s > 600.0 {
+        return Status::Fail(format!("talked to {} of {n} townsfolk", bot.count));
+    }
+    Status::Running
+}
+
+/// Trade at the town's trader (`mission-playthrough` design 6,
+/// "first-trade"): townsfolk talked to until one offers TRADE (the town picks
+/// its trader from its people; the bot asks as a player does), TRADE
+/// pressed, `sell` goods sold one press at a time from the first row the
+/// trader buys, `buy` presses on the buy rows in turn, and the talk shut.
+/// `count` counts the sells, `tries` the buy presses.
+fn trade(bot: &mut Bot, sell: u32, buy: u32, s: &Sight, out: &mut Intent) -> Status {
+    use super::talk::TalkAction;
+    let pressing = bot.phase_s > 0.7;
+    match s.screen {
+        Screen::Talk => {
+            let shut = if !s.talk_buttons.contains(&TalkAction::Trade) {
+                // Not the trader: shut it and ask another.
+                if let Some(who) = bot.talking_to.take() {
+                    bot.not_trader.insert(who);
+                    info!("showcase: trade: {}:{} is not the trader", who.0, who.1);
+                }
+                true
+            } else {
+                bot.count >= sell && bot.tries >= buy
+            };
+            if pressing {
+                if shut {
+                    out.taps.push(KeyCode::KeyF);
+                } else {
+                    bot.talking_to = None;
+                    out.click = Some(Click::Talk(TalkAction::Trade));
+                }
+                bot.phase_s = 0.0;
+            }
+            return Status::Running;
+        }
+        Screen::Trade => {
+            if !pressing {
+                return Status::Running;
+            }
+            bot.phase_s = 0.0;
+            let sells: Vec<&TalkAction> = s
+                .talk_buttons
+                .iter()
+                .filter(|a| matches!(a, TalkAction::Sell(_)))
+                .collect();
+            let buys: Vec<&TalkAction> = s
+                .talk_buttons
+                .iter()
+                .filter(|a| matches!(a, TalkAction::Buy(_)))
+                .collect();
+            if bot.count < sell {
+                let Some(action) = sells.first() else {
+                    return Status::Fail("the trader buys nothing the pack holds".into());
+                };
+                info!("showcase: trade: {action:?}");
+                out.click = Some(Click::Talk((*action).clone()));
+                bot.count += 1;
+            } else if bot.tries < buy {
+                if buys.is_empty() {
+                    return Status::Fail("the trader sells nothing".into());
+                }
+                let action = buys[bot.tries as usize % buys.len()];
+                info!("showcase: trade: {action:?}");
+                out.click = Some(Click::Talk(action.clone()));
+                bot.tries += 1;
+            } else {
+                // Done: F leaves every talk panel at once.
+                out.taps.push(KeyCode::KeyF);
+            }
+            return Status::Running;
+        }
+        Screen::Playing if bot.count >= sell && bot.tries >= buy => return Status::Done,
+        _ => {}
+    }
+    // Out in the world: the nearest townsperson not yet asked.
+    let target = s
+        .talkers
+        .iter()
+        .filter(|(site, index, _)| !bot.not_trader.contains(&(*site, *index)))
+        .min_by(|a, b| {
+            let d = |p: Vec3| tangent(p - s.feet, s.up).length();
+            d(a.2).total_cmp(&d(b.2))
+        })
+        .copied();
+    let Some((site, index, at)) = target else {
+        if bot.act_s > 120.0 {
+            return Status::Fail("no townsperson offers trade".into());
+        }
+        return Status::Running;
+    };
+    let dist = tangent(at - s.feet, s.up).length();
+    if dist > 1.8 {
+        if bot.walk_to(s, out, at, 1.6) == Walked::Stuck {
+            bot.not_trader.insert((site, index));
+        }
+        bot.phase_s = 0.0;
+    } else {
+        bot.aim_at(s, out, at + s.up * 1.0);
+        if bot.phase_s > 0.6 && s.screen == Screen::Playing {
+            bot.talking_to = Some((site, index));
+            out.taps.push(KeyCode::KeyF);
+            bot.phase_s = 0.0;
+        }
+    }
+    if bot.act_s > 600.0 {
+        return Status::Fail(format!(
+            "sold {} of {sell}, bought {} of {buy}",
+            bot.count, bot.tries
+        ));
+    }
+    Status::Running
+}
+
+/// One town job, played through (`mission-playthrough` design 6,
+/// "first-job"). A done job is handed in at the giver's board; a taken one
+/// is worked (its acts injected: a trade sells at the trader, a fish job
+/// fishes, a mine job digs stone); with none taken, the giver's board is
+/// opened and its first posted job taken, given back if it is not a kind the
+/// bot plays. `count` is set once a job is handed in.
+fn job(bot: &mut Bot, s: &Sight, out: &mut Intent) -> Status {
+    use super::talk::TalkAction;
+    use pbd_core::economy::jobs::JobKind;
+    let plays = |k: JobKind| matches!(k, JobKind::Trade | JobKind::Fish | JobKind::Mine);
+    let done = s.jobs.iter().find(|j| j.3).copied();
+    let pending = s.jobs.iter().find(|j| !j.3 && plays(j.1)).copied();
+    let foreign = s.jobs.iter().find(|j| !j.3 && !plays(j.1)).copied();
+    let pressing = bot.phase_s > 0.7;
+    if bot.count > 0 && s.screen == Screen::Playing {
+        return Status::Done;
+    }
+    // A job in hand to work: its acts, then back here.
+    if done.is_none()
+        && foreign.is_none()
+        && let Some((id, kind, count, _)) = pending
+        && s.screen == Screen::Playing
+    {
+        if !bot.injected.is_empty() {
+            return Status::Running;
+        }
+        let times = match bot.job_worked {
+            Some((was, n)) if was == id => n,
+            _ => 0,
+        };
+        if times >= 3 {
+            return Status::Fail(format!("the {kind:?} job is not done after three goes"));
+        }
+        bot.job_worked = Some((id, times + 1));
+        info!("showcase: job: working the {kind:?} job ({count})");
+        match kind {
+            JobKind::Trade => bot.injected.push_back(file::Act::Trade(count, 0)),
+            JobKind::Fish => {
+                bot.injected.push_back(file::Act::Hand("rod".into()));
+                bot.injected
+                    .push_back(file::Act::Fish(file::Until::Times(count)));
+            }
+            _ => {
+                bot.injected.push_back(file::Act::Hand("pickaxe".into()));
+                bot.injected
+                    .push_back(file::Act::Mine(file::Until::Times(count), 2));
+            }
+        }
+        return Status::Running;
+    }
+    match s.screen {
+        Screen::Talk => {
+            let work = s.talk_buttons.contains(&TalkAction::Work);
+            if !work && let Some(who) = bot.talking_to.take() {
+                bot.not_giver.insert(who);
+                info!("showcase: job: {}:{} gives no work", who.0, who.1);
+            }
+            if pressing {
+                if work && bot.count == 0 {
+                    bot.talking_to = None;
+                    out.click = Some(Click::Talk(TalkAction::Work));
+                } else {
+                    out.taps.push(KeyCode::KeyF);
+                }
+                bot.phase_s = 0.0;
+            }
+            return Status::Running;
+        }
+        Screen::Board => {
+            if !pressing {
+                return Status::Running;
+            }
+            bot.phase_s = 0.0;
+            // Handed in: out, and nothing more taken (2026-11-23: still on
+            // the board after the hand-in, it took a hunt job, gave it back
+            // and called the board empty).
+            if bot.count > 0 {
+                out.taps.push(KeyCode::KeyF);
+                return Status::Running;
+            }
+            let press = if let Some((id, ..)) = done {
+                bot.count = 1;
+                info!("showcase: job: handing in {id}");
+                Some(TalkAction::HandIn(id))
+            } else if let Some((id, kind, ..)) = foreign {
+                info!("showcase: job: giving back the {kind:?} job");
+                bot.skipped_jobs.insert(id);
+                Some(TalkAction::Abandon(id))
+            } else if pending.is_some() {
+                None
+            } else {
+                s.talk_buttons
+                    .iter()
+                    .find(|a| matches!(a, TalkAction::Take(id) if !bot.skipped_jobs.contains(id)))
+                    .cloned()
+            };
+            match press {
+                Some(action) => out.click = Some(Click::Talk(action)),
+                // Nothing to press here: out, F leaves every panel.
+                None => {
+                    if pending.is_none() && done.is_none() {
+                        return Status::Fail("no job on the board the bot plays".into());
+                    }
+                    out.taps.push(KeyCode::KeyF);
+                }
+            }
+            return Status::Running;
+        }
+        _ => {}
+    }
+    // Out in the world: the nearest townsperson not known to give no work.
+    let target = s
+        .talkers
+        .iter()
+        .filter(|(site, index, _)| !bot.not_giver.contains(&(*site, *index)))
+        .min_by(|a, b| {
+            let d = |p: Vec3| tangent(p - s.feet, s.up).length();
+            d(a.2).total_cmp(&d(b.2))
+        })
+        .copied();
+    let Some((site, index, at)) = target else {
+        if bot.act_s > 120.0 {
+            return Status::Fail("no townsperson gives work".into());
+        }
+        return Status::Running;
+    };
+    let dist = tangent(at - s.feet, s.up).length();
+    if dist > 1.8 {
+        if bot.walk_to(s, out, at, 1.6) == Walked::Stuck {
+            bot.not_giver.insert((site, index));
+        }
+        bot.phase_s = 0.0;
+    } else {
+        bot.aim_at(s, out, at + s.up * 1.0);
+        if bot.phase_s > 0.6 && s.screen == Screen::Playing {
+            bot.talking_to = Some((site, index));
+            out.taps.push(KeyCode::KeyF);
+            bot.phase_s = 0.0;
+        }
+    }
+    if bot.act_s > 1800.0 {
+        return Status::Fail("no job handed in in half an hour".into());
+    }
+    Status::Running
+}
+
+/// A town's furniture used as a player uses it (`Act::Furniture`): the
+/// nearest piece of the use asked for, walked to, aimed at and F pressed. A
+/// seat or bed is sat or lain on a moment and left with F; a store is
+/// opened, its coins (or else one stack) taken and shut. A piece that does
+/// not take the bot (held by a townsperson, or missed) is passed over.
+/// `count` is set once the use is done.
+fn furniture(bot: &mut Bot, what: &str, s: &Sight, out: &mut Intent) -> Status {
+    use pbd_core::furniture::Use;
+    let wants = |kind: pbd_core::furniture::Kind| match (what, kind.use_()) {
+        ("sit", Use::Seat { .. }) | ("lie", Use::Bed { .. }) | ("loot", Use::Store { .. }) => true,
+        _ => false,
+    };
+    let pressing = bot.phase_s > 0.7;
+    // Sat or lain: a moment there, a still, then up with F.
+    if s.sitting {
+        bot.piece_pressed = None;
+        if bot.count == 0 && bot.phase_s > 2.5 {
+            info!("showcase: furniture: {what} done, getting up");
+            bot.want_still = true;
+            bot.count = 1;
+            bot.phase_s = 0.0;
+        } else if bot.count == 1 && bot.phase_s > 1.0 {
+            out.taps.push(KeyCode::KeyF);
+            bot.phase_s = 0.0;
+        }
+        return Status::Running;
+    }
+    // A container open: its coins, else a stack, then shut.
+    if s.screen == Screen::Pack {
+        if let Some((id, coins, first)) = s.store_open {
+            bot.piece_pressed = None;
+            if !pressing {
+                return Status::Running;
+            }
+            bot.phase_s = 0.0;
+            if bot.count == 0 {
+                if coins > 0 {
+                    info!("showcase: furniture: taking {coins} coins from {id}");
+                    out.click = Some(Click::Coins);
+                    bot.count = 1;
+                } else if let Some(k) = first {
+                    info!("showcase: furniture: taking slot {k} of {id}");
+                    out.click = Some(Click::Cell(super::furniture::STORE_AT + k));
+                    out.lmb_tap = true;
+                    bot.count = 1;
+                } else {
+                    info!("showcase: furniture: {id} is empty");
+                    bot.pieces_passed.insert(id);
+                    out.taps.push(KeyCode::Tab);
+                }
+            } else {
+                bot.want_still = true;
+                out.taps.push(KeyCode::Tab);
+            }
+            return Status::Running;
+        }
+    }
+    if bot.count > 0 && s.screen == Screen::Playing {
+        return Status::Done;
+    }
+    // F pressed and nothing took the bot: pass that piece over.
+    if let Some(id) = bot.piece_pressed
+        && bot.phase_s > 1.5
+    {
+        info!("showcase: furniture: {id} did not take the bot");
+        bot.pieces_passed.insert(id);
+        bot.piece_pressed = None;
+    }
+    let target = s
+        .pieces
+        .iter()
+        .filter(|(id, kind, _, site)| {
+            site.is_some() && wants(*kind) && !bot.pieces_passed.contains(id)
+        })
+        .min_by(|a, b| {
+            let d = |p: Vec3| tangent(p - s.feet, s.up).length();
+            d(a.2).total_cmp(&d(b.2))
+        })
+        .copied();
+    let Some((id, kind, at, _)) = target else {
+        if bot.act_s > 120.0 {
+            return Status::Fail(format!("no town piece to {what}"));
+        }
+        return Status::Running;
+    };
+    let dist = tangent(at - s.feet, s.up).length();
+    if dist > 1.3 {
+        if bot.walk_to(s, out, at, 1.1) == Walked::Stuck {
+            info!("showcase: furniture: no way to {kind:?} {id}");
+            bot.pieces_passed.insert(id);
+        }
+        bot.phase_s = 0.0;
+    } else {
+        bot.aim_at(s, out, at);
+        if bot.piece_pressed.is_none() && bot.phase_s > 0.6 && s.screen == Screen::Playing {
+            info!("showcase: furniture: F at {kind:?} {id}");
+            bot.piece_pressed = Some(id);
+            out.taps.push(KeyCode::KeyF);
+            bot.phase_s = 0.0;
+        }
+    }
+    if bot.act_s > 600.0 {
+        return Status::Fail(format!("did not {what} in ten minutes"));
+    }
+    Status::Running
+}
 
 fn tame(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
     if s.tally.tamed > bot.mark.tamed {
@@ -4741,15 +7387,58 @@ fn tame(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
             cost(&a.0).total_cmp(&cost(&b.0))
         });
     let Some((animal, sp)) = target else {
+        // Wild ones in sight but nothing they eat carried: dig turf for them
+        // first, as a player would (2026-11-21: woolbacks passed by for want
+        // of wheat or turf, then "no wild woolback found").
+        let hungry = animals(s, species).any(|(a, sp)| {
+            a.wild
+                && sp.refusal().is_none()
+                && sp
+                    .keep
+                    .as_ref()
+                    .is_some_and(|k| k.foods.iter().any(|f| f.is(Item::Block(Material::Grass))))
+        });
+        if hungry && bot.injected.is_empty() && !bot.fed_turf {
+            info!("showcase: tame: {species} in sight, nothing it eats carried; digging turf");
+            bot.fed_turf = true;
+            bot.injected.push_back(file::Act::Hand("shovel".into()));
+            bot.injected.push_back(file::Act::Dig(
+                file::Until::Have("block:grass".into(), 4),
+                1,
+            ));
+            bot.injected.push_back(file::Act::Hand("hand".into()));
+            return Status::Running;
+        }
         // None in sight: look further, for up to 90 s from losing them.
         if bot.phase != LOST {
             bot.phase = LOST;
             bot.phase_s = 0.0;
         }
-        out.held.insert(KeyCode::KeyW);
-        bot.steer(s, out, s.heading, -0.05);
-        if bot.phase_s > 90.0 {
-            return Status::Fail(format!("no wild {species} found"));
+        // Not in sight: head for the nearest herd of the kind, as a player
+        // walks back to one seen on the way (2026-11-21: blind walks off a
+        // beach met none, and the third went into the sea). Read from the
+        // same grid the game places herds by; nothing is moved or spawned.
+        if bot.herd_goal.is_none() {
+            bot.herd_goal = nearest_herd(s, species);
+            match bot.herd_goal {
+                Some(at) => info!(
+                    "showcase: tame: no {species} in sight; the nearest herd is {:.0} m off",
+                    tangent(at - s.feet, s.up).length()
+                ),
+                None => return Status::Fail(format!("no wild {species} within 1.2 km")),
+            }
+        }
+        if let Some(at) = bot.herd_goal {
+            // On the way the clock stays at nought; at the herd, half a
+            // minute to see one before giving up.
+            match bot.walk_to(s, out, at, 25.0) {
+                Walked::There if bot.phase_s > 30.0 => {
+                    return Status::Fail(format!("no wild {species} at its herd"));
+                }
+                Walked::There => {}
+                Walked::Going => bot.phase_s = 0.0,
+                Walked::Stuck => return Status::Fail(format!("stuck on the way to a {species}")),
+            }
         }
         return Status::Running;
     };
@@ -4762,9 +7451,36 @@ fn tame(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
     if bot.phase == 0 {
         match bot.select(s, out, &|item| keep.eats(item)) {
             Status::Done => bot.next_phase(),
+            // None left: turf dug for it, once, then on.
+            Status::Fail(_)
+                if !bot.fed_turf
+                    && bot.injected.is_empty()
+                    && keep
+                        .foods
+                        .iter()
+                        .any(|f| f.is(Item::Block(Material::Grass))) =>
+            {
+                info!("showcase: tame: no food left; digging turf");
+                bot.fed_turf = true;
+                bot.injected.push_back(file::Act::Hand("shovel".into()));
+                bot.injected.push_back(file::Act::Dig(
+                    file::Until::Have("block:grass".into(), 6),
+                    1,
+                ));
+                bot.injected.push_back(file::Act::Hand("hand".into()));
+            }
             Status::Fail(why) => return Status::Fail(format!("food: {why}")),
             Status::Running => {}
         }
+        return Status::Running;
+    }
+    // The food in hand eaten up (two wheat, 25 trust each, and trust wants
+    // 100): more from the pack before waiting on (2026-11-21: it waited with
+    // nothing in hand until it gave up, turf still in the pack).
+    if !s.slots.held().is_some_and(|st| keep.eats(st.item)) {
+        info!("showcase: tame: nothing it eats in hand; fetching more");
+        bot.phase = 0;
+        bot.phase_s = 0.0;
         return Status::Running;
     }
     let dist = tangent(animal.pos - s.feet, s.up).length();
@@ -4813,7 +7529,8 @@ fn tame(bot: &mut Bot, species: &str, s: &Sight, out: &mut Intent) -> Status {
             }
         }
     }
-    if bot.act_s > 240.0 {
+    // The walk to the herd can be long (the herd finder): ten minutes all in.
+    if bot.act_s > 600.0 {
         return Status::Fail(format!("the {} never trusted", sp.name()));
     }
     Status::Running

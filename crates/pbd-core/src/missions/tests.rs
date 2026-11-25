@@ -213,7 +213,11 @@ fn a_state_met_mission_completes_on_open() {
     ] {
         assert!(progress.is_done(id), "{id} in {:?}", step.done);
     }
-    assert_eq!(progress.line(&chain).as_deref(), Some("Go fishing 0/3"));
+    // After the campfire the trunk ends with the chest (`storage-chests` 9).
+    assert_eq!(
+        progress.line(&chain).as_deref(),
+        Some("A chest: Make a chest 0/1, Set it down 0/1, Store a stack 0/1")
+    );
 }
 
 /// A name the build lacks that the file awaits makes its mission pending,
@@ -306,11 +310,13 @@ fn the_record_round_trips_and_keeps_what_it_does_not_know() {
     let mut read = record.read::<Progress>().unwrap();
     read.settle(&chain, &none);
     assert!(read.done.contains("a-later-mission"));
-    // On the tree, the old line's done ids stay done; the trunk's new step
-    // after the axe is next.
+    // On the tree, the old line's done ids stay done, and a done mission's
+    // parents are done with it (the fire's line back to the gathering:
+    // `starter-missions`, "The first mission: open the pack"). The chest,
+    // after the fire, is next.
     assert_eq!(
         read.line(&chain).as_deref(),
-        Some("Gather wood: Fell trees 0/2, Gather logs 0/10")
+        Some("A chest: Make a chest 0/1, Set it down 0/1, Store a stack 0/1")
     );
 }
 
@@ -323,7 +329,7 @@ fn the_record_round_trips_and_keeps_what_it_does_not_know() {
 fn the_shipped_chain_names_only_what_the_build_knows() {
     let book = shipped_book();
     let chain = shipped_file().resolve(&shipped_catalog(&book)).unwrap();
-    assert_eq!(chain.missions.len(), 42);
+    assert_eq!(chain.missions.len(), 44);
     // One parent each, and only `gather` without one.
     for m in &chain.missions {
         assert!(m.needs.len() <= 1, "{}: {:?}", m.id, m.needs);
@@ -384,6 +390,7 @@ fn the_shipped_chain_names_only_what_the_build_knows() {
         ev(Kind::Gather, "fibre", 8),
         ev(Kind::Gather, "stone", 9),
         ev(Kind::Gather, "block:dirt", 6),
+        ev(Kind::Open, "pack", 1),
         ev(Kind::Craft, "recipe:stone-axe", 1),
         ev(Kind::Fell, "tree", 2),
         ev(Kind::Gather, "log", 10),
@@ -395,6 +402,10 @@ fn the_shipped_chain_names_only_what_the_build_knows() {
         ev(Kind::Craft, "tool:shovel", 1),
         ev(Kind::Craft, "block:campfire", 1),
         ev(Kind::Place, "block:campfire", 1),
+        // The storage mission (`storage-chests` 9).
+        ev(Kind::Craft, "block:chest", 1),
+        ev(Kind::Place, "block:chest", 1),
+        ev(Kind::Store, "block:dirt", 1),
         ev(Kind::Craft, "tool:rod", 1),
         ev(Kind::Cast, "water", 1),
         ev(Kind::Catch, "minnow", 3),
@@ -409,7 +420,7 @@ fn the_shipped_chain_names_only_what_the_build_knows() {
         ev(Kind::Open, "map", 1),
         ev(Kind::Reach, "marked", 1),
         ev(Kind::Swim, "water", 20),
-        ev(Kind::Reach, "reef", 1),
+        ev(Kind::Gather, "block:reef rock", 1),
         ev(Kind::Reach, "town", 1),
         ev(Kind::Board, "boat", 1),
         ev(Kind::Travel, "boat", 100),
@@ -560,8 +571,11 @@ fn an_old_missions_record_reads_unchanged() {
     let chain = shipped_file()
         .resolve(&shipped_catalog(&shipped_book()))
         .unwrap();
-    // On the tree: the axe after the gathering is next.
-    assert_eq!(progress.current(&chain).map(|m| m.id.as_str()), Some("axe"));
+    // On the tree: the pack after the gathering is next (owner, 2026-11-22).
+    assert_eq!(
+        progress.current(&chain).map(|m| m.id.as_str()),
+        Some("pack")
+    );
 }
 
 /// A world from before the tree keeps every tool it could make (T.3): the

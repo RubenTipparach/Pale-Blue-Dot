@@ -1,0 +1,80 @@
+// The phase-1 showcase, the last six missions (`mission-playthrough`
+// design 5): the three crops, the farm meal and the feast, the reef, a town
+// and a boat. Run after the rest branch, on its world, from where it ended.
+// Chili grows only where it is hot, turnip and frost kale only where it is
+// temperate or cold, so the crops are sown in two places.
+(
+    goal: "Goal: the last of the mission tree",
+    at: None,
+    hour: 10.0,
+    shots: [
+        (
+            caption: "Three crops. Chili grows where it is hot: a desert",
+            max_s: 600.0,
+            acts: [Focus("three-crops"), Declutter, Seek("desert"), Hand("shovel"), Dig(Have("chili-seed", 2), 1), Till(2), Select("chili-seed"), Plant(2), Still],
+        ),
+        (
+            caption: "Five days later: the chili is ripe",
+            rate: Some(400.0),
+            max_s: 60.0,
+            acts: [Wait(36.0)],
+        ),
+        (
+            caption: "Harvest the chili",
+            max_s: 120.0,
+            acts: [Hand("hand"), Harvest(2), Still],
+        ),
+        (
+            caption: "Turnip and frost kale, where it is temperate",
+            max_s: 1800.0,
+            acts: [Declutter, Seek("temperate"), Hand("shovel"), Dig(Have("turnip-seed", 2), 1), Dig(Have("frost-kale-seed", 2), 1), Till(6), Select("turnip-seed"), Plant(2), Select("frost-kale-seed"), Plant(2), Still],
+        ),
+        (
+            caption: "Five days later: turnip and kale are ripe",
+            rate: Some(400.0),
+            max_s: 60.0,
+            acts: [Wait(36.0)],
+        ),
+        (
+            caption: "Harvest the turnip and the kale",
+            until: ["three-crops"],
+            max_s: 420.0,
+            acts: [Hand("hand"), Harvest(4), Still],
+        ),
+        (
+            caption: "A meal from the farm",
+            until: ["farm-meal"],
+            max_s: 600.0,
+            acts: [Focus("farm-meal"), Hand("axe"), Chop(Have("log", 2)), Craft("campfire", 1), Hand("hand"), Place("block:campfire"), Cook("roast-turnip", 1), Still],
+        ),
+        (
+            caption: "A feast: fish, a farm dish and an egg",
+            until: ["feast"],
+            max_s: 400.0,
+            acts: [Focus("feast"), Cook("chili-fish", 1), Cook("fried-egg", 1), Eat("chili-fish"), Eat("roast-turnip"), Eat("fried-egg"), Still],
+        ),
+        (
+            caption: "Dive to a reef and mine some reef rock",
+            until: ["reef"],
+            max_s: 1200.0,
+            acts: [Focus("reef"), Declutter, MapGoal("places", "reef"), ToMark, Swim("reef"), Hand("pickaxe"), Dig(Have("block:reef rock", 1), 1), Still],
+        ),
+        (
+            caption: "Walk to a town",
+            until: ["town"],
+            max_s: 2400.0,
+            acts: [Focus("town"), Seek("town"), Still],
+        ),
+        (
+            caption: "Make a raft, launch it and row it",
+            until: ["boat"],
+            max_s: 900.0,
+            acts: [Focus("boat"), Declutter, Hand("axe"), Chop(Have("log", 8)), Hand("shovel"), Dig(Have("fibre", 12), 1), Craft("rope", 4), Bench("raft", 1), Shore, Hand("hand"), Select("raft"), Look(0.0, -30.0, 1.0), Wait(0.5), Use, Wait(1.5), Tap("F"), Wait(1.5), Hold("W", 120.0), Still],
+        ),
+        (
+            caption: "Every mission done",
+            max_s: 20.0,
+            acts: [Missions(6.0)],
+        ),
+    ],
+)

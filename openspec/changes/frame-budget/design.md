@@ -486,3 +486,26 @@ Two runs each, interleaved, GPU apps closed.
   tail is.
 - Loading terrain less often, or coarser near bands. That trades detail
   near the camera for frame time, and invites pop-in (priority 1).
+
+## The F3 graph shows stalls apart from slow frames (owner, 2026-11-22)
+
+The owner, on F3 screenshots at 4 to 23 fps: "the red does not show rare
+stalls", "the red line is continuous".
+
+The graph drew every frame over 16.7 ms the same red, clipped at 50 ms. At
+30 fps every bar is red and nearly full height, so the graph is a red wall,
+and a 5 s stall is drawn exactly like a 32 ms frame.
+
+Change (an instrument; `frame_graph.rs`, `locale: dev`):
+- **Height on a log scale**, 4 ms at the foot to 1000 ms at the top, so
+  16.7, 33, 100 and 1000 ms are each a clear step apart. Lines at 16.7 ms
+  (60 Hz), 33.3 ms (30 Hz) and 100 ms.
+- **Five colours by band:**
+  - green to 8.3 ms;
+  - amber to 16.7 ms;
+  - orange to 33.3 ms;
+  - red to 100 ms;
+  - white past 100 ms (a stall), so a rare stall stands out against a
+    slow run.
+- **The line counts stalls:** "N stalls over 100 ms" in the window, beside
+  fps, p50, p99 and max.

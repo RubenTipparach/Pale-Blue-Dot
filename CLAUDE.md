@@ -515,6 +515,22 @@ That goes to the survey with screenshots, as any look change does. A cut
 that keeps the picture and the sound the same is just done. Report it
 afterwards, with the before-and-after numbers.
 
+## No builds while the game is running (owner, 2026-11-22)
+
+**Standing instruction from the user:** "If game is running on PC DO NOT
+BUILD unless it's a bot run" (after "remeber not to build while the player
+is playtesting" and "Kill build", on a build started beside their release
+playtest). While a `pbd-app` is open that the owner started, or the owner
+says they are playtesting:
+- no `cargo build`, `cargo test`, `cargo clippy` or `build-play`, at any
+  priority, and no bot run;
+- edits and write-ups go on, and the build waits. Say in the reply that it
+  is waiting and what it holds;
+- build when the owner says they are done or asks for one.
+
+The one exception is the bot's own game: beside a bot run I started (and
+nobody else's game), a build is fine at `BelowNormal` priority.
+
 ## Build with `fast`, always; `--release` only for performance (owner, 2026-11-13)
 
 **Standing instruction from the user:** "build with fast ALWAYS unless doing

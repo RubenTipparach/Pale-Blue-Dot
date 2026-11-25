@@ -40,8 +40,12 @@ use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
 pub mod light;
+pub mod punch;
 pub mod stroke;
-use stroke::{DigBeat, Gear, ShovelSettings, StrokeClock, StrokeSettings, StrokeTool};
+use stroke::{
+    DigBeat, Gear, Meets, Motion, PunchSettings, ShovelSettings, StrokeClock, StrokeSettings,
+    StrokeTool, SwingSettings,
+};
 
 /// How the tool in hand moves, in `held.ron`.
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
@@ -55,6 +59,11 @@ pub struct HeldSettings {
     pub stroke: StrokeSettings,
     /// The shovel's stroke (`held-swing` decision 9).
     pub shovel: ShovelSettings,
+    /// The bare-hand punch (`held-swing` decision 10).
+    pub punch: PunchSettings,
+    /// A stroke at the air and at a refused block (`held-swing` decision
+    /// 11).
+    pub swing: SwingSettings,
     /// How the rod moves with the line (`rod-motion` design 2).
     pub rod: RodSettings,
     /// How the hand is lit (`hand-model`).
@@ -256,6 +265,8 @@ impl Default for HeldSettings {
             sway_rate: [1.3, 1.7],
             stroke: StrokeSettings::default(),
             shovel: ShovelSettings::default(),
+            punch: PunchSettings::default(),
+            swing: SwingSettings::default(),
             rod: RodSettings::default(),
             hand_light: HandLight::default(),
             light: light::LightHold::default(),
@@ -264,6 +275,16 @@ impl Default for HeldSettings {
 }
 
 impl HeldSettings {
+    /// What the stroke is drawn from.
+    pub fn motion(&self) -> Motion {
+        Motion {
+            stroke: self.stroke,
+            shovel: self.shovel,
+            punch: self.punch,
+            swing: self.swing,
+        }
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         let all = [
             self.sway_m[0],
@@ -279,6 +300,8 @@ impl HeldSettings {
         }
         self.stroke.validate()?;
         self.shovel.validate()?;
+        self.punch.validate()?;
+        self.swing.validate()?;
         self.light.validate()?;
         self.rod.validate()
     }
@@ -442,6 +465,21 @@ pub fn meshes(model: &HeldModel, spacing: f32, look: &hand::Look, sleeve_extra: 
     }
 }
 
+/// The bare fist (`held-swing` decision 10, the fist of version 16): the
+/// pickaxe grip's bones re-chained into a closed fist, built one skin tone
+/// with no handle, about the pickaxe's fist; and its frame for aiming.
+pub fn fist_meshes(look: &hand::Look, sleeve_extra: f32) -> (hand::Hand, punch::FistFrame) {
+    let model = models().get(Tool::Pickaxe);
+    let centre = model
+        .rest()
+        .compute_affine()
+        .inverse()
+        .transform_point3(model.fist.into());
+    let bones = hand::fist_bones(&model.bones, look, &hand::FistShape::V16);
+    let built = hand::build_bare(&bones, centre, look, sleeve_extra);
+    (built, punch::FistFrame::new(&bones, centre, look))
+}
+
 /// The dirt colour of the scoop's clump, straight sRGB: the Tools in Hand
 /// mockup's dirt.
 const DIRT: [u8; 3] = [122, 86, 54];
@@ -490,12 +528,13 @@ fn dirt_clump(model: &HeldModel) -> HexelMesh {
 #[derive(Resource, Default, Clone, Copy, Debug)]
 pub struct Swinging(pub DigBeat);
 
-/// A stroke's impact this frame (`held-swing` 2.2): whether it is a
-/// block's last, the one on the break. Written by the hold, read by the
-/// dig sounds.
+/// A stroke's impact this frame (`held-swing` 2.2, 10-12): whether it is a
+/// block's last, the one on the break, and what it met. Written by the
+/// hold, read by the dig sounds and the tree's shake.
 #[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StrokeImpact {
     pub last: bool,
+    pub meets: Meets,
 }
 
 /// An offset from a held tool's rest pose: a pitch about the fist (tip up
@@ -969,6 +1008,9 @@ pub struct Held {
     wrist: Vec3,
     arm: Entity,
     dirt: Option<Entity>,
+    /// The bare fist's frame: this holder is the empty hand, not `tool`'s
+    /// (it is posed from the pickaxe's model).
+    bare: Option<punch::FistFrame>,
 }
 
 /// A hand mesh and what its light is re-baked from (`hand-model`): its
@@ -1058,6 +1100,11 @@ fn bend_rod(
 impl Held {
     pub fn tool(&self) -> Tool {
         self.tool
+    }
+
+    /// Whether this is the bare fist rather than a tool.
+    pub fn bare(&self) -> bool {
+        self.bare.is_some()
     }
 
     /// A point given in eye space at the rest pose (a tool's tip) where it
@@ -1403,6 +1450,7 @@ fn spawn(
                     wrist: built.wrist,
                     arm,
                     dirt,
+                    bare: None,
                 },
                 rest,
                 Visibility::Hidden,
@@ -1433,39 +1481,103 @@ fn spawn(
         if let Some(dirt) = dirt {
             commands.entity(holder).add_child(dirt);
         }
-        for (on_arm, set) in [(false, &built.hand), (true, &built.arm)] {
-            for texture in Texture::ALL {
-                let part = &set[texture.index()];
-                if part.positions.is_empty() {
-                    continue;
-                }
-                let normals: Vec<Vec3> = part.normals.iter().map(|n| Vec3::from(*n)).collect();
-                let tint: Vec<[f32; 3]> = part.flush.iter().map(|f| all.hand.tint(*f)).collect();
-                let colours = hand_colours(&normals, &part.shade, &tint, rest.rotation, &light);
-                let child = commands
-                    .spawn((
-                        Name::new(if on_arm { "arm part" } else { "hand part" }),
-                        Mesh3d(meshes.add(hand_mesh(part, colours))),
-                        MeshMaterial3d(hand_materials[texture.index()].clone()),
-                        Transform::IDENTITY,
-                        Visibility::Inherited,
-                        NotShadowCaster,
-                        HandShading {
-                            holder,
-                            on_arm,
-                            normals,
-                            shade: part.shade.clone(),
-                            tint,
-                            lit_at: None,
-                        },
-                    ))
-                    .id();
-                commands
-                    .entity(if on_arm { arm } else { holder })
-                    .add_child(child);
-            }
-        }
+        let hand = hand::Hand {
+            hand: built.hand,
+            arm: built.arm,
+            wrist: built.wrist,
+        };
+        spawn_hand_parts(
+            &mut commands,
+            &mut meshes,
+            &hand_materials,
+            (holder, arm),
+            &hand,
+            rest.rotation,
+            &light,
+        );
         commands.entity(camera).add_child(holder);
+    }
+    // The bare fist (`held-swing` decision 10): the hand with no tool, posed
+    // as an arm by `punch::aimed`.
+    let model = all.get(Tool::Pickaxe);
+    let rest = model.rest();
+    let (built, frame) = fist_meshes(&all.hand, settings.0.stroke.sleeve_extra);
+    let arm = commands
+        .spawn((Name::new("arm"), Transform::IDENTITY, Visibility::Inherited))
+        .id();
+    let holder = commands
+        .spawn((
+            Name::new("bare fist"),
+            Held {
+                tool: Tool::Pickaxe,
+                rest,
+                fist: model.fist.into(),
+                wrist: frame.j,
+                arm,
+                dirt: None,
+                bare: Some(frame),
+            },
+            rest,
+            Visibility::Hidden,
+        ))
+        .id();
+    commands.entity(holder).add_child(arm);
+    spawn_hand_parts(
+        &mut commands,
+        &mut meshes,
+        &hand_materials,
+        (holder, arm),
+        &built,
+        rest.rotation,
+        &light,
+    );
+    commands.entity(camera).add_child(holder);
+}
+
+/// A hand's meshes, one per texture with any faces, under the holder (the
+/// hand) and the arm's pivot (the wrist, cuff and sleeve), each lit by the
+/// hand's light at `rotation` and re-baked as it turns (`shade_hands`).
+fn spawn_hand_parts(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    hand_materials: &[Handle<StandardMaterial>],
+    (holder, arm): (Entity, Entity),
+    built: &hand::Hand,
+    rotation: Quat,
+    light: &HandLight,
+) {
+    let all = models();
+    for (on_arm, set) in [(false, &built.hand), (true, &built.arm)] {
+        for texture in Texture::ALL {
+            let part = &set[texture.index()];
+            if part.positions.is_empty() {
+                continue;
+            }
+            let normals: Vec<Vec3> = part.normals.iter().map(|n| Vec3::from(*n)).collect();
+            let tint: Vec<[f32; 3]> = part.flush.iter().map(|f| all.hand.tint(*f)).collect();
+            let colours = hand_colours(&normals, &part.shade, &tint, rotation, light);
+            let child = commands
+                .spawn((
+                    Name::new(if on_arm { "arm part" } else { "hand part" }),
+                    Mesh3d(meshes.add(hand_mesh(part, colours))),
+                    MeshMaterial3d(hand_materials[texture.index()].clone()),
+                    Transform::IDENTITY,
+                    Visibility::Inherited,
+                    NotShadowCaster,
+                    HandShading {
+                        holder,
+                        on_arm,
+                        normals,
+                        shade: part.shade.clone(),
+                        tint,
+                        lit_at: None,
+                    },
+                ))
+                .id();
+            commands
+                .entity(if on_arm { arm } else { holder })
+                .add_child(child);
+        }
     }
 }
 
@@ -1542,6 +1654,7 @@ fn hold(
     view: Option<Res<crate::vehicles::view::VehicleView>>,
     vehicles: Query<&crate::vehicles::Vehicle>,
     swinging: Res<Swinging>,
+    item: Option<Res<crate::carried_light::HeldItem>>,
     time: Res<Time>,
     mut cue: ResMut<RodCue>,
     mut rod: ResMut<RodMotion>,
@@ -1568,8 +1681,15 @@ fn hold(
         .is_some_and(|(_, r)| r.running);
     let on_foot = walking.is_some_and(|w| w.active)
         || (seated_afloat(aboard.as_deref(), view.as_deref(), &vehicles) && !rowing);
-    // The stroke reads the dig's beat; bare hands keep it for the sounds.
+    // The stroke reads the dig's beat and the button; bare hands punch.
     let in_hand = tools.held();
+    // With nothing in the tool slot a light is held in the right hand
+    // (`light::hold_lights`), and the fist is put away.
+    let light_in_hand = item
+        .as_deref()
+        .and_then(|i| i.0)
+        .and_then(light::LightKind::of)
+        .is_some();
     let (kind, posed_from) = stroke_tool(in_hand);
     let tier = in_hand
         .and_then(|tool| tools.tier(tool))
@@ -1581,9 +1701,13 @@ fn hold(
         fist: model.fist.into(),
         tip: model.tip.into(),
     };
-    let stroke = clock.step(&s.stroke, &s.shovel, gear, swinging.0, dt);
+    let motion = s.motion();
+    let stroke = clock.step(&motion, gear, swinging.0, dt);
     for &last in &stroke.impacts {
-        impacts.write(StrokeImpact { last });
+        impacts.write(StrokeImpact {
+            last,
+            meets: stroke.meets,
+        });
     }
     let t = time.elapsed_secs();
     let sway = Vec3::new(
@@ -1601,7 +1725,17 @@ fn hold(
     };
     tip_now.0 = RodMotion::tip(&rod_pose, rod.bend);
     for (held, mut transform, mut visibility) in &mut held_tools {
-        let shown = on_foot && in_hand == Some(held.tool);
+        let shown = if held.bare() {
+            // Only while it punches, the ease back to rest included (owner,
+            // 2026-11-22: "no need to show hand model unless punching
+            // something ... I do like my screenshots to be nice and clean").
+            // (The rest pose is the fist's guard, not zero: the stroke
+            // clock says when a stroke is under way.)
+            let punching = stroke.busy;
+            on_foot && in_hand.is_none() && !light_in_hand && punching
+        } else {
+            on_foot && in_hand == Some(held.tool)
+        };
         let want = if shown {
             Visibility::Inherited
         } else {
@@ -1611,6 +1745,26 @@ fn hold(
             *visibility = want;
         }
         if !shown {
+            continue;
+        }
+        if let Some(frame) = &held.bare {
+            // The fist, aimed as an arm (`punch::aimed`), the wrist straight.
+            let aimed = punch::aimed(
+                frame,
+                &s.punch,
+                &hand::FistShape::V16,
+                held.fist,
+                held.rest.scale.x,
+                struck,
+            );
+            if *transform != aimed.holder {
+                *transform = aimed.holder;
+            }
+            if let Ok((mut pivot, _)) = parts.get_mut(held.arm)
+                && *pivot != aimed.arm
+            {
+                *pivot = aimed.arm;
+            }
             continue;
         }
         let pose = if held.tool == Tool::Rod {
@@ -1794,6 +1948,7 @@ mod tests {
             wrist: Vec3::ZERO,
             arm: Entity::PLACEHOLDER,
             dirt: None,
+            bare: None,
         };
         let tip = rod_tip();
         assert!(held.posed(&rod.rest(), tip).distance(tip) < 1e-5);
@@ -1852,9 +2007,25 @@ mod tests {
         let mut holders = app.world_mut().query::<(&Held, &Visibility, &Children)>();
         let rows: Vec<(Tool, bool, usize)> = holders
             .iter(app.world())
+            .filter(|(h, _, _)| !h.bare())
             .map(|(h, v, c)| (h.tool, *v != Visibility::Hidden, c.len()))
             .collect();
         assert_eq!(rows.len(), 4);
+        // And the bare fist, hidden with a tool in hand: the arm's pivot and
+        // the hand's skin and nails (one tone: no palm or fold faces).
+        let fists: Vec<(bool, usize, Entity)> = holders
+            .iter(app.world())
+            .filter(|(h, _, _)| h.bare())
+            .map(|(h, v, c)| (*v != Visibility::Hidden, c.len(), h.arm))
+            .collect();
+        assert_eq!(fists.len(), 1);
+        assert!(!fists[0].0, "the fist is put away with a tool in hand");
+        assert_eq!(fists[0].1, 3, "the fist's parts");
+        let arm_parts = app
+            .world()
+            .get::<Children>(fists[0].2)
+            .map_or(0, |c| c.len());
+        assert_eq!(arm_parts, 3, "the fist's wrist, cuff and sleeve");
         for (tool, shown, children) in &rows {
             assert_eq!(*shown, *tool == Tool::Pickaxe, "{tool:?}");
             // The tool, the arm's pivot, the hand's back, nails, palm and
@@ -1864,7 +2035,11 @@ mod tests {
         }
         // The arm's pivot carries the wrist's back and fold, the cuff and
         // the sleeve.
-        let arms: Vec<Entity> = holders.iter(app.world()).map(|(h, _, _)| h.arm).collect();
+        let arms: Vec<Entity> = holders
+            .iter(app.world())
+            .filter(|(h, _, _)| !h.bare())
+            .map(|(h, _, _)| h.arm)
+            .collect();
         for arm in arms {
             let n = app.world().get::<Children>(arm).map_or(0, |c| c.len());
             assert_eq!(n, 4, "the arm's parts");
@@ -1876,6 +2051,27 @@ mod tests {
             .filter(|(_, v, _)| **v != Visibility::Hidden)
             .count();
         assert_eq!(shown, 0, "nothing in hand while flying");
+        // On foot with nothing in the tool slot and no punch playing,
+        // nothing is shown (owner, 2026-11-22: "it should just be not
+        // showing unless punch animation is playing"); with a light in the
+        // right hand, nothing either.
+        app.world_mut().resource_mut::<WalkingReadout>().active = true;
+        app.world_mut().resource_mut::<ToolSlot>().hold(None);
+        app.update();
+        let shown = holders
+            .iter(app.world())
+            .filter(|(_, v, _)| **v != Visibility::Hidden)
+            .count();
+        assert_eq!(shown, 0, "idle bare hands show no fist");
+        app.insert_resource(crate::carried_light::HeldItem(Some(
+            pbd_core::inventory::Item::Block(pbd_core::terrain::Material::Torch),
+        )));
+        app.update();
+        let shown = holders
+            .iter(app.world())
+            .filter(|(_, v, _)| **v != Visibility::Hidden)
+            .count();
+        assert_eq!(shown, 0, "a torch in the right hand puts the fist away");
     }
 
     #[test]
@@ -2762,6 +2958,7 @@ mod tests {
             break_s: 1.2,
             between_s: 0.15,
             local_s: 0.0,
+            ..Default::default()
         }));
         // Into the windup of the first stroke.
         for i in 0..14 {
@@ -2770,6 +2967,7 @@ mod tests {
                 break_s: 1.2,
                 between_s: 0.15,
                 local_s: i as f32 * DT,
+                ..Default::default()
             }));
             app.update();
         }

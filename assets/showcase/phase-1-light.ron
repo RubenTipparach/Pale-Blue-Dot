@@ -24,7 +24,7 @@
         (
             caption: "Make torches, and set them round it",
             max_s: 300.0,
-            acts: [Hand("axe"), Chop(Have("log", 1)), Craft("planks", 1), Hand("shovel"), Dig(Have("fibre", 2), 1), Hand("hand"), Craft("torch", 2), Place("block:torch"), Place("block:torch"), Place("block:torch"), Place("block:torch"), Still],
+            acts: [Away(80.0), Hand("axe"), Chop(Have("log", 1)), Craft("planks", 1), Hand("shovel"), Dig(Have("fibre", 2), 1), Hand("hand"), Craft("torch", 2), Place("block:torch"), Place("block:torch"), Place("block:torch"), Place("block:torch"), Still],
         ),
         (
             caption: "Nightfall by the torches",

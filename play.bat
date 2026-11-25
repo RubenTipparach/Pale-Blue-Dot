@@ -11,7 +11,7 @@ REM kept in logs\play-last.log; the run before it in logs\play-previous.log.
 pushd "%~dp0"
 if not exist "target\fast\pbd-app.exe" (
     echo No fast build yet. Building it once with build-play.bat...
-    call build-play.bat %*
+    call "%~dp0build-play.bat" %*
     popd
     exit /b
 )

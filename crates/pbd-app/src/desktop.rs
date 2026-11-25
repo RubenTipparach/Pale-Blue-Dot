@@ -20,6 +20,7 @@ mod glow_plants;
 mod guide;
 mod hud;
 mod kitchen;
+mod map_herds;
 mod map_screen;
 mod map_sites;
 mod menu;
@@ -1882,6 +1883,8 @@ pub fn run(args: &[String]) {
     .insert_resource(tools)
     // And the dug blocks still floating where they were cut.
     .add_plugins(pbd_app::drops::DropsPlugin)
+    // Bark dust and falling leaves on a hit or felled tree (`tree-punch-shake`).
+    .add_plugins(pbd_app::tree_fx::TreeFxPlugin)
     // `PBD_MOTION_TRACE` (`movement-smoothness`): absent, nothing.
     .add_plugins(pbd_app::motion_trace::MotionTracePlugin)
     .add_plugins(pbd_app::step_trace::StepTracePlugin)
@@ -1960,6 +1963,7 @@ pub fn run(args: &[String]) {
     .init_resource::<pack::PackHand>()
     .init_resource::<boat::BoatMenu>()
     .init_resource::<pack::HoldView>()
+    .init_resource::<pack::OpenChest>()
     // Farming and the forge (`farming-and-smelting`).
     .init_resource::<farm::FarmNote>()
     .init_resource::<water::PourSources>()
@@ -2236,6 +2240,7 @@ pub fn run(args: &[String]) {
                 pbd_app::roads::take_stakes,
                 digging::dig_and_place,
                 cracks::show,
+                digging::shake_on_impact,
             )
                 .chain()
                 .before(pbd_app::fish::FishSet),
@@ -2274,6 +2279,7 @@ pub fn run(args: &[String]) {
                 craft::press,
                 craft::collect_hands,
                 craft::paint,
+                craft::paint_need_counts,
             )
                 .chain()
                 .after(digging::dig_and_place)

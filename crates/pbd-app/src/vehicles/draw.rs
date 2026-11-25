@@ -374,7 +374,7 @@ impl Builder<'_> {
         let kit = super::oar_hand::Kit::new(self.world);
         for side in [-1_i8, 1] {
             let hand = self.pivot(parent, Moving::Hand(side), Transform::IDENTITY);
-            kit.spawn(self.world, hand);
+            kit.spawn(self.world, hand, f32::from(side));
         }
     }
 

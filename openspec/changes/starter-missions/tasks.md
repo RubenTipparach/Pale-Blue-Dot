@@ -94,3 +94,9 @@ Done on `claude/starter-missions` (2026-11-14): tests in `pbd_core::missions` an
 - [x] J.2 The labels rewritten as instructions; metres on distance goals. Verify: the load test; the tests that read the line.
 - [x] J.3 `mission_done` in `gen_sfx.py`, played once when a mission closes. Verify: the sfx checks (`inspect_sfx.py`), a spectrogram, an app test that one close plays one jingle.
   - Built 2026-11-17: `desktop/missions.rs` (`goals_view`, `goal_words`, `show_goals`; `GOALS_AT` (6, 62) UI px, four rows); `MissionDone` from the counting, `mission_done` in `audio/hooks.rs` and `cues.ron` (-6 dB, Menus); 67 labels in `missions.ron`. Tests: `the_goals_list_every_objective_and_a_finished_mission_all_met`, `a_distance_goal_counts_in_metres`, and the new-world test reads one `MissionDone` for "gather". Captures: `docs/screenshots/mission-goals/` (lavapipe). The jingle: revised 2026-11-18 to one 0.8 s ding (`inspect_sfx.py check` ok). Not heard: only the owner's ears approve a sound.
+
+## Playtest notes (owner's playtest, 2026-11-22; `docs/plans/2026-11-22-playtest-todo.md`)
+
+- [ ] P.1 The `pack` mission after `gather`: coded; built, tested, and seen on a new world and an old one.
+- [ ] P.2 The `reef` mission is "Get a reef" (`gather block:reef rock`): coded; built, tested, seen.
+- [ ] P.3 A pack icon for the `pack` mission.
