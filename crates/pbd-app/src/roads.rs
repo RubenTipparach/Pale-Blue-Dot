@@ -1197,6 +1197,7 @@ impl Plugin for RoadsPlugin {
             .init_resource::<RoadSay>()
             .init_resource::<paving::MarksShown>()
             .init_resource::<paving::PlannerSettings>()
+            .init_resource::<paving::PaveTick>()
             .init_resource::<planner::Planner>()
             .init_resource::<planner::PlannerMenu>()
             .init_resource::<planner::PlannerAim>()
@@ -1220,6 +1221,7 @@ impl Plugin for RoadsPlugin {
                     planner::planner_aim,
                     planner::planner_hands,
                     road_hands,
+                    paving::pave_tick,
                     stand_roads,
                     paving::stand_stakes,
                     paving::follow_marks,

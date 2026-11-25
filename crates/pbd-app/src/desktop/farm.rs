@@ -2102,8 +2102,17 @@ pub fn scripted(
     }
     if let Some(metres) = launch.paving {
         use pbd_app::roads::paving;
-        // The grinder to the left and the mixer to the right.
+        // The grinder to the left and the mixer to the right (not for the
+        // slope and the bridge, whose roads are the shot).
+        let shot_road = launch
+            .road_plan
+            .as_deref()
+            .is_some_and(|s| s.starts_with("slope") || s.starts_with("bridge"));
+        let stations = !shot_road;
         for (across, material) in [(-3.2, Material::Grinder), (3.2, Material::Mixer)] {
+            if !stations {
+                continue;
+            }
             if let Some((cell, top)) = spot(&fine, &contact, metres, across) {
                 apply_edit(world!(), Hands::Empty, cell, top + 1, material);
                 info!("scripted paving: a {material:?} at cell {cell}");
@@ -2145,6 +2154,195 @@ pub fn scripted(
                 Err(why) => warn!("scripted road plan: refused: {why:?}"),
             }
         };
+        // `slope` and `bridge` (design 42m, the captures the handoff owes):
+        // the first road of a fan along the view that the planner lays with
+        // no red and that climbs (two wide where the ground takes it, else
+        // one) or carries a bridge; staked and paved whole through the
+        // paving's own calls.
+        // `slope:A:B:W` and `bridge:A:B:W` stake that road (cells A to B,
+        // width W) as a first run logged it, for a second run from the
+        // view it logged.
+        if shot_road {
+            use pbd_core::roads::planner as core;
+            let name = scene.clone().unwrap_or_default();
+            let bridge = name.starts_with("bridge");
+            let given: Vec<u32> = name
+                .split(':')
+                .skip(1)
+                .filter_map(|v| v.parse().ok())
+                .collect();
+            slots.give(Item::Good(pbd_core::goods::Good::GRAVEL), 120);
+            slots.give(Item::Good(pbd_core::goods::Good::PLANKS), 120);
+            slots.give(Item::Good(pbd_core::goods::Good::LOG), 30);
+            // Clear of the world's roads, so the two are not laid together.
+            let world: std::collections::BTreeSet<u32> = net
+                .as_deref()
+                .map(|n| {
+                    n.cells
+                        .iter()
+                        .flat_map(|l| {
+                            std::iter::once(l.cell.key)
+                                .chain(pbd_core::roads::neighbours(l.cell.key))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let mut picked = match given[..] {
+                [a, b, w] => Some((
+                    a,
+                    b,
+                    core::How {
+                        width: w as u8,
+                        surface: pbd_core::roads::Surface::Gravel,
+                        lamps: false,
+                    },
+                    0,
+                )),
+                _ => None,
+            };
+            'fan: for width in [2u8, 1] {
+                if picked.is_some() {
+                    break;
+                }
+                // Up the view from spots across it; for a bridge, from a
+                // grid of spots and turned every 30 degrees, to find water a
+                // plank bridge spans.
+                let mut legs: Vec<((f32, f32), (f32, f32))> = Vec::new();
+                for across in [0.0f32, 4.0, -4.0, 8.0, -8.0, 12.0, -12.0, 16.0, -16.0] {
+                    for (near, far) in [(3.0f32, 30.0f32), (3.0, 20.0), (8.0, 40.0)] {
+                        legs.push(((near, across), (far, across)));
+                    }
+                }
+                if bridge {
+                    for near in [3.0f32, 10.0, 18.0, 26.0] {
+                        for across in [0.0f32, 8.0, -8.0, 16.0, -16.0, 24.0, -24.0] {
+                            for turn in 0..12 {
+                                let t = (turn as f32 * 30.0).to_radians();
+                                for length in [14.0f32, 22.0] {
+                                    legs.push((
+                                        (near, across),
+                                        (near + t.cos() * length, across + t.sin() * length),
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+                for ((near, across), (far, across_far)) in legs {
+                    {
+                        let (Some(a), Some(b)) = (
+                            key_at(&fine, &contact, metres + near, across),
+                            key_at(&fine, &contact, metres + far, across_far),
+                        ) else {
+                            continue;
+                        };
+                        // Straight along a row, where a wide road climbs.
+                        let rows = (far - near).hypot(across_far - across) / 2.833;
+                        let b = core::along_row(a, b, rows.round() as i64).unwrap_or(b);
+                        let how = core::How {
+                            width,
+                            surface: pbd_core::roads::Surface::Gravel,
+                            lamps: false,
+                        };
+                        let road =
+                            core::PlanRoad::new(core::stake_line(a, b, pcfg.max_segment), how);
+                        // As the planner asks: a standing tree refuses a cell.
+                        let tree =
+                            |k: u32| pbd_app::roads::planner::tree_on(&fine, &contact, &save, 4, k);
+                        let laid = {
+                            let ground = paving::stake_ground(&config, &save.edits, &save.yields);
+                            core::lay(&road, &ground, &tree, &pcfg, cfg.ford_depth_m)
+                        };
+                        let wanted = if bridge {
+                            laid.iter().any(|c| c.deck.is_some())
+                        } else {
+                            laid.iter()
+                                .filter(|c| c.lane == 0 && c.up.is_some())
+                                .count()
+                                >= 2
+                        };
+                        let apart = laid.iter().all(|c| !world.contains(&c.key));
+                        if core::first_clash(&laid).is_none() && wanted && apart {
+                            picked = Some((a, b, how, laid.len()));
+                            break 'fan;
+                        }
+                    }
+                }
+            }
+            match picked {
+                Some((a, b, how, n)) => {
+                    info!(
+                        "scripted road plan: {} {n} cells, width {}",
+                        scene.as_deref().unwrap_or(""),
+                        how.width
+                    );
+                    // Where to stand for the shot: on its first stake's cell,
+                    // 1.5 m back from the stake, facing along it (`--yaw` as
+                    // the roads' log gives it).
+                    if let (Some(ca), Some(cb)) =
+                        (pbd_core::roads::centre(a), pbd_core::roads::centre(b))
+                    {
+                        let along = (cb - ca - ca * (cb - ca).dot(ca)).normalize_or_zero();
+                        let kind = if bridge { "bridge" } else { "slope" };
+                        // On foot on its first cell, and from over the
+                        // ground 14 m back (`--view column`).
+                        for (what, back_m) in [("view", 1.5f32), ("overview", 14.0)] {
+                            let back = (ca - along * (back_m / config.radius_m)).normalize();
+                            let (north, east) = pbd_core::geo::north_east(back);
+                            let bearing = (-along.dot(north)).atan2(along.dot(east)).to_degrees();
+                            let yaw = (bearing + 360.0).rem_euclid(360.0) - 180.0;
+                            let (lat, lon) = pbd_core::geo::lat_lon(back).degrees();
+                            info!(
+                                "scripted road {what}: --at {lat:.5} {lon:.5} --yaw {yaw:.1} --road-plan {kind}:{a}:{b}:{}",
+                                how.width
+                            );
+                        }
+                    }
+                    match paving::end_road(
+                        &mut save,
+                        &mut slots,
+                        a,
+                        b,
+                        how,
+                        &|_| false,
+                        &config,
+                        &cfg,
+                        &pcfg,
+                    ) {
+                        Ok(_) => {
+                            let plans = pbd_core::roads::planner::plans(&save.records);
+                            let keys: Vec<u32> = plans
+                                .values()
+                                .flat_map(|p| &p.roads)
+                                .flat_map(|r| {
+                                    let ground =
+                                        paving::stake_ground(&config, &save.edits, &save.yields);
+                                    core::lay(r, &ground, &|_| false, &pcfg, cfg.ford_depth_m)
+                                })
+                                .map(|c| c.key)
+                                .collect();
+                            for key in keys {
+                                if let Err(why) =
+                                    paving::pave(&mut save, &mut slots, key, &config, &cfg, &pcfg)
+                                {
+                                    warn!("scripted paving: cell {key} not paved: {why:?}");
+                                }
+                            }
+                        }
+                        Err(why) => warn!("scripted road plan: refused: {why:?}"),
+                    }
+                }
+                None => warn!("scripted road plan: no {:?} road in the fan", scene),
+            }
+            // An empty hand, so the view is the walker's own.
+            if let Some(i) = (0..10).find(|&i| slots.get(i).is_none()) {
+                slots.select(i);
+            }
+            if let (Some(mut net), Some(mut standing)) = (net, standing) {
+                paving::restand(&save, &mut net, &mut standing);
+            }
+            return;
+        }
         let (start, end) = (
             key_at(&fine, &contact, metres + 3.0, 0.0),
             key_at(&fine, &contact, metres + 34.0, 0.0),
