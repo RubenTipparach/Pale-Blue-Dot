@@ -45,7 +45,7 @@ Captures are in `docs/screenshots/playtest-fixes/` (lavapipe in a cloud
 session: what things look like, never how fast). They include the ones
 owed from before: the tracker on the left (every capture shows it), a
 talker held facing you (`talker-stopped.jpg`, the merchant 200 frames into a
-talk), a sleeper's shut eyes (`asleep-night.jpg`) and a wild plant picked a
+talk), a sleeper in bed at 02:00 (`asleep-night.jpg`) and their shut eyes from over the pillow (`asleep-face.jpg`: the lids read grey with a dark lash line, closer to heavy-lidded than shut, worth a look in play) and a wild plant picked a
 day ago, gone, and picked over two days ago, grown back (`wild-*.jpg`).
 
 ## Still open
