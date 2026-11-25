@@ -32,6 +32,7 @@ mod planner;
 mod repro;
 mod scene;
 mod scroll_list;
+mod sea_gather;
 mod showcase;
 mod slots;
 mod sounds;
@@ -2111,6 +2112,7 @@ pub fn run(args: &[String]) {
         (
             fruit::offer.in_set(pbd_app::interact::InteractSet::Offer),
             glow_plants::offer.in_set(pbd_app::interact::InteractSet::Offer),
+            sea_gather::offer.in_set(pbd_app::interact::InteractSet::Offer),
             farm::offer
                 .in_set(pbd_app::interact::InteractSet::Offer)
                 .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
@@ -2300,6 +2302,16 @@ pub fn run(args: &[String]) {
             (glow_plants::pick, glow_plants::follow)
                 .chain()
                 .after(fruit::pick)
+                .before(farm::use_key),
+            // The sea floor (`sea-gathering`): the takes read from the save,
+            // F on a piece, a creature or an ornament, right-click to set one.
+            (
+                sea_gather::refresh_takes,
+                sea_gather::use_key,
+                sea_gather::place,
+            )
+                .chain()
+                .after(glow_plants::pick)
                 .before(farm::use_key),
             (
                 farm::use_key,
@@ -2572,6 +2584,12 @@ pub fn run(args: &[String]) {
             app.add_systems(
                 PreUpdate,
                 glow_plants::pick_script.after(bevy::input::InputSystems),
+            );
+        }
+        if sea_gather::shot_wanted().is_some() {
+            app.add_systems(
+                PreUpdate,
+                sea_gather::shot_script.after(bevy::input::InputSystems),
             );
         }
         if launch.break_s.is_some() || launch.tool.is_some() {

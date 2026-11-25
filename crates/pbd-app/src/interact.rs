@@ -42,6 +42,8 @@ pub enum Reader {
     Planner,
     /// A construction site's pieces (`building-planner` design 6, 7).
     Site,
+    /// The sea floor's pieces, crawlers and ornaments (`sea-gathering`).
+    Sea,
 }
 
 /// A thing F can do.
@@ -106,6 +108,12 @@ pub enum Act {
     TakeDown,
     /// Set a piece of furniture in its slot (design 6).
     Fill,
+    /// Take a piece or a crawler off the sea floor (`sea-gathering` design 2).
+    GatherSea,
+    /// Take a set-down ornament back up (`sea-gathering` design 8).
+    TakeOrnament,
+    /// Feed a growing crop fertiliser (`sea-gathering` design 6).
+    Fertilize,
 }
 
 /// One row of the table: an act, the verb the prompt names it by (the
@@ -124,7 +132,7 @@ const fn row(act: Act, verb: &'static str, reader: Reader) -> Row {
 
 /// Everything F does, highest priority first: the one table the prompt and
 /// the readers share.
-pub const ACTS: [Row; 38] = [
+pub const ACTS: [Row; 41] = [
     // A cart in hand, a seat or a back taken comes first: F lets it go.
     row(Act::LetGo, "let_go", Reader::Carts),
     row(Act::StepDown, "step_down", Reader::Carts),
@@ -141,9 +149,12 @@ pub const ACTS: [Row; 38] = [
     row(Act::TakeUp, "take_up", Reader::Husbandry),
     row(Act::PickFruit, "pick_fruit", Reader::Fruit),
     row(Act::PickGlow, "pick_glow", Reader::Glow),
+    row(Act::GatherSea, "gather_sea", Reader::Sea),
+    row(Act::TakeOrnament, "take_ornament", Reader::Sea),
     row(Act::Open, "open", Reader::Farm),
     row(Act::Plan, "plan", Reader::Planner),
     row(Act::Harvest, "harvest", Reader::Farm),
+    row(Act::Fertilize, "fertilize", Reader::Farm),
     row(Act::Check, "check", Reader::Farm),
     row(Act::PickWild, "pick_wild", Reader::Farm),
     row(Act::Gather, "gather", Reader::Farm),

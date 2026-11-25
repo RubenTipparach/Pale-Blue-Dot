@@ -1653,7 +1653,6 @@ sea:
   occupied: Something already stands there
   refusal:
     rod: Use a rod
-  too_far: Too far away
 site:
   have: "{have}/{count}"
   left: "{left} of {total} left"

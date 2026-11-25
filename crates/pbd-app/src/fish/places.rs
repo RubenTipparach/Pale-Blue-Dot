@@ -25,6 +25,7 @@ use bevy::tasks::{AsyncComputeTaskPool, Task, block_on, futures_lite::future};
 use pbd_core::fauna::{Environment, hash2};
 use pbd_core::ocean::places::environment;
 use pbd_core::planet_gen::TerrainConfig;
+use pbd_core::sea_gather::SeaPiece;
 use std::collections::HashMap;
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 use std::sync::OnceLock;
@@ -76,10 +77,59 @@ struct Piece {
     /// Kelp: its height to the surface, m. Floes: its radius, m.
     reach: f32,
     floe: bool,
+    /// The piece's id, derived from its tile and lattice point like the rest
+    /// of it, so the same piece has the same id in every build
+    /// (`sea-gathering` design 3); zero for one that is never taken.
+    id: u64,
+    /// What it gives when taken by hand, if it is gathered.
+    what: Option<SeaPiece>,
+}
+
+/// What a model gives when taken (`sea-gathering` design 1): one good per
+/// model; none for the big anemone (the clownfish's home), the smoker,
+/// the mats and the unused models.
+fn gathered(kind: Kind) -> Option<SeaPiece> {
+    Some(match kind {
+        Kind::Branch => SeaPiece::StaghornCoral,
+        Kind::Finger => SeaPiece::FingerCoral,
+        Kind::Boulder => SeaPiece::BrainCoral,
+        Kind::Table => SeaPiece::TableCoral,
+        Kind::Soft => SeaPiece::SoftCoral,
+        Kind::Tube => SeaPiece::TubeSponge,
+        Kind::Barrel => SeaPiece::BarrelSponge,
+        Kind::Fan => SeaPiece::SeaFan,
+        Kind::Anemone => SeaPiece::SeaAnemone,
+        Kind::Turf => SeaPiece::SeaLettuce,
+        Kind::Rubble => SeaPiece::CoralRubble,
+        Kind::Mussels => SeaPiece::Mussels,
+        Kind::Hero | Kind::Grass | Kind::Weed | Kind::Shell | Kind::Chimney | Kind::Mat => {
+            return None;
+        }
+    })
+}
+
+/// The model a gathered piece is drawn with, set down as an ornament.
+fn model_of(piece: SeaPiece) -> Option<Kind> {
+    [
+        Kind::Branch,
+        Kind::Finger,
+        Kind::Boulder,
+        Kind::Table,
+        Kind::Soft,
+        Kind::Tube,
+        Kind::Barrel,
+        Kind::Fan,
+        Kind::Anemone,
+        Kind::Turf,
+        Kind::Rubble,
+        Kind::Mussels,
+    ]
+    .into_iter()
+    .find(|k| gathered(*k) == Some(piece))
 }
 
 /// A tile on the cube projection: the face (0..6) and the cell on it.
-type Key = (u8, i32, i32);
+pub type Key = (u8, i32, i32);
 
 fn face_of(d: Vec3) -> (u8, f32, f32) {
     let a = d.abs();
@@ -590,6 +640,8 @@ fn plan(cfg: &TerrainConfig, key: Key) -> Vec<Piece> {
         let v = 0.85 + 0.3 * hash_unit(seed ^ 3, k);
         [c[0] * v, c[1] * v, c[2] * v]
     };
+    // A piece's id: its lattice point's hash and its kind, never zero.
+    let id_of = |kind: u64, k: u64| hash2(seed ^ 0x5ea_7a4e, k.wrapping_mul(31) ^ kind).max(1);
     let piece = |dir: Vec3, kind: Kind, scale: f32, tall: f32, yaw: f32, k: u64| Piece {
         dir,
         kind: Some(kind),
@@ -600,6 +652,8 @@ fn plan(cfg: &TerrainConfig, key: Key) -> Vec<Piece> {
         over: 0.0,
         reach: 0.0,
         floe: false,
+        id: id_of(kind as u64, k),
+        what: gathered(kind),
     };
     // Deep enough for a table coral to stand clear of the surface.
     let deep = |d: Vec3| cfg.sea_level_m - pbd_core::planet_gen::surface_altitude(cfg, d) >= 3.5;
@@ -663,6 +717,9 @@ fn plan(cfg: &TerrainConfig, key: Key) -> Vec<Piece> {
                         Kind::Finger
                     };
                     let mut p = piece(d, on, s * 0.6, 1.0, yaw, k ^ 0xb);
+                    // `k ^ 0xb` is also a lattice point's: the id takes its
+                    // own salt so the two never share one.
+                    p.id = id_of(0x100 | on as u64, k);
                     p.over = 0.42 * size * tall;
                     out.push(p);
                 }
@@ -675,14 +732,16 @@ fn plan(cfg: &TerrainConfig, key: Key) -> Vec<Piece> {
                     };
                     let east = Vec3::Y.cross(d).normalize_or(Vec3::X);
                     let beside = (d + east * (0.3 / radius)).normalize();
-                    out.push(piece(
+                    let mut p = piece(
                         beside,
                         fill,
                         0.6 + 0.6 * hash_unit(seed ^ 15, k),
                         1.0,
                         yaw,
                         k ^ 0xf,
-                    ));
+                    );
+                    p.id = id_of(0x200 | fill as u64, k);
+                    out.push(p);
                 }
             }
         }
@@ -725,6 +784,7 @@ fn plan(cfg: &TerrainConfig, key: Key) -> Vec<Piece> {
                 tile_k,
             );
             p.colour = [1.0; 3];
+            p.what = None;
             out.push(p);
         }
     }
@@ -746,6 +806,8 @@ fn plan(cfg: &TerrainConfig, key: Key) -> Vec<Piece> {
                 let mut p = piece(d, Kind::Weed, 1.0, 1.0, hash_unit(seed ^ 33, k) * TAU, k);
                 p.kind = None;
                 p.reach = -1.0; // to the surface, set when the bed is known
+                p.id = id_of(0x4e1b, k);
+                p.what = Some(SeaPiece::Kelp);
                 out.push(p);
                 if hash_unit(seed ^ 34, k) < 0.5 {
                     let mut rock = piece(
@@ -760,6 +822,8 @@ fn plan(cfg: &TerrainConfig, key: Key) -> Vec<Piece> {
                     let pick = (hash_unit(seed ^ 36, k) * KELP_ROCK.len() as f32) as usize;
                     let l = lin(KELP_ROCK[pick.min(KELP_ROCK.len() - 1)]);
                     rock.colour = [l[0], l[1], l[2]];
+                    // Rock, not brain coral: never taken.
+                    rock.what = None;
                     out.push(rock);
                 }
             }
@@ -835,6 +899,8 @@ fn plan(cfg: &TerrainConfig, key: Key) -> Vec<Piece> {
                     over: 0.0,
                     reach: 1.2 + 0.25 * hash_unit(seed ^ 52, k),
                     floe: true,
+                    id: 0,
+                    what: None,
                 });
             }
         }
@@ -1172,6 +1238,42 @@ struct Built {
     /// The kelp stands: M25's cards, in the cut-out kelp material (B20).
     kelp: Sway,
     ambient: Vec<Ambient>,
+    /// What a hand can take from it (`sea-gathering` design 2).
+    pickable: Vec<Pickable>,
+}
+
+/// A piece a hand can take, as it is drawn: its id, what it gives, its
+/// foot in the tile's frame, its up, and its drawn height and half-width.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Pickable {
+    pub id: u64,
+    pub what: SeaPiece,
+    pub foot: Vec3,
+    pub up: Vec3,
+    pub height: f32,
+    pub radius: f32,
+}
+
+/// Each model's height over its foot and its half-width, m, at scale one.
+fn extent(kind: Kind) -> (f32, f32) {
+    static EXTENTS: OnceLock<HashMap<Kind, (f32, f32)>> = OnceLock::new();
+    EXTENTS
+        .get_or_init(|| {
+            library()
+                .iter()
+                .map(|(kind, shape)| {
+                    let height = shape.positions.iter().fold(0.0f32, |h, p| h.max(p.y));
+                    let radius = shape
+                        .positions
+                        .iter()
+                        .fold(0.0f32, |r, p| r.max(Vec2::new(p.x, p.z).length()));
+                    (*kind, (height, radius))
+                })
+                .collect()
+        })
+        .get(&kind)
+        .copied()
+        .unwrap_or((0.3, 0.3))
 }
 
 /// `PBD_PASS_OFF=kelp`: no kelp stand is laid (its rocks stay), a pricing
@@ -1285,6 +1387,16 @@ fn build_tile(
                     continue;
                 }
                 let height = (sea_radius - ground - 0.3).max(1.0);
+                if let Some(what) = p.what {
+                    out.pickable.push(Pickable {
+                        id: p.id,
+                        what,
+                        foot: origin,
+                        up: p.dir,
+                        height,
+                        radius: KELP_CARD_W * 0.4,
+                    });
+                }
                 let mut kelp = Verts::default();
                 kelp_stand(origin, axes, height, i as f32 * 0.37, &mut kelp);
                 out.kelp.uvs.extend_from_slice(&kelp.uvs);
@@ -1307,6 +1419,17 @@ fn build_tile(
                 };
                 let scale = Vec3::new(p.scale, p.scale * p.tall, p.scale);
                 let tint = water.albedo(p.colour, sea_radius - ground);
+                if let Some(what) = p.what {
+                    let (h, r) = extent(kind);
+                    out.pickable.push(Pickable {
+                        id: p.id,
+                        what,
+                        foot: origin,
+                        up: p.dir,
+                        height: h * scale.y,
+                        radius: r * p.scale,
+                    });
+                }
                 if sways(kind) {
                     lay_swaying(
                         shape,
@@ -1553,7 +1676,9 @@ const WANT_M: f32 = 52.0;
 const DETAIL_M: f32 = 12.0;
 const NEAR_PER_M2: f32 = 0.6;
 const FAR_PER_M2: f32 = 0.04;
+#[cfg_attr(not(test), allow(dead_code))]
 const MAX_PIECES: usize = 1000;
+#[cfg_attr(not(test), allow(dead_code))]
 const MAX_PIECE_TRIS: usize = 500;
 
 /// A tile's level of detail: 0 near, 1 far.
@@ -1661,6 +1786,152 @@ struct Drawn {
     /// The tile's triangles and the kelp's share of them (`SEA_PLACES`).
     tris: usize,
     kelp_tris: usize,
+    /// The pieces it was built from, after the trim, taken ones included:
+    /// what a take rebuilds it from (`sea-gathering` design 3).
+    kept: Vec<Piece>,
+    /// The taken pieces its build left out: kept out of a rebuild even once
+    /// grown back, so nothing reappears in sight.
+    left_out: std::collections::HashSet<u64>,
+    packed: bool,
+    /// What a hand can take from it.
+    pickable: Vec<Pickable>,
+}
+
+/// The sea pieces taken and not yet grown back, by id, and the tiles a
+/// take has just changed (`sea-gathering` design 3). The gathering reader
+/// fills it from the save; [`tiles`] leaves the taken out of every tile it
+/// builds and rebuilds a changed one at its fade.
+#[derive(Resource, Default, Debug)]
+pub struct SeaTakes {
+    pub taken: std::collections::HashSet<u64>,
+    pub dirty: Vec<Key>,
+    /// Every drawn tile is rebuilt: the set was read from a save opened
+    /// after tiles were built.
+    pub rebuild_all: bool,
+}
+
+/// The piece the eye is on within reach, this frame (`sea-gathering`
+/// design 2): the nearest along the ray.
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq)]
+pub struct SeaAim(pub Option<Aimed>);
+
+/// A piece aimed at: its tile, its id, what it gives, how far along the
+/// ray, m.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Aimed {
+    pub key: Key,
+    pub id: u64,
+    pub what: SeaPiece,
+    pub along_m: f32,
+}
+
+/// How far a hand reaches for a sea piece from the eye, m.
+pub const REACH_M: f32 = 2.5;
+
+/// Where along the ray from `eye` toward `look` (unit) the ray passes a
+/// piece, if it passes within its half-width (at least 0.2 m) of its stem
+/// from foot to top, within `reach`: the distance along it.
+pub fn ray_meets(eye: Vec3, look: Vec3, p: &Pickable, reach: f32) -> Option<f32> {
+    let top = p.foot + p.up * p.height.max(0.1);
+    let (along, gap) = ray_to_stem(eye, look, p.foot, top);
+    (along >= 0.0 && along <= reach && gap <= p.radius.max(0.2)).then_some(along)
+}
+
+/// The closest approach of a ray to a segment: how far along the ray, and
+/// the gap there.
+fn ray_to_stem(eye: Vec3, look: Vec3, a: Vec3, b: Vec3) -> (f32, f32) {
+    let ab = b - a;
+    let w = eye - a;
+    let (aa, ab_l, ll) = (ab.dot(ab), ab.dot(look), look.dot(look));
+    let (aw, lw) = (ab.dot(w), look.dot(w));
+    let den = aa * ll - ab_l * ab_l;
+    let mut u = if den.abs() < 1e-9 {
+        0.0
+    } else {
+        ((aw * ll - ab_l * lw) / den).clamp(0.0, 1.0)
+    };
+    let mut t = (ab_l * u - lw) / ll;
+    if t < 0.0 {
+        t = 0.0;
+        u = (aw / aa.max(1e-9)).clamp(0.0, 1.0);
+    }
+    let gap = (eye + look * t).distance(a + ab * u);
+    (t, gap)
+}
+
+/// The nearest piece on the ray within reach among the near tiles drawn.
+fn aimed_in(tiles: &Tiles, eye: Vec3, look: Vec3) -> Option<Aimed> {
+    let mut best: Option<Aimed> = None;
+    for (&(key, level), drawn) in &tiles.drawn {
+        if level != 0 || drawn.fade >= 0.5 {
+            continue;
+        }
+        let local = eye - drawn.anchor;
+        if drawn.pickable.is_empty() || local.length() > TILE_M * 1.8 {
+            continue;
+        }
+        for p in &drawn.pickable {
+            if let Some(along) = ray_meets(local, look, p, REACH_M)
+                && best.is_none_or(|b| along < b.along_m)
+            {
+                best = Some(Aimed {
+                    key,
+                    id: p.id,
+                    what: p.what,
+                    along_m: along,
+                });
+            }
+        }
+    }
+    best
+}
+
+/// A capture instrument's question (`sea-gathering` 4.1): the nearest
+/// gatherable piece of a kind (any with `want` none) in a near tile within
+/// 30 m of the eye, as its middle, planet-local. Inserted by the capture
+/// script only.
+#[derive(Resource, Default, Debug)]
+pub struct SeaNear {
+    pub want: Option<SeaPiece>,
+    pub found: Option<Vec3>,
+}
+
+/// Each frame, the piece the walking eye is on ([`SeaAim`]), and for a
+/// capture the nearest piece it asks for ([`SeaNear`]).
+fn aim(
+    tiles: Res<Tiles>,
+    mut aimed: ResMut<SeaAim>,
+    near: Option<ResMut<SeaNear>>,
+    cameras: Query<&GlobalTransform, With<WalkingCamera>>,
+    frame: Res<crate::planet::PlanetRenderFrame>,
+) {
+    let Some(camera) = cameras.iter().next() else {
+        return;
+    };
+    let eye = (camera.translation().as_dvec3() - frame.center).as_vec3();
+    let now = aimed_in(&tiles, eye, camera.forward().as_vec3());
+    if aimed.0 != now {
+        aimed.0 = now;
+    }
+    if let Some(mut near) = near {
+        let mut best: Option<(f32, Vec3)> = None;
+        for (&(_, level), drawn) in &tiles.drawn {
+            if level != 0 {
+                continue;
+            }
+            for p in &drawn.pickable {
+                if near.want.is_some_and(|w| w != p.what) {
+                    continue;
+                }
+                let mid = drawn.anchor + p.foot + p.up * (p.height * 0.5).min(1.2);
+                let d = mid.distance(eye);
+                if d < 30.0 && best.is_none_or(|b| d < b.0) {
+                    best = Some((d, mid));
+                }
+            }
+        }
+        near.found = best.map(|b| b.1);
+    }
 }
 
 #[derive(Resource, Default)]
@@ -1717,8 +1988,11 @@ pub struct SeaPlacesPlugin;
 impl Plugin for SeaPlacesPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Tiles>()
+            .init_resource::<SeaTakes>()
+            .init_resource::<SeaAim>()
             .add_systems(Startup, warm_glow)
-            .add_systems(Update, tiles);
+            .add_systems(Update, (tiles, aim).chain())
+            .add_systems(Update, ornaments);
     }
 }
 
@@ -1788,7 +2062,7 @@ fn warm_glow(
 /// (`phase + 0.6 h`). Written once when the tile is built; the GPU moves it.
 pub const ATTRIBUTE_SWAY: bevy::mesh::MeshVertexAttribute = bevy::mesh::MeshVertexAttribute::new(
     "Reef_Sway",
-    0x5eed_5ea_0001,
+    0x05ee_d5ea_0001,
     bevy::render::render_resource::VertexFormat::Float32x4,
 );
 
@@ -1862,6 +2136,7 @@ struct Swimmer {
 impl Swimmer {
     /// Its place and heading in the cloud's frame at `t` (x and z the
     /// plane, y up), as the shader has them.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn at(&self, t: f32) -> (Vec3, Vec3) {
         let a = self.start + t * self.speed;
         let h = self.bob_mid + self.bob_reach * (t * self.bob_rate + self.bob_phase).sin();
@@ -2037,6 +2312,7 @@ fn tiles(
     mut meshes: ResMut<Assets<Mesh>>,
     mut roots: Query<(&mut Transform, &mut crate::field_light::Faded)>,
     mut shown: Query<&mut Visibility>,
+    mut takes: ResMut<SeaTakes>,
 ) {
     let _timer = TilesTimer(std::time::Instant::now());
     let cfg = *crate::planet::terrain_config();
@@ -2217,6 +2493,49 @@ fn tiles(
         state.planning.remove(&key);
         state.ready.push((key, pieces));
     }
+    // A take rebuilds its tile from its kept pieces at once, at the fade
+    // it had: the piece goes out on this frame and nothing else moves.
+    let mut dirty: Vec<Key> = std::mem::take(&mut takes.dirty);
+    if std::mem::take(&mut takes.rebuild_all) {
+        dirty.extend(state.drawn.keys().map(|(key, _)| *key));
+    }
+    dirty.sort_unstable();
+    dirty.dedup();
+    for key in dirty {
+        for level in [0u8, 1] {
+            let Some(old) = state.drawn.remove(&(key, level)) else {
+                continue;
+            };
+            let mut left_out = old.left_out.clone();
+            left_out.extend(
+                old.kept
+                    .iter()
+                    .filter(|p| p.id != 0 && takes.taken.contains(&p.id))
+                    .map(|p| p.id),
+            );
+            let laid = Laid {
+                frame_center: frame.center,
+                contact: contact.as_deref(),
+                sea_radius: sea.radius,
+                under,
+                life: &life.0,
+                glow: &glow.0,
+                kelp: &kelp_material.0,
+            };
+            let drawn = lay_tile(
+                &mut commands,
+                &mut meshes,
+                &laid,
+                key,
+                old.kept,
+                old.packed,
+                left_out,
+                old.fade,
+            );
+            commands.entity(old.root).despawn();
+            state.drawn.insert((key, level), drawn);
+        }
+    }
     // Build one tile a frame, the nearest first.
     state
         .ready
@@ -2241,13 +2560,76 @@ fn tiles(
         .count()
         > 80;
     let pieces = trim(pieces, level, tile_area_m2(key, radius));
-    let anchor = tile_centre(key, radius) * sea.radius;
-    let contact = contact.as_deref();
-    let bed = |d: Vec3| crate::vehicles::ground_under(contact, (d * sea.radius).as_dvec3()) as f32;
+    // A taken piece is left out after the trim, so no piece the budget
+    // left out takes its place (`sea-gathering` design 3).
+    let left_out = pieces
+        .iter()
+        .filter(|p| p.id != 0 && takes.taken.contains(&p.id))
+        .map(|p| p.id)
+        .collect();
+    let laid = Laid {
+        frame_center: frame.center,
+        contact: contact.as_deref(),
+        sea_radius: sea.radius,
+        under,
+        life: &life.0,
+        glow: &glow.0,
+        kelp: &kelp_material.0,
+    };
+    let drawn = lay_tile(
+        &mut commands,
+        &mut meshes,
+        &laid,
+        key,
+        pieces,
+        packed,
+        left_out,
+        1.0,
+    );
+    state.drawn.insert((key, level), drawn);
+}
+
+/// What laying a tile reads of the world.
+struct Laid<'a> {
+    frame_center: bevy::math::DVec3,
+    contact: Option<&'a PlanetContact>,
+    sea_radius: f32,
+    under: UnderWater,
+    life: &'a Handle<StandardMaterial>,
+    glow: &'a Handle<StandardMaterial>,
+    kelp: &'a Handle<StandardMaterial>,
+}
+
+/// Build a tile's meshes from its kept pieces less `left_out`, and spawn
+/// it at `fade`.
+#[allow(clippy::too_many_arguments)]
+fn lay_tile(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    laid: &Laid,
+    key: Key,
+    kept: Vec<Piece>,
+    packed: bool,
+    left_out: std::collections::HashSet<u64>,
+    fade: f32,
+) -> Drawn {
+    let radius = crate::planet::terrain_config().radius_m;
+    let frame_center = laid.frame_center;
+    let under = laid.under;
+    let (life, glow, kelp_material) = (laid.life, laid.glow, laid.kelp);
+    let sea_radius = laid.sea_radius;
+    let pieces: Vec<Piece> = kept
+        .iter()
+        .filter(|p| !left_out.contains(&p.id))
+        .copied()
+        .collect();
+    let anchor = tile_centre(key, radius) * sea_radius;
+    let contact = laid.contact;
+    let bed = |d: Vec3| crate::vehicles::ground_under(contact, (d * sea_radius).as_dvec3()) as f32;
     let seed = (key.1 as u32).wrapping_mul(73_856_093)
         ^ (key.2 as u32).wrapping_mul(19_349_663)
         ^ u32::from(key.0);
-    let built = build_tile(&pieces, packed, anchor, bed, sea.radius, under, seed);
+    let built = build_tile(&pieces, packed, anchor, bed, sea_radius, under, seed);
     for a in &built.ambient {
         let (Ambient::Anthias { at, .. }
         | Ambient::Clowns { at, .. }
@@ -2271,14 +2653,14 @@ fn tiles(
         + built.kelp.rest.len())
         / 3;
     let kelp_tris = built.kelp.rest.len() / 3;
-    let at = (frame.center + anchor.as_dvec3()).as_vec3();
+    let at = (frame_center + anchor.as_dvec3()).as_vec3();
     let root = commands
         .spawn((
             Name::new("Sea places tile"),
             crate::field_light::LitByField,
             // Lit as the seabed beside it is (`ocean-environments` B23).
             crate::field_light::LitLikeTerrain,
-            crate::field_light::Faded(1.0),
+            crate::field_light::Faded(fade),
             Transform::from_translation(at),
             Visibility::default(),
         ))
@@ -2302,25 +2684,25 @@ fn tiles(
     };
     if !built.pieces.positions.is_empty() {
         child(
-            &mut commands,
+            commands,
             meshes.add(mesh_of(built.pieces, true)),
-            life.0.clone(),
+            life.clone(),
             "Sea pieces",
         );
     }
     if !built.floes.positions.is_empty() {
         child(
-            &mut commands,
+            commands,
             meshes.add(mesh_of(built.floes, true)),
-            life.0.clone(),
+            life.clone(),
             "Ice floes",
         );
     }
     let glow_id = (!built.glow.positions.is_empty()).then(|| {
         child(
-            &mut commands,
+            commands,
             meshes.add(mesh_of(built.glow, false)),
-            glow.0.clone(),
+            glow.clone(),
             "Vent glow",
         )
     });
@@ -2328,9 +2710,9 @@ fn tiles(
     // (`sway_vertex.wgsl`), so the meshes are never written again.
     if !built.sway.rest.is_empty() {
         child(
-            &mut commands,
+            commands,
             meshes.add(swaying_mesh(&built.sway)),
-            life.0.clone(),
+            life.clone(),
             "Sea pieces (swaying)",
         );
     }
@@ -2342,7 +2724,7 @@ fn tiles(
             .spawn((
                 Name::new("Kelp"),
                 Mesh3d(handle.clone()),
-                MeshMaterial3d(kelp_material.0.clone()),
+                MeshMaterial3d(kelp_material.clone()),
                 Transform::default(),
                 Visibility::default(),
             ))
@@ -2350,7 +2732,7 @@ fn tiles(
         commands.entity(root).add_child(id);
     }
     // The fish clouds: laid once, swum on the GPU (`fish_vertex.wgsl`).
-    let surface = sea.radius;
+    let surface = sea_radius;
     let mut fish_clouds = 0;
     for a in &built.ambient {
         let (Ambient::Anthias { at, .. } | Ambient::Clowns { at, .. }) = *a else {
@@ -2362,7 +2744,7 @@ fn tiles(
                 .spawn((
                     Name::new("Reef fish"),
                     Mesh3d(meshes.add(mesh)),
-                    MeshMaterial3d(life.0.clone()),
+                    MeshMaterial3d(life.clone()),
                     Transform::from_translation(at).with_rotation(turn),
                     Visibility::default(),
                     bevy::camera::visibility::NoFrustumCulling,
@@ -2384,9 +2766,9 @@ fn tiles(
     };
     let life_handle = meshes.add(blank(true));
     let life_id = child(
-        &mut commands,
+        commands,
         life_handle.clone(),
-        life.0.clone(),
+        life.clone(),
         "Sea life (ambient)",
     );
     let smoke = built
@@ -2396,30 +2778,173 @@ fn tiles(
         .then(|| {
             let handle = meshes.add(blank(false));
             (
-                child(&mut commands, handle.clone(), glow.0.clone(), "Vent smoke"),
+                child(commands, handle.clone(), glow.clone(), "Vent smoke"),
                 handle,
             )
         });
-    state.drawn.insert(
-        (key, level),
-        Drawn {
-            root,
-            glow: glow_id,
-            life: (life_id, life_handle),
-            smoke,
-            anchor,
-            fade: 1.0,
-            fish_clouds,
-            // The fish clouds swim on the GPU; the CPU keeps the rest.
-            ambient: built
-                .ambient
-                .into_iter()
-                .filter(|a| !matches!(a, Ambient::Anthias { .. } | Ambient::Clowns { .. }))
-                .collect(),
-            tris,
-            kelp_tris,
-        },
+    let pickable = built.pickable.clone();
+    Drawn {
+        root,
+        glow: glow_id,
+        life: (life_id, life_handle),
+        smoke,
+        anchor,
+        fade,
+        fish_clouds,
+        // The fish clouds swim on the GPU; the CPU keeps the rest.
+        ambient: built
+            .ambient
+            .into_iter()
+            .filter(|a| !matches!(a, Ambient::Anthias { .. } | Ambient::Clowns { .. }))
+            .collect(),
+        tris,
+        kelp_tris,
+        kept,
+        left_out,
+        packed,
+        pickable,
+    }
+}
+
+// ---- ornaments (`sea-gathering` design 8) ---------------------------------------
+
+/// The scale an ornament is drawn at: a mid-sized reef piece's.
+pub const ORNAMENT_SCALE: f32 = 1.0;
+
+/// A sea piece's model as an ornament's mesh, in its kind's first palette
+/// colour, tinted for `depth_m` of water over it (none on land): the reef's
+/// own shape, on the water life's atlas. `None` for a piece with no model.
+pub fn ornament_mesh(piece: SeaPiece, under: &UnderWater, depth_m: f32) -> Option<Mesh> {
+    let kind = model_of(piece)?;
+    let shape = library().get(&kind)?;
+    let c = lin(palette(kind)[0]);
+    let colour = [c[0], c[1], c[2]];
+    let tint = if depth_m > 0.0 {
+        under.albedo(colour, depth_m)
+    } else {
+        colour
+    };
+    let mut verts = Verts::default();
+    lay(
+        shape,
+        Vec3::ZERO,
+        (Vec3::X, Vec3::Y, Vec3::Z),
+        Vec3::splat(ORNAMENT_SCALE),
+        tint,
+        &mut verts,
     );
+    Some(mesh_of(verts, true))
+}
+
+/// An ornament's height and half-width as drawn, m: what F is aimed at.
+pub fn ornament_extent(piece: SeaPiece) -> (f32, f32) {
+    model_of(piece).map_or((0.4, 0.3), |kind| {
+        let (h, r) = extent(kind);
+        (h * ORNAMENT_SCALE, r * ORNAMENT_SCALE)
+    })
+}
+
+/// The standing ornaments a save holds, by their record's id: the body
+/// and the piece.
+pub fn standing_ornaments(
+    save: &crate::saves::WorldSave,
+) -> impl Iterator<Item = (u64, pbd_core::sea_gather::Ornament, SeaPiece)> + '_ {
+    save.records
+        .of_kind(pbd_core::sea_gather::ORNAMENT_RECORD)
+        .filter_map(|r| {
+            let body = r.read::<pbd_core::sea_gather::Ornament>()?;
+            let piece = body.piece()?;
+            body.standing.then_some((r.id, body, piece))
+        })
+}
+
+/// The turn an ornament stands at: up its point's, turned `yaw` about it.
+pub fn ornament_turn(at: Vec3, yaw: f32) -> Quat {
+    let (x, y, z) = frame_at(at.normalize_or(Vec3::Y), yaw);
+    Quat::from_mat3(&Mat3::from_cols(x, y, z))
+}
+
+/// Draw every standing ornament where its record says: spawned when one is
+/// set, gone when it is taken up, moved with the render frame. Each is lit
+/// as the ground it stands on (`LitByField`, `LitLikeTerrain`).
+#[allow(clippy::too_many_arguments)]
+fn ornaments(
+    mut commands: Commands,
+    save: Option<Res<crate::saves::WorldSave>>,
+    frame: Res<crate::planet::PlanetRenderFrame>,
+    life: Option<Res<super::draw::LifeMaterial>>,
+    sea: Option<Res<crate::sea::Sea>>,
+    water: Option<Res<crate::config::WaterSettings>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut drawn: Local<HashMap<u64, (Entity, bevy::math::DVec3, String)>>,
+    mut roots: Query<&mut Transform>,
+) {
+    let (Some(save), Some(life)) = (save, life) else {
+        for (_, (entity, _, _)) in drawn.drain() {
+            commands.entity(entity).despawn();
+        }
+        return;
+    };
+    let mut standing = std::collections::HashSet::new();
+    let under = UnderWater::of(water.as_deref());
+    let has_sea = crate::planet::terrain_config().ocean.is_some();
+    for (id, body, piece) in standing_ornaments(&save) {
+        standing.insert(id);
+        let at = bevy::math::DVec3::new(body.at.0, body.at.1, body.at.2);
+        if drawn
+            .get(&id)
+            .is_some_and(|(_, was, code)| *was == at && *code == body.code)
+        {
+            continue;
+        }
+        if let Some((entity, _, _)) = drawn.remove(&id) {
+            commands.entity(entity).despawn();
+        }
+        let depth = match (&sea, has_sea) {
+            (Some(sea), true) => sea.radius - at.length() as f32,
+            _ => 0.0,
+        };
+        let Some(mesh) = ornament_mesh(piece, &under, depth) else {
+            continue;
+        };
+        let local = at.as_vec3();
+        let root = commands
+            .spawn((
+                Name::new("Ornament"),
+                crate::field_light::LitByField,
+                crate::field_light::LitLikeTerrain,
+                Transform::from_translation((frame.center + at).as_vec3())
+                    .with_rotation(ornament_turn(local, body.yaw)),
+                Visibility::default(),
+            ))
+            .id();
+        let child = commands
+            .spawn((
+                Name::new("Ornament mesh"),
+                Mesh3d(meshes.add(mesh)),
+                MeshMaterial3d(life.0.clone()),
+                Transform::default(),
+                Visibility::default(),
+            ))
+            .id();
+        commands.entity(root).add_child(child);
+        drawn.insert(id, (root, at, body.code.clone()));
+    }
+    drawn.retain(|id, (entity, _, _)| {
+        let keep = standing.contains(id);
+        if !keep {
+            commands.entity(*entity).despawn();
+        }
+        keep
+    });
+    for (entity, at, _) in drawn.values() {
+        if let Ok(mut transform) = roots.get_mut(*entity) {
+            let want = (frame.center + *at).as_vec3();
+            if transform.translation != want {
+                transform.translation = want;
+            }
+        }
+    }
 }
 
 fn write_mesh(mesh: &mut Mesh, verts: Verts, textured: bool) {
@@ -2507,6 +3032,8 @@ mod tests {
             over: 0.0,
             reach: 1.3,
             floe: true,
+            id: 0,
+            what: None,
         }];
         let built = build_tile(
             &pieces,
@@ -2595,6 +3122,153 @@ mod tests {
         let per_m2 = (TILE_M / KELP_STEP_M).floor().powi(2) * KELP_KEEP / (TILE_M * TILE_M);
         let mockup = 0.58 / (3f32.sqrt() / 2.0 * 2.833 * 2.833);
         assert!((per_m2 - mockup).abs() < 0.01, "{per_m2} against {mockup}");
+    }
+
+    /// `sea-gathering` design 1 and 3: a reef tile's gatherable pieces have
+    /// ids, the same in every plan and unique in the tile; the big anemone
+    /// and the kelp bed's rocks are never gathered; and a piece left out of
+    /// a build takes its pickable with it and nothing else.
+    #[test]
+    fn a_reef_s_pieces_have_steady_ids_and_a_take_leaves_one_out() {
+        let cfg = TerrainConfig::for_version(7).unwrap();
+        let d = pbd_core::geo::direction(pbd_core::geo::LatLon {
+            lat: 12.985f32.to_radians(),
+            lon: 95.043f32.to_radians(),
+        });
+        let key = key_of(d, cfg.radius_m);
+        let a = plan(&cfg, key);
+        let b = plan(&cfg, key);
+        let ids: Vec<u64> = a.iter().map(|p| p.id).collect();
+        assert_eq!(ids, b.iter().map(|p| p.id).collect::<Vec<_>>());
+        let gathered: Vec<&Piece> = a.iter().filter(|p| p.what.is_some()).collect();
+        assert!(gathered.len() > 50, "{} gatherable", gathered.len());
+        let unique: std::collections::HashSet<u64> = gathered.iter().map(|p| p.id).collect();
+        assert_eq!(unique.len(), gathered.len(), "ids are unique in a tile");
+        assert!(gathered.iter().all(|p| p.id != 0));
+        assert!(
+            a.iter()
+                .filter(|p| p.kind == Some(Kind::Hero))
+                .all(|p| p.what.is_none())
+        );
+        for kind in [Kind::Branch, Kind::Finger, Kind::Fan, Kind::Turf] {
+            assert!(
+                a.iter()
+                    .any(|p| p.kind == Some(kind) && p.what == gathered_of(kind)),
+                "{kind:?} gives its own good"
+            );
+        }
+        let pieces = trim(a, 0, tile_area_m2(key, cfg.radius_m));
+        let anchor = tile_centre(key, cfg.radius_m) * cfg.radius_m;
+        let bed = |dir: Vec3| cfg.radius_m - 3.0 + 0.0 * dir.x;
+        let whole = build_tile(
+            &pieces,
+            true,
+            anchor,
+            bed,
+            cfg.radius_m,
+            UnderWater::of(None),
+            1,
+        );
+        let gone = pieces.iter().find(|p| p.what.is_some()).unwrap().id;
+        let less: Vec<Piece> = pieces.iter().filter(|p| p.id != gone).copied().collect();
+        let taken = build_tile(
+            &less,
+            true,
+            anchor,
+            bed,
+            cfg.radius_m,
+            UnderWater::of(None),
+            1,
+        );
+        assert_eq!(taken.pickable.len() + 1, whole.pickable.len());
+        assert!(taken.pickable.iter().all(|p| p.id != gone));
+        let before: std::collections::HashSet<u64> = whole.pickable.iter().map(|p| p.id).collect();
+        assert!(
+            taken.pickable.iter().all(|p| before.contains(&p.id)),
+            "none new"
+        );
+    }
+
+    fn gathered_of(kind: Kind) -> Option<SeaPiece> {
+        gathered(kind)
+    }
+
+    /// The aim meets a piece by its stem, within its width and the reach.
+    #[test]
+    fn the_aim_meets_a_piece_by_its_stem() {
+        let p = Pickable {
+            id: 7,
+            what: SeaPiece::SeaFan,
+            foot: Vec3::ZERO,
+            up: Vec3::Y,
+            height: 0.6,
+            radius: 0.25,
+        };
+        let eye = Vec3::new(-2.0, 0.3, 0.0);
+        assert!(ray_meets(eye, Vec3::X, &p, REACH_M).is_some_and(|t| (t - 2.0).abs() < 1e-4));
+        assert_eq!(ray_meets(eye, Vec3::NEG_X, &p, REACH_M), None, "behind");
+        let off = Vec3::new(1.0, 0.0, 0.6).normalize();
+        assert_eq!(
+            ray_meets(Vec3::new(-2.0, 0.3, 0.0), off, &p, REACH_M),
+            None,
+            "beside"
+        );
+        let far = Vec3::new(-3.0, 0.3, 0.0);
+        assert_eq!(ray_meets(far, Vec3::X, &p, REACH_M), None, "out of reach");
+        // Every gatherable model but kelp is an ornament's or a pick's mesh.
+        for piece in SeaPiece::ALL {
+            let mesh = ornament_mesh(piece, &UnderWater::of(None), 0.0);
+            assert_eq!(mesh.is_some(), piece != SeaPiece::Kelp, "{piece:?}");
+        }
+    }
+
+    /// `sea-gathering` design 9, an art instrument: write each gatherable
+    /// model's triangles, colours and atlas UVs and its kind's palette to
+    /// `tools/art/sea_models.json`, which `tools/art/sea_gather_icons.py`
+    /// renders the pack icons from.
+    /// `cargo test -p pbd-app --lib -- --ignored dump_sea_models`.
+    #[test]
+    #[ignore]
+    fn dump_sea_models() {
+        let mut out = String::from("{\n");
+        let pieces: Vec<SeaPiece> = SeaPiece::ALL
+            .into_iter()
+            .filter(|p| model_of(*p).is_some())
+            .collect();
+        for (n, piece) in pieces.iter().enumerate() {
+            let kind = model_of(*piece).unwrap();
+            let shape = &library()[&kind];
+            let f = |v: &[f32]| {
+                v.iter()
+                    .map(|x| format!("{x:.4}"))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            };
+            let pos: Vec<f32> = shape.positions.iter().flat_map(|p| p.to_array()).collect();
+            let col: Vec<f32> = shape
+                .colours
+                .iter()
+                .flat_map(|c| [c[0], c[1], c[2]])
+                .collect();
+            let uv: Vec<f32> = shape.uvs.iter().flat_map(|u| *u).collect();
+            let pal: Vec<String> = palette(kind)
+                .iter()
+                .map(|c| format!("\"{c:06x}\""))
+                .collect();
+            out += &format!(
+                "\"{}\": {{\"model\": \"{kind:?}\", \"palette\": [{}], \"positions\": [{}], \"colours\": [{}], \"uvs\": [{}]}}{}\n",
+                piece.code(),
+                pal.join(","),
+                f(&pos),
+                f(&col),
+                f(&uv),
+                if n + 1 < pieces.len() { "," } else { "" }
+            );
+        }
+        out += "}\n";
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tools/art/sea_models.json");
+        std::fs::write(&path, out).unwrap();
     }
 
     /// A tile is the same tile whoever comes near it, and its plan is a
@@ -2942,6 +3616,7 @@ mod sway_tests {
             "the reach is capped at 0.7 m"
         );
         let clock = 7.25f32;
+        #[allow(clippy::needless_range_loop)]
         for i in 0..3 {
             let h = still.height[i];
             let old = still.axis[i]

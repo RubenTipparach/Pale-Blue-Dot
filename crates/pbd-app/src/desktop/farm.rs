@@ -31,6 +31,7 @@ use pbd_core::column;
 use pbd_core::farming::{
     self, Climate, Crop, PLOT_KIND, PLOT_SCHEMA, Picked, Plot, Stage, WILD_KIND, WILD_SCHEMA,
 };
+use pbd_core::goods::Good;
 use pbd_core::inventory::{Item, Tool};
 use pbd_core::locale::{tr, tr_with};
 use pbd_core::records::Record as StoredRecord;
@@ -683,7 +684,7 @@ pub fn offer(
         Option<Res<pbd_app::config::ScatterSettings>>,
         Option<Res<pbd_app::config::GatherConfig>>,
     ),
-    mut interact: ResMut<Interact>,
+    (mut interact, slots): (ResMut<Interact>, Option<Res<super::slots::Hotbar>>),
     mut last: Local<(
         pbd_app::interact::Recheck,
         Option<PlantHit>,
@@ -726,8 +727,53 @@ pub fn offer(
         sun.clock.seconds,
         axe_logs(gathering.as_deref()),
     ) {
-        interact.offer(act.offer());
+        let fertilizer = slots
+            .as_deref()
+            .is_some_and(|s| s.0.count(Item::Good(Good::FERTILIZER)) > 0);
+        interact.offer(match &act {
+            FarmAct::Crop { plot, crop, .. }
+                if fertilizer && plot.can_feed(&farm.0, sun.clock.seconds) =>
+            {
+                Offer::new(Act::Fertilize, crop.row().name())
+            }
+            _ => act.offer(),
+        });
     }
+}
+
+/// F on a growing crop with fertiliser in the pack (`sea-gathering` design
+/// 6): one used, and the plot written fed, with the pack, in one line.
+/// Whether it was fed.
+#[allow(clippy::too_many_arguments)]
+fn fertilize(
+    save: &mut WorldSave,
+    slots: &mut super::slots::Hotbar,
+    farm: &FarmConfig,
+    cell: u32,
+    plot: &Plot,
+    crop: Crop,
+    now_s: f64,
+    note: &mut FarmNote,
+    wall_s: f32,
+) -> bool {
+    let Some(fed) = plot.fed_at(&farm.0, now_s) else {
+        return false;
+    };
+    let mut moved = slots.0.clone();
+    if !moved.take_item(Item::Good(Good::FERTILIZER), 1) {
+        return false;
+    }
+    if !save.store_with_hands(plot_record(cell, &fed), PLOT_SCHEMA, &moved) {
+        error!("fertilize BLOCKED: the save did not accept it");
+        return false;
+    }
+    slots.0 = moved;
+    note.say(
+        wall_s,
+        tr_with("farm.fertilized", &[("crop", &crop.row().name())]),
+    );
+    info!("FERTILIZED cell {cell} {}", crop.row().code);
+    true
 }
 
 /// The interact key on the farm: does what [`farm_act`] says.
@@ -855,6 +901,17 @@ pub fn use_key(
             return;
         }
         FarmAct::Crop {
+            cell,
+            plot,
+            crop,
+            ripe: false,
+        } if slots.0.count(Item::Good(Good::FERTILIZER)) > 0 && plot.can_feed(&farm.0, now_s) => {
+            fertilize(
+                &mut save, &mut slots, &farm, cell, &plot, crop, now_s, &mut note, wall_s,
+            );
+            return;
+        }
+        FarmAct::Crop {
             cell, plot, crop, ..
         } => {
             harvest(
@@ -971,8 +1028,10 @@ fn harvest(
         return;
     }
     let tuning = farm.0.of(crop);
+    // One more from a fed plot (`sea-gathering` design 6).
+    let produce = plot.produce(&farm.0, crop);
     let mut moved = slots.0.clone();
-    let left = moved.give(Item::Good(row.produce), tuning.produce)
+    let left = moved.give(Item::Good(row.produce), produce)
         + moved.give(Item::Good(row.seed), tuning.seeds);
     if left > 0 {
         note.say(wall_s, tr("farm.no_room_harvest"));
@@ -986,7 +1045,7 @@ fn harvest(
     slots.0 = moved;
     gained.write(Gained {
         item: Item::Good(row.produce),
-        count: tuning.produce,
+        count: produce,
         how: How::Harvested,
     });
     gained.write(Gained {
@@ -999,7 +1058,7 @@ fn harvest(
         tr_with(
             "farm.harvested",
             &[
-                ("produce", &tuning.produce),
+                ("produce", &produce),
                 ("crop", &row.name()),
                 ("seeds", &tuning.seeds),
             ],

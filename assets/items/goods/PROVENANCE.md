@@ -124,3 +124,14 @@ stone in four greys, with the 1 px outline of an inventory icon.
 (`CARTS`): a spoked wheel with its iron tyre, and the two carts side on, each
 from a few shapes in the boats' browns with the 1 px outline of an inventory
 icon.
+
+## sea-gathering design 9: what the sea floor gives
+
+Drawn by `tools/art/sea_gather_icons.py`, with the 1 px outline of an
+inventory icon (the pieces in the world have none):
+
+| Good | How |
+| --- | --- |
+| `staghorn-coral`, `finger-coral`, `brain-coral`, `table-coral`, `soft-coral`, `tube-sponge`, `barrel-sponge`, `sea-fan`, `sea-anemone`, `sea-lettuce`, `coral-rubble`, `mussels` | rendered from the game's own model of that piece (`fish::places::library`, dumped to `tools/art/sea_models.json` by the ignored test `dump_sea_models`): its triangles and vertex colours times its kind's first palette colour, the water life's atlas sampled nearest at its UVs, lit from the top left, three-quarter view from above; 64 px reduced to 16 px by area average, its colours snapped to five of its own |
+| `kelp` | a frond in the colours of the kelp card the game draws (`assets/textures/water_life/kelp_card.png`), which is a card, not a model |
+| `fertilizer`, `steamed-mussels`, `kelp-crisps` | pixel maps in the goods' browns and the reef's palette (no model) |
