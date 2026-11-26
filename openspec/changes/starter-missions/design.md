@@ -834,3 +834,12 @@ pack, and nothing tells a new player where it is.
 - Tests: the chain's count (44); the event script and the app's walkthrough
   open the pack after gathering; after "Gather by hand" the line is "Open
   your pack 0/1", then "Craft an axe 0/1".
+
+## A Survival branch (owner, 2026-11-26)
+
+The owner: "we're gonna work on survival mode which will add new branch to
+starter missions to handle survival". The branch, `8 · SURVIVAL`, is
+designed in `survival-mode` design 18: 23 missions off `pack`, each marked
+`mode: survival` and shown only in Survival worlds, mocked up on M33's
+Survival tab (`docs/mockups/mission-tree.html#survival`). Its tasks are
+`survival-mode`'s section 6; nothing in this change's tree moves for it.
