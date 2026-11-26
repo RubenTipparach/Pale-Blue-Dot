@@ -370,3 +370,11 @@ run had main-thread stalls of 0.2 to 1.5 s in its first 40 s of play, when
 the bot plans its first walk (`showcase: planned 7 steps`); the bot's
 planner is the measuring instrument's cost, not the game's, and is taken
 off the main thread next so the numbers are the game's.
+
+The held light's flame, glow and embers were written (empty) every frame
+with no torch in hand, three meshes uploaded each frame for nothing; with
+no flame and no ember alight they are now left as they are. Measured again
+on `town-soak`'s first 4.5 minutes with both: p50 11.5, p99 18.4, max 30 ms;
+97% of frames at 60 fps, 99.9% at 40, main 8.6 ms. The stalls of the run
+before it did not come back: it started seconds after a 17 GB file was
+deleted, and is not counted.
