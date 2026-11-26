@@ -442,6 +442,12 @@ struct Bot {
     /// the same keys give it back, when it starts its act over from where
     /// the player left it.
     taken: bool,
+    /// The player's own Ctrl and Shift, read from the keyboard's events: the
+    /// bot presses and releases Left Shift in the game's input every frame
+    /// (it sprints), which wiped out a player's held Shift, so Ctrl+Shift+F
+    /// never reached it.
+    real_ctrl: bool,
+    real_shift: bool,
     injected: std::collections::VecDeque<file::Act>,
     /// The shot file's last change seen, and when it was last looked at:
     /// an edit is played at once (`bot-control` hot reload).
@@ -2929,6 +2935,8 @@ pub fn tally(
 #[derive(bevy::ecs::system::SystemParam)]
 pub struct Hands<'w, 's> {
     keys: ResMut<'w, ButtonInput<KeyCode>>,
+    /// The keyboard's own events, which the bot never writes.
+    real: MessageReader<'w, 's, bevy::input::keyboard::KeyboardInput>,
     mouse: ResMut<'w, ButtonInput<MouseButton>>,
     motion: ResMut<'w, AccumulatedMouseMotion>,
     wheel: MessageWriter<'w, MouseWheel>,
@@ -3367,13 +3375,19 @@ pub fn drive(
     }
     let bot = &mut player.bot;
     // Ctrl+Shift+F: the player takes the controls, or gives them back.
-    let ctrl = hands
-        .keys
-        .any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]);
-    let shift = hands
-        .keys
-        .any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
-    if ctrl && shift && hands.keys.just_pressed(KeyCode::KeyF) {
+    let mut toggle = false;
+    for event in hands.real.read() {
+        let down = event.state == bevy::input::ButtonState::Pressed;
+        match event.key_code {
+            KeyCode::ControlLeft | KeyCode::ControlRight => bot.real_ctrl = down,
+            KeyCode::ShiftLeft | KeyCode::ShiftRight => bot.real_shift = down,
+            KeyCode::KeyF if down && !event.repeat && bot.real_ctrl && bot.real_shift => {
+                toggle = true;
+            }
+            _ => {}
+        }
+    }
+    if toggle {
         hands.keys.clear_just_pressed(KeyCode::KeyF);
         bot.taken = !bot.taken;
         if bot.taken {
