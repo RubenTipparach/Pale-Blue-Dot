@@ -566,6 +566,8 @@ pub(super) fn reference(piece: &Piece) -> Option<Vec3> {
         Shape::Roof { .. } => 1.0,
         Shape::Floor { .. } => 0.0,
         Shape::Furniture { .. } => 0.5,
+        // At the posts' tops.
+        Shape::Beam { .. } => 2.8,
     };
     let alt = column::layer_altitude(piece.shape.layer() as usize) + lift;
     Some(mean * (PLANET_RADIUS + alt))

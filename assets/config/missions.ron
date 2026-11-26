@@ -483,4 +483,65 @@
             ],
         ),
     ],
+    // The crew's chains (`coop-missions` design 5): counted once a world,
+    // from every player's deeds, each hand's share kept. `hands: n` is met
+    // only once n different players have counted toward it (never more
+    // than the crew has had, so a world played alone can finish it);
+    // `each: n` once every player in the world for `grace_s` seconds has
+    // counted n. Words: `crew_mission.<id>.*` in the locale file.
+    //
+    // "Raise a house together": H5, the ridge beam set by two at once, waits
+    // for the step for two (`coop-missions` task 3.3), so the roof follows
+    // the walls. The site's flat top and the hearth's being inside are not
+    // checked yet.
+    crew: Some((
+        grace_s: 300.0,
+        missions: [
+            (
+                id: "house-site",
+                icon: "tools/shovel",
+                objectives: [
+                    (kind: gather, what: "block:dirt|block:grass|block:dry grass|block:jungle grass|block:soil|block:sand|block:desert sand|block:stone", count: 7, hands: 2),
+                ],
+            ),
+            (
+                id: "house-timber",
+                icon: "goods/log",
+                needs: ["house-site"],
+                objectives: [
+                    (kind: fell, what: "tree", count: 6),
+                    (kind: gather, what: "log", count: 24, each: 4),
+                ],
+            ),
+            (
+                id: "house-floor",
+                needs: ["house-timber"],
+                objectives: [
+                    (kind: build, what: "floor", count: 7, hands: 2),
+                ],
+            ),
+            (
+                id: "house-walls",
+                needs: ["house-floor"],
+                objectives: [
+                    (kind: build, what: "wall|door|window", count: 8, hands: 2, each: 1),
+                ],
+            ),
+            (
+                id: "house-roof",
+                needs: ["house-walls"],
+                objectives: [
+                    (kind: build, what: "roof", count: 1),
+                ],
+            ),
+            (
+                id: "house-hearth",
+                icon: "lights/campfire",
+                needs: ["house-roof"],
+                objectives: [
+                    (kind: place, what: "block:campfire|block:brazier", count: 1),
+                ],
+            ),
+        ],
+    )),
 )

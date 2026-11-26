@@ -851,6 +851,7 @@ fn furniture_is_a_piece_record_and_old_pieces_read_as_before() {
     );
     let old_line = serde_json::to_string(&PieceBody {
         piece: Some(old.clone()),
+        owners: Vec::new(),
     })
     .unwrap();
     // The floor's body as an older build wrote it: unchanged by this one.
@@ -896,4 +897,60 @@ fn furniture_is_cut_with_the_room() {
     let centre = cells.cell(k).unwrap().direction.normalize() * bed_at.length();
     let off = (bed_at - centre).length();
     assert!((0.05..1.4).contains(&off), "{off} m from the middle");
+}
+
+/// `coop-missions` task 3.2: a ridge beam needs a post at each end, holds
+/// those posts up against removal, and is cut as timber between them.
+#[test]
+fn a_beam_needs_a_post_at_each_end() {
+    let kits = kits();
+    let (patch, at) = plot();
+    let cells = Cells::new(patch);
+    let k = key(*at);
+    let site = Site {
+        cells: &cells,
+        ground: &flat,
+    };
+    let a = cells.corner_cells(k, 0).expect("a corner");
+    let b = cells.corner_cells(k, 3).expect("the far corner");
+    let beam = Piece::new("timber", Shape::beam(b, a, GROUND));
+    assert_eq!(beam.shape, Shape::beam(a, b, GROUND), "either way round");
+    assert_eq!(beam.shape.class().id(), "beam");
+    let post_a = Piece::new("timber", Shape::post(a, GROUND));
+    let post_b = Piece::new("timber", Shape::post(b, GROUND));
+    // No post, one post, then both.
+    assert_eq!(can_place(&site, &[], &beam), Err(Rule::Posts));
+    assert_eq!(
+        can_place(&site, std::slice::from_ref(&post_a), &beam),
+        Err(Rule::Posts)
+    );
+    let high = Piece::new("timber", Shape::post(b, GROUND + STOREY));
+    assert_eq!(
+        can_place(&site, &[post_a.clone(), high], &beam),
+        Err(Rule::Posts),
+        "a post a storey up is not its end"
+    );
+    let posts = [post_a.clone(), post_b.clone()];
+    assert_eq!(can_place(&site, &posts, &beam), Ok(()));
+    // A beam from a corner to itself is no beam.
+    let stub = Piece::new("timber", Shape::beam(a, a, GROUND));
+    assert_eq!(can_place(&site, &posts, &stub), Err(Rule::Outside));
+    // The posts are held by the beam on them.
+    let built = [post_a.clone(), post_b.clone(), beam.clone()];
+    assert_eq!(dependant(&built, &post_a), Some(&beam));
+    assert_eq!(dependant(&built, &post_b), Some(&beam));
+    // It is cut as timber over the posts.
+    let bare: Vec<&Piece> = posts.iter().collect();
+    let with: Vec<&Piece> = built.iter().collect();
+    let count =
+        |c: &super::cut::Cut| -> usize { c.meshes.values().map(|m| m.positions.len()).sum() };
+    let before = cut(&cells, k, &bare, &kits, &|_| 2.0, RADIUS_M).expect("cut");
+    let after = cut(&cells, k, &with, &kits, &|_| 2.0, RADIUS_M).expect("cut");
+    assert!(count(&after) > count(&before), "the beam has a mesh");
+    // A beam record round trips.
+    let line = placed(&beam).line(&crate::records::Author::Player(1));
+    let (_, back) = crate::records::Record::parse_line(&line).expect("parses");
+    let mut records = Records::new();
+    records.put(back);
+    assert_eq!(from_records(&records).get(&beam.id()), Some(&beam));
 }

@@ -2,7 +2,7 @@ use super::*;
 use crate::station::RecipeFile;
 
 /// The shipped recipe book: the forge's and the kitchen's.
-fn shipped_book() -> RecipeBook {
+pub(super) fn shipped_book() -> RecipeBook {
     let mut book =
         ron::from_str::<RecipeFile>(include_str!("../../../../assets/config/recipes.ron"))
             .unwrap()
@@ -19,7 +19,7 @@ fn shipped_book() -> RecipeBook {
 }
 
 /// The shipped rosters' names: every body's fish and land animals.
-fn shipped_catalog(book: &RecipeBook) -> Catalog {
+pub(super) fn shipped_catalog(book: &RecipeBook) -> Catalog {
     let fauna: crate::fauna::FaunaSettings =
         ron::from_str(include_str!("../../../../assets/config/fauna.ron")).unwrap();
     let land = crate::husbandry::HusbandrySettings::default();
@@ -81,6 +81,7 @@ fn none(_: &Objective) -> u32 {
 fn a_chain_is_walked_by_its_events() {
     let book = shipped_book();
     let file = MissionFile {
+        crew: None,
         awaited: vec![],
         missions: vec![
             mission("cast", &[], vec![objective(Kind::Cast, "water", 1)]),
@@ -139,6 +140,7 @@ fn a_state_met_mission_completes_on_open() {
     // The workbench's stone tools (`tool-crafting`) are in the shipped book.
     let book = shipped_book();
     let file = MissionFile {
+        crew: None,
         awaited: vec![],
         missions: vec![
             mission(
@@ -227,6 +229,7 @@ fn an_awaited_name_makes_a_mission_pending() {
     let book = shipped_book();
     let catalog = shipped_catalog(&book);
     let file = MissionFile {
+        crew: None,
         awaited: vec!["oak-planks".into()],
         missions: vec![
             mission("planks", &[], vec![objective(Kind::Craft, "oak-planks", 4)]),
@@ -258,6 +261,7 @@ fn an_awaited_name_makes_a_mission_pending() {
 
     // One alternative known is enough for a mission to play.
     let file = MissionFile {
+        crew: None,
         awaited: vec!["bark".into()],
         missions: vec![mission(
             "gather",
@@ -275,6 +279,7 @@ fn an_awaited_name_makes_a_mission_pending() {
         mission("x", &[], vec![]),
     ] {
         let file = MissionFile {
+            crew: None,
             awaited: vec![],
             missions: vec![bad],
         };
@@ -487,6 +492,7 @@ fn an_after_gate_holds_a_mission_shut() {
     let mut gated = mission("b", &["a"], vec![objective(Kind::Cast, "water", 1)]);
     gated.after = vec!["c".into()];
     let file = MissionFile {
+        crew: None,
         awaited: vec![],
         missions: vec![
             mission("a", &[], vec![objective(Kind::Till, "any", 1)]),
@@ -502,6 +508,7 @@ fn an_after_gate_holds_a_mission_shut() {
     progress.record(&chain, &Happened::new(Kind::Craft, "planks", 1), &none);
     assert_eq!(progress.standing(&chain, b), Standing::Open);
     let two = MissionFile {
+        crew: None,
         awaited: vec![],
         missions: vec![
             mission("a", &[], vec![objective(Kind::Till, "any", 1)]),
@@ -523,6 +530,7 @@ fn eat_fell_and_night_count_once_per_deed() {
     let book = shipped_book();
     let catalog = shipped_catalog(&book);
     let file = MissionFile {
+        crew: None,
         awaited: vec![],
         missions: vec![
             mission("fell", &[], vec![objective(Kind::Fell, "tree", 2)]),
@@ -554,6 +562,7 @@ fn eat_fell_and_night_count_once_per_deed() {
     assert!(progress.is_done("night"));
     // A name the kind does not know is refused.
     let bad = MissionFile {
+        crew: None,
         awaited: vec![],
         missions: vec![mission("x", &[], vec![objective(Kind::Night, "moon", 1)])],
     };
@@ -633,6 +642,7 @@ fn a_mission_unlocks_its_recipes() {
     let mut first = mission("bench", &[], vec![objective(Kind::Craft, "planks", 4)]);
     first.unlocks = vec!["stone-pickaxe".into()];
     let file = MissionFile {
+        crew: None,
         awaited: vec![],
         missions: vec![first.clone()],
     };
@@ -662,6 +672,7 @@ fn a_mission_unlocks_its_recipes() {
     );
     first.unlocks = vec!["no-such-recipe".into()];
     let bad = MissionFile {
+        crew: None,
         awaited: vec![],
         missions: vec![first],
     };
@@ -674,6 +685,7 @@ fn a_mission_unlocks_its_recipes() {
 #[test]
 fn a_kind_of_fish_counts_once_a_mission() {
     let file = MissionFile {
+        crew: None,
         awaited: vec![],
         missions: vec![mission(
             "kinds",

@@ -437,3 +437,144 @@ fn two_players_reaching_one_drop_are_given_it_once() {
     assert_eq!(left, 3);
     assert_eq!(st.drops[&10].count, 3);
 }
+
+/// A crew chain of one objective, seven blocks of anything dug by two
+/// hands (`coop-missions` design 3).
+fn crew_chain() -> pbd_core::missions::crew::CrewChain {
+    use pbd_core::missions::crew::{CrewFile, CrewMissionEntry, CrewObjectiveEntry};
+    let file = CrewFile {
+        grace_s: 300.0,
+        missions: vec![CrewMissionEntry {
+            id: "house-site".into(),
+            needs: vec![],
+            icon: String::new(),
+            objectives: vec![CrewObjectiveEntry {
+                kind: Kind::Gather,
+                what: "any".into(),
+                count: 7,
+                hands: 2,
+                each: 0,
+            }],
+        }],
+    };
+    let catalog = pbd_core::missions::Catalog {
+        live: Kind::LIVE.into_iter().collect(),
+        ..Default::default()
+    };
+    file.resolve(&catalog, &[]).expect("resolves")
+}
+
+/// `coop-missions` task 2.1: two players' digs, decided by the server,
+/// count into the world's one crew record with each share right; the store
+/// journals it, and a server opened on that record again keeps both.
+#[test]
+fn two_players_digs_count_into_the_crew_record() {
+    use pbd_core::missions::crew::{CREW_MISSIONS_ID, CREW_MISSIONS_KIND, CrewProgress};
+    let (mut s, mut st) = server();
+    s.set_crew(crew_chain(), CrewProgress::default());
+    joined(&mut s, &[1, 2], Slots::default());
+    let cells = dry_cells(&s, 7);
+    for (n, &(cell, layer)) in cells.iter().enumerate() {
+        let id = n as u32 + 1;
+        let player = if n < 3 { 0 } else { 1 };
+        s.handle(
+            &mut st,
+            player,
+            ToServer::Request {
+                id,
+                request: Request::Dig { cell, layer },
+            },
+        );
+        if n == 5 {
+            // Six dug: the record as journaled, read back as a reload does.
+            let saved = st
+                .records
+                .get(CREW_MISSIONS_KIND, CREW_MISSIONS_ID)
+                .unwrap();
+            let back = CrewProgress::from_records(&st.records).unwrap();
+            assert_eq!(back, s.crew().unwrap().progress);
+            assert_eq!(saved.read::<CrewProgress>().unwrap(), back);
+        }
+    }
+    assert_eq!(st.entries.len(), 7, "every dig accepted");
+    let crew = s.crew().unwrap();
+    let site = crew.chain.chain.get("house-site").unwrap();
+    assert!(crew.progress.is_done("house-site"));
+    let shares = crew.progress.shares(site, 0);
+    assert_eq!(shares, BTreeMap::from([(0, 3), (1, 4)]));
+    // A reload: a new server on the journaled record keeps both shares.
+    let saved = CrewProgress::from_records(&st.records).unwrap();
+    assert_eq!(saved.shares(site, 0), shares);
+    assert!(saved.is_done("house-site"));
+    let (mut again, _) = server();
+    again.set_crew(crew_chain(), saved.clone());
+    assert_eq!(again.crew().unwrap().progress, saved);
+}
+
+/// A store that takes every edit and refuses every record.
+struct NoRecords(MemoryStore);
+
+impl Store for NoRecords {
+    fn edits(&self) -> &Edits {
+        self.0.edits()
+    }
+    fn ledger(&self) -> &Ledger {
+        self.0.ledger()
+    }
+    fn commit(&mut self, author: &Author, edit: Edit, carried: &Slots) -> Option<Sequenced> {
+        self.0.commit(author, edit, carried)
+    }
+    fn commit_pack(&mut self, author: &Author, carried: &Slots) -> bool {
+        self.0.commit_pack(author, carried)
+    }
+    fn drop(&self, id: u64) -> Option<ItemDrop> {
+        self.0.drop(id)
+    }
+    fn commit_pick(&mut self, author: &Author, id: u64, left: u16, carried: &Slots) -> bool {
+        self.0.commit_pick(author, id, left, carried)
+    }
+    fn commit_record(&mut self, _: &Author, _: Record) -> bool {
+        false
+    }
+}
+
+/// A crew record the store refuses leaves the crew's progress as it was;
+/// the dig it came from was durable first, and stands.
+#[test]
+fn a_refused_crew_record_changes_nothing() {
+    use pbd_core::missions::crew::CrewProgress;
+    let (mut s, st) = server();
+    let mut st = NoRecords(st);
+    s.set_crew(crew_chain(), CrewProgress::default());
+    joined(&mut s, &[1], Slots::default());
+    let (cell, layer) = dry_cells(&s, 1)[0];
+    s.handle(
+        &mut st,
+        0,
+        ToServer::Request {
+            id: 1,
+            request: Request::Dig { cell, layer },
+        },
+    );
+    assert_eq!(st.0.entries.len(), 1, "the dig stands");
+    assert_eq!(s.crew().unwrap().progress, CrewProgress::default());
+}
+
+/// A server with no crew chain, single player's today, counts nothing and
+/// journals no record.
+#[test]
+fn a_world_with_no_crew_chain_journals_no_crew_record() {
+    let (mut s, mut st) = server();
+    joined(&mut s, &[1], Slots::default());
+    let (cell, layer) = dry_cells(&s, 1)[0];
+    s.handle(
+        &mut st,
+        0,
+        ToServer::Request {
+            id: 1,
+            request: Request::Dig { cell, layer },
+        },
+    );
+    assert_eq!(st.entries.len(), 1);
+    assert!(st.records.is_empty());
+}

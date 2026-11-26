@@ -87,3 +87,19 @@ cast into the sun's shadow cascades, as a town's building does.
   of its cells
 - **THEN** a footing fills the space under those floors to the ground, and
   the walker cannot walk under the floor
+
+### Requirement: A ridge beam needs a post at each end
+
+A `beam` piece SHALL lie across the tops of the posts at two different
+corners, both standing on its layer, and SHALL be refused (`posts`) unless a
+post stands at each end. While it stands, neither post SHALL be taken away.
+It is a timber of its kit's post, cut between the posts' tops
+(`coop-missions` task 3.2). Build mode does not offer it yet: it is placed
+by two players at once, which waits for the step for two.
+
+(`building::tests::a_beam_needs_a_post_at_each_end`)
+
+#### Scenario: One post
+
+- **WHEN** a beam is asked for with a post at one end only
+- **THEN** it is refused as needing a post at each end

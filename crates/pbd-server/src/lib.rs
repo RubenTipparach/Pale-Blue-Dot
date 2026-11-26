@@ -12,6 +12,11 @@
 //! requester included, in that order. A refusal carries no undo: the
 //! requester is sent the cell's layers and its own slots again (design 15.3).
 //!
+//! A world with crew missions (`coop-missions` design 1 and 2) has them
+//! counted here: every accepted edit is counted for its author into the
+//! world's one crew record, which the store journals after the edit
+//! ([`Server::set_crew`]).
+//!
 //! It is plain data and a [`Server::handle`] and [`Server::tick`] pair, so a
 //! test drives it with no thread or socket, single player runs it in process
 //! and a dedicated server runs it on its own thread at [`TICK_S`].
@@ -22,12 +27,14 @@ use pbd_core::column::{self, Column};
 use pbd_core::drops::ItemDrop;
 use pbd_core::edits::{Edit, Edits};
 use pbd_core::inventory::{Item, Slots};
+use pbd_core::missions::crew::{CrewChain, CrewProgress, Hand};
+use pbd_core::missions::{Happened, Kind, item_code};
 use pbd_core::net::ledger::{Ledger, Sequenced};
 use pbd_core::net::protocol::{
     Change, JoinRefusal, Refusal, Request, ToClient, ToServer, Versions, agree,
 };
 use pbd_core::planet_gen::TerrainConfig;
-use pbd_core::records::Author;
+use pbd_core::records::{Author, Record, Records};
 use pbd_core::terrain::Material;
 use pbd_core::worms::{self, WormField};
 use std::collections::BTreeMap;
@@ -58,6 +65,9 @@ pub trait Store {
     /// Journal a pickup: `left` remain on drop `id` (none: it is gone), the
     /// rest went into `carried`. `false` refuses it.
     fn commit_pick(&mut self, author: &Author, id: u64, left: u16, carried: &Slots) -> bool;
+    /// Journal a world record `author`'s deed changed: the crew's progress
+    /// (`coop-missions` design 1). `false` refuses it.
+    fn commit_record(&mut self, author: &Author, record: Record) -> bool;
 }
 
 /// A pack or pickup a [`MemoryStore`] journaled: the author, the drop and
@@ -76,6 +86,8 @@ pub struct MemoryStore {
     /// Every pack and pickup journaled, in order: the author, the drop and
     /// what was left on it for a pickup, and the slots after.
     pub hands: Vec<HandsEntry>,
+    /// Every record journaled, by kind and id: its last value.
+    pub records: Records,
     /// Refuse everything from here on, as a failed writer does.
     pub failed: bool,
 }
@@ -130,6 +142,13 @@ impl Store for MemoryStore {
             .push((author.clone(), Some((id, left)), carried.clone()));
         true
     }
+    fn commit_record(&mut self, _author: &Author, record: Record) -> bool {
+        if self.failed {
+            return false;
+        }
+        self.records.put(record);
+        true
+    }
 }
 
 /// An accepted edit, as the server decided it.
@@ -164,6 +183,17 @@ pub struct World {
 pub struct Player {
     pub name: String,
     pub slots: Slots,
+    /// The world time they joined at, s: a crew `each` waits for them
+    /// until they have been in for its grace time.
+    pub joined_s: f64,
+}
+
+/// A world's crew missions as the server counts them: the chain and the
+/// world's one record of its progress.
+#[derive(Clone, Debug)]
+pub struct Crew {
+    pub chain: CrewChain,
+    pub progress: CrewProgress,
 }
 
 pub struct Server {
@@ -175,6 +205,8 @@ pub struct Server {
     clock_s: f64,
     since_clock_s: f64,
     outbox: Vec<(To, ToClient)>,
+    /// The crew missions counted, when the world has them.
+    crew: Option<Crew>,
 }
 
 impl Server {
@@ -187,6 +219,46 @@ impl Server {
             clock_s,
             since_clock_s: 0.0,
             outbox: Vec::new(),
+            crew: None,
+        }
+    }
+
+    /// Count the crew chain `chain` from here on, from `progress` as the
+    /// world's record holds it (`CrewProgress::from_records`).
+    pub fn set_crew(&mut self, chain: CrewChain, progress: CrewProgress) {
+        self.crew = Some(Crew { chain, progress });
+    }
+
+    pub fn crew(&self) -> Option<&Crew> {
+        self.crew.as_ref()
+    }
+
+    /// The players in the world now, and when each joined.
+    pub fn present(&self) -> Vec<Hand> {
+        self.players
+            .iter()
+            .map(|(&player, p)| Hand {
+                player,
+                since_s: p.joined_s,
+            })
+            .collect()
+    }
+
+    /// Count `happened`, done by `player`, into the crew's record, and have
+    /// the store journal the record when it moved. A record the store
+    /// refuses leaves the crew's progress as it was.
+    fn count_crew(&mut self, store: &mut impl Store, player: u32, happened: &Happened) {
+        let present = self.present();
+        let now_s = self.clock_s;
+        let Some(crew) = self.crew.as_mut() else {
+            return;
+        };
+        let before = crew.progress.clone();
+        let step = crew
+            .progress
+            .count(&crew.chain, player, happened, &present, now_s);
+        if step.changed && !store.commit_record(&Author::Player(player), crew.progress.record()) {
+            crew.progress = before;
         }
     }
 
@@ -225,6 +297,7 @@ impl Server {
             Player {
                 name: name.clone(),
                 slots,
+                joined_s: self.clock_s,
             },
         );
         self.send(
@@ -483,6 +556,13 @@ impl Server {
         if let Some(player) = self.players.get_mut(&player) {
             player.slots = taken.slots.clone();
         }
+        // The deed, as the missions count it: a block dug or placed.
+        let happened = if material == Material::Air {
+            Happened::new(Kind::Gather, item_code(Item::Block(ask.was)), 1)
+        } else {
+            Happened::new(Kind::Place, item_code(Item::Block(material)), 1)
+        };
+        self.count_crew(store, player, &happened);
         self.send(
             To::Player(player),
             ToClient::Accepted {

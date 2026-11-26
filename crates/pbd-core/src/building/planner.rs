@@ -136,7 +136,7 @@ impl Tunables {
             Shape::Wall { .. } => s.wall,
             Shape::Floor { .. } => s.floor,
             Shape::Stair { .. } => s.stair,
-            Shape::Post { .. } => s.post,
+            Shape::Post { .. } | Shape::Beam { .. } => s.post,
             Shape::Lantern { .. } => s.lantern,
             Shape::Door { .. } => s.door,
             Shape::Roof { cells, .. } => s.roof_cell * cells.len().max(1) as u32,

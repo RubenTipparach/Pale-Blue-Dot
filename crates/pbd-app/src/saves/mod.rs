@@ -378,6 +378,9 @@ impl pbd_server::Store for SaveStore<'_> {
         debug_assert_eq!(*author, Author::Player(0));
         self.save.record_pick(id, left, carried)
     }
+    fn commit_record(&mut self, author: &Author, record: StoredRecord) -> bool {
+        self.save.store(author, vec![record]).is_some()
+    }
 }
 
 impl Default for WorldSave {

@@ -381,6 +381,19 @@ impl Cutter<'_> {
                 let edge = wall_of(kit, 0).edge.clone();
                 self.prism(&square, y0, y1, &edge, &edge, true);
             }
+            // The posts' timber, laid across their tops from one to the
+            // other, its top flush with theirs.
+            Shape::Beam { a, b, layer } => {
+                let (Some(ca), Some(cb)) = (self.cells.corner(*a), self.cells.corner(*b)) else {
+                    return;
+                };
+                let (pa, ya) = self.plan_y(ca, layer + STOREY);
+                let (pb, yb) = self.plan_y(cb, layer + STOREY);
+                let top = ya.min(yb);
+                let h = POST_HALF_M;
+                let edge = wall_of(kit, 0).edge.clone();
+                self.slab(pa, pb, h, top - 2.0 * h, top, &edge, &edge);
+            }
             Shape::Lantern { cell, layer } => self.lantern(kit, *cell, *layer),
             Shape::Door { a, b, layer } => self.door(kit, *a, *b, *layer, shape.id()),
             Shape::Furniture {

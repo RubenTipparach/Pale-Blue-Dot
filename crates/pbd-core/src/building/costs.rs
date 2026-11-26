@@ -114,7 +114,8 @@ impl CostTable {
             ),
             Shape::Floor { .. } => (&row.floor, 1),
             Shape::Stair { .. } => (&row.stair, 1),
-            Shape::Post { .. } => (&row.post, 1),
+            // A beam is a post's timber laid across.
+            Shape::Post { .. } | Shape::Beam { .. } => (&row.post, 1),
             Shape::Lantern { .. } => (&row.lantern, 1),
             Shape::Roof { cells, .. } => (&row.roof, cells.len().max(1) as u32),
             // Paid with its wall's door row; furniture by placing the piece.

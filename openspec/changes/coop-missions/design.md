@@ -156,3 +156,40 @@ task 9.2, played through requests as a player's hands send them.
 
 Multiplayer waits until the rest of phase 3 is done (owner, 2026-11-24:
 "leave multiplayer out for now").
+
+## As built (2026-11-26)
+
+Tasks 2.1, 2.2 and 3.2 are built, and 3.1 in part (`tasks.md` has each one's
+tests).
+
+- **The counting function** is `missions::count(objective, happened, had,
+  seen)`: how much one deed adds to an objective that has counted `had`.
+  `Progress::record` (a player's trees) and `CrewProgress::count` (the
+  crew's) both call it; the crew passes the objective's total as `had`.
+- **A player still owed counts past a full total.** Once an objective's
+  total is reached but it is short of hands or of someone's `each`, the
+  player who owes it is counted as if the total were short by what they
+  owe, so the second pair of hands the walls wait for can still land. The
+  total can then pass the count by that much.
+- **`hands` asks no more hands than the crew has had** (every player
+  present when it counted is a member, kept in the record). A world played
+  alone is a crew of one, and finishes the chain alone, as decision 4
+  intends for the step for two. Recommendation taken (ask only with
+  screenshots).
+- **Shares are kept once a mission is done**, so who did what stays on the
+  record and the house's co-owners can be read from it.
+- **The server counts digs and places** (`Kind::Gather` of the block dug,
+  `Kind::Place` of the block set) for a world given a crew chain
+  (`Server::set_crew`), and has the store journal the record
+  (`Store::commit_record`) before it answers the edit. A record the store
+  refuses leaves the crew's progress as it was. Pieces, fellings and logs
+  reach it when they go through the server.
+- **H5 waits with `Together`**; until then H6 follows H4. The site's flat
+  top and the hearth being inside the house are not checked.
+- **Co-ownership** is a field of the piece record (`owners`, absent on
+  every record written before), written by `crew::co_own` for the hands of
+  H3, H4, H6 and H7. Nothing calls it until pieces go through the server.
+- **The beam** is `Shape::Beam { a, b, layer }`, two post corners on one
+  layer; `Rule::Posts` refuses it without a post at each end, and it holds
+  those posts up.
+

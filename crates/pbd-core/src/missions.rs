@@ -20,6 +20,7 @@ use crate::station::{RecipeBook, item_named};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+pub mod crew;
 pub mod town;
 
 /// The record kind progress is stored as, its schema and its one id (the
@@ -292,6 +293,10 @@ pub struct MissionFile {
     #[serde(default)]
     pub awaited: Vec<String>,
     pub missions: Vec<MissionEntry>,
+    /// The crew's chains (`coop-missions` design 5): counted once a world,
+    /// each hand's share kept. Only `missions.ron` has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crew: Option<crew::CrewFile>,
 }
 
 /// A group of names an objective can count as one.
@@ -774,6 +779,55 @@ pub enum Standing {
     Pending,
 }
 
+/// Where `mission` stands, given the ids `done`: the one rule a player's
+/// tree and the crew's (`coop-missions`) are opened by.
+pub fn standing_in(done: &BTreeSet<String>, chain: &Chain, mission: &Mission) -> Standing {
+    if done.contains(&mission.id) {
+        Standing::Done
+    } else if mission.pending.is_some() {
+        Standing::Pending
+    } else if mission
+        .needs
+        .iter()
+        .chain(&mission.after)
+        .all(|need| done.contains(need) || chain.get(need).is_none_or(|m| m.pending.is_some()))
+    {
+        Standing::Open
+    } else {
+        Standing::Locked
+    }
+}
+
+/// How much `happened` adds to `objective`, which has counted `had` so far
+/// and, in its mission, seen the names `seen`: the one counting rule every
+/// tree uses, a player's own and the crew's (`coop-missions` design 2),
+/// whoever the author. Nought when it does not count: another kind or
+/// thing, the objective already met, or a name its mission has seen for a
+/// kind that counts each name once.
+pub fn count(
+    objective: &Objective,
+    happened: &Happened,
+    had: u32,
+    seen: Option<&BTreeSet<String>>,
+) -> u32 {
+    if objective.kind != happened.kind
+        || !objective.want.matches(happened.kind, &happened.what)
+        || had >= objective.count
+    {
+        return 0;
+    }
+    let room = objective.count - had;
+    if happened.kind.once_a_name() {
+        // A kind counts once a mission, however often landed.
+        if seen.is_some_and(|s| s.contains(&happened.what)) {
+            return 0;
+        }
+        1.min(room)
+    } else {
+        happened.count.min(room)
+    }
+}
+
 /// The `missions` record's body: what is done, and the counts of the open
 /// missions. Ids this build's chain lacks are kept as they are.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
@@ -800,20 +854,7 @@ impl Progress {
 
     /// Where `mission` stands.
     pub fn standing(&self, chain: &Chain, mission: &Mission) -> Standing {
-        if self.is_done(&mission.id) {
-            Standing::Done
-        } else if mission.pending.is_some() {
-            Standing::Pending
-        } else if mission
-            .needs
-            .iter()
-            .chain(&mission.after)
-            .all(|need| self.is_done(need) || chain.get(need).is_none_or(|m| m.pending.is_some()))
-        {
-            Standing::Open
-        } else {
-            Standing::Locked
-        }
+        standing_in(&self.done, chain, mission)
     }
 
     /// The open missions, in the chain's order.
@@ -910,21 +951,10 @@ impl Progress {
             let mut counts = self.counts(mission);
             let mut named = false;
             for (count, objective) in counts.iter_mut().zip(&mission.objectives) {
-                if objective.kind == happened.kind
-                    && objective.want.matches(happened.kind, &happened.what)
-                    && *count < objective.count
-                {
-                    if happened.kind.once_a_name() {
-                        // A kind counts once a mission, however often landed.
-                        let seen = self.seen.get(&mission.id);
-                        if seen.is_some_and(|s| s.contains(&happened.what)) {
-                            continue;
-                        }
-                        named = true;
-                        *count = (*count + 1).min(objective.count);
-                    } else {
-                        *count = (*count + happened.count).min(objective.count);
-                    }
+                let added = self::count(objective, happened, *count, self.seen.get(&mission.id));
+                if added > 0 {
+                    named |= happened.kind.once_a_name();
+                    *count += added;
                     changed = true;
                 }
             }

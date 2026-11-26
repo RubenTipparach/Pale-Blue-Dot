@@ -82,6 +82,9 @@ pub const DATA_PREFIXES: &[&str] = &[
     "mission.",
     // `town_missions.ron`: each town mission's words by id.
     "town_mission.",
+    // `missions.ron`'s crew section: each crew mission's words by id
+    // (`missions::crew::CREW_KEYS`).
+    "crew_mission.",
     // `vehicle::Kind`: each kind's name and title by its saved key.
     "vehicle.",
     // `economy::jobs::JobKind`: each job's line by its code; the townsfolk's
