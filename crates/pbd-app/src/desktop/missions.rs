@@ -375,15 +375,12 @@ pub fn show_line(
             Kind::Till => Some(pbd_core::inventory::Item::Tool(Tool::Shovel)),
             _ => None,
         });
-        // Only an icon that says something the title's does not: the
-        // mission's own thing (a campfire to make and place) shows once, by
-        // the title (owner: "why does it say make twice").
-        let repeats = item.is_some_and(|i| {
-            let code = pbd_core::missions::item_code(i);
-            let tail = code.rsplit(':').next().unwrap_or(&code).to_string();
-            objectives.is_some_and(|m| m.icon.ends_with(&tail))
-        });
-        let display = if item.is_some() && !repeats {
+        // Every objective with an item shows it: the header has no icon of
+        // its own since the owner's 2026-11-19 ask, so an objective's item
+        // that is also the mission's icon (the stone pickaxe of Stone
+        // tools) is not shown anywhere else (owner, 2026-11-26: "where icon
+        // for pickaxe?").
+        let display = if item.is_some() {
             Display::Flex
         } else {
             Display::None
