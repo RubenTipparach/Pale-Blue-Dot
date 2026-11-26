@@ -28,12 +28,15 @@
   felled trees (`trees_taken.rs`, `FELLED`).
 - **`lightning-fire`** (designed, not built) lands a strike on the tallest
   point near it and burns a few seconds in the rain, saving nothing.
+- **The owner, on the first draft, 2026-11-26:** "Let's not spread fire too
+  much for now , consider lots of factors like dryness of plants" (decision
+  12), with Our World in Data's *Wildfires* page as "some ideas".
 
 ## Goals / Non-Goals
 
 **Goals:**
-- Fires that start only when and where it is dry, read before they are
-  dangerous, and are stopped by weather, water and the player's work.
+- Fires that start only when and where the plants are dry, stay small, read
+  before they are dangerous, and are stopped by weather, water and the player's work.
 - One rule, run by the server, giving the same fire on every machine and on
   every replay.
 - Everything a fire did is in the save, and it heals over time.
@@ -57,51 +60,151 @@ the wrong place to read it. `survival-mode` says when fire is on: only in
 Survival worlds. The torches are here too, because a torch going out is the
 same rain-on-fire rule as a forest going out.
 
-### 2. How dry it is: the ground's wetness and the fire danger
+### 2. How dry it is: the ground's wetness, the fire weather, and each plant's dryness
+
+Revised 2026-11-26 for decision 12 ("consider lots of factors like dryness
+of plants"). What burns is decided per cell by its plant's dryness
+(`plant_dry`, below); the place's weather is one of its factors.
 
 - **`ground_wet`**, 0..1, one value per atmosphere cell, a new state of the
-  atmosphere, stepped with it:
+  atmosphere, stepped with it (unchanged):
   - rain adds 0.1 for each millimetre that falls (10 mm soaks it);
   - snow lying keeps it at 1;
   - it dries by 0.04 an in-game hour (120 s of play) x (0.5 + sunlight /
     1000 W/m^2) x (1 - humidity) x clamp((air_c + 5) / 30, 0, 1).
   So soaked ground under a dry summer sun needs about a world day to dry
-  enough to burn, and a damp, cool place may never.
+  enough to burn, and a damp, cool place may never. It is "days since rain"
+  without a counter: every shower resets it, every dry day lowers it.
   - The sea's cells stay 1.
   - Saving: an additive field of `Atmosphere::to_bytes`. A save from before
-    restores with `ground_wet` at its spun-up value (the biome's wetness),
-    so no world changes under a player.
-- **The fire danger**, `danger` 0..1, at a place:
-  `danger = (1 - ground_wet) x dry(humidity) x warm(air_c) x biome`, where
-  - `dry(h)` is 1 at humidity 0.35 or less, falling smoothly to 0 at 0.85;
-  - `warm(t)` is 0 at 0 C or less, rising smoothly to 1 at 25 C;
-  - `biome` is fields 1.0, desert 1.0 (its fuel is sparse), mountains 0.8,
-    tundra 0.4, jungle 0.3, swamp 0.1, beach 0.6, ocean 0.
-- **"The dry season"** is wherever `danger` is 0.35 or more. It comes with
-  the season where the flora's straw is high and the rain stops, and goes
-  with the rain: it is the weather's own, so it moves with the climate and
-  differs from valley to valley, which a calendar date would not.
+    restores with `ground_wet` at its spun-up value (the biome's wetness,
+    `surface.wetness`: 0.1 desert, 0.6 fields, 0.9 jungle, 1 swamp), so no
+    world changes under a player.
+- **The fire weather**, `weather` 0..1, at a place:
+  `weather = (1 - ground_wet) x air(humidity) x warm(air_c)`, where
+  - `air(h) = 1 - 0.6 x smooth(0.35, 0.85, h)`: dry air leaves a plant as it
+    is, humid air keeps it 40% wetter;
+  - `warm(t) = 0.4 + 0.6 x smooth(0, 25, t)`: cool air dries slowly, never
+    not at all (late-winter grass can still burn where it is dry);
+  - altitude acts through these: the atmosphere's cells carry
+    `surface.elevation`, so high ground is cooler (`air_c`) and wetter
+    (`humidity`, the rain on its slopes), and above the generator's snow
+    line (`TerrainConfig::snow_line_m`, `mountain_snowcap_elev_m`) the snow
+    term below is 0.
+  The biome multiplier of the first draft is gone: a biome's fire comes
+  from what grows there (its plants' kinds) and its own `ground_wet`.
+- **`plant_dry`**, 0..1, per cell, **derived and never saved**: a pure
+  function of the world's generator version, the cell, the clock and the
+  atmosphere's sample there, the same on every machine:
+
+  ```text
+  plant_dry = clamp(cure(kind, season) x weather x shade x water x hollow x patch x grazed, 0, 1)
+            = 0 where snow lies, where the cell is flooded, where the plant is a cactus or there is none
+  ```
+
+  | Factor | Values | Source in the code |
+  | --- | --- | --- |
+  | `kind` | the cell's plant: grass (green to straw), a shrub, a deciduous tree, a conifer, a palm or jungle tree, a cactus (never), none | grass tops: the top block (`flora` grass codes); a tree: `flora::grows_tree` and its species, `tree_kit::pick` / `BIOME_TREES` (oak, birch, willow deciduous by `tree_kit::look(..).deciduous`; pine and krummholz conifers; kapok and palm evergreen broadleaf); a cactus: `tree_kit::grows_cactus`; a shrub: ground cover with a bush (`scatter`) |
+  | `season` | `cure`, 0..1, how cured the plant is in its own hemisphere's year (below) | `flora::season_at` (its `own` year is half a year on across the equator, `SEASON_TROPIC` fades seasons out near the equator), `SEASON_STRAW`, `SEASON_LITTER` |
+  | `weather` | above | `atmosphere::Sample`'s `humidity`, `air_c`, `rain_rate`; `ground_wet` (new) |
+  | `shade` | grass and shrubs only: 1 - 0.07 for each tree among the cell's 5 or 6 neighbours, x 0.85 under its own tree (a closed stand's floor stays green) | `grows_tree` on the neighbours, the topology's neighbour tables |
+  | `water` | riparian: 0.35 on a cell beside water, 0.675 two cells away, 1 from three cells on (`0.35 + 0.65 x smooth(1, 3, cells to water)`): a bank is never dry enough to burn | `planet_gen::in_river`, `map::river_water`, the sea (`surface_altitude < sea_level_m`), the flora's `FLOODED_BIT` (a river, a pool, the sea) |
+  | `hollow` | `1 + 0.06 x clamp(layers above the neighbours' mean, -2, 2)`: a hollow holds water and stays greener (0.88), a rise dries first (1.12) | the column heights the generator gives the cell and its neighbours |
+  | `patch` | `0.62 + 0.5 x n`, `n` a smooth 0..1 field about 60 m across, times `0.92 + 0.16 x roll` per cell: the soil's own moisture, so the same field has green and cured patches | `flora::shader_hash` / `tree_kit::roll` with a new salt, at the cell key (derived, never saved) |
+  | `grazed` | grass only: 0.5 on a pen's cells and within 2 cells of one (grazed short), else 1 | `husbandry::farm::Conditions::grazing`, the pens' records |
+  | `snow` | 0 where snow lies, else 1 | `atmosphere::Sample::snow`, `surface.snowy`, the generator's snow line and snow tops |
+
+  **The cure** by kind, from the season's `c = max(dry(local), 0.5 x straw)`,
+  where `dry(local)` is a new bump on the plant's own year, one at local
+  0.10 (late summer, the year starting at the place's midsummer) and nought
+  0.20 either side, faded toward the equator by `SEASON_TROPIC` as every
+  season is; and `straw` is the flora's (`SEASON_STRAW`, which peaks a
+  little before midwinter):
+
+  | Kind | `cure` | Spring (c 0) | Late summer (c 1) |
+  | --- | --- | ---: | ---: |
+  | Grass | 0.2 + 0.8 c | 0.20 | 1.00 |
+  | Shrub | 0.25 + 0.6 c | 0.25 | 0.85 |
+  | Deciduous tree (oak, birch, willow) | 0.15 + 0.45 c + 0.15 x litter | 0.15 | 0.60 |
+  | Conifer (pine, krummholz) | 0.3 + 0.6 c | 0.30 | 0.90 |
+  | Evergreen broadleaf (kapok, palm) | 0.1 + 0.3 c | 0.10 | 0.40 |
+  | Cactus | 0 | 0 | 0 |
+
+  **The fire season follows each hemisphere's summer** (OWID, below): the
+  fire's `dry` bump peaks in late summer of the place's own year, half a
+  year apart across the equator, as Europe burns June to August and the
+  south in its own summer. The flora's drawn straw (`SEASON_STRAW`) peaks
+  a little before midwinter instead; it counts at half (`0.5 x straw`), so
+  a cured winter field can burn only where its ground has dried, which in
+  winter it seldom does. That the grass looks straw-coloured in winter and
+  burns best in late summer is a look question, not a rule one: moving the
+  drawn straw is the owner's (to be asked with screenshots, not here).
+
+- **Examples** (fields, an open cell, no neighbour trees, level ground,
+  `patch` 1; worked by hand, and by the mockup's own code, which runs the
+  same lines):
+
+  | Place and time | `ground_wet`, humidity, air | `weather` | Plant | `cure` | Other | `plant_dry` | Burns? |
+  | --- | --- | ---: | --- | ---: | --- | ---: | --- |
+  | Spring meadow | 0.5, 0.6, 16 C | 0.29 | grass | 0.20 | - | 0.06 | no |
+  | Midsummer field | 0.25, 0.45, 26 C | 0.70 | grass | 0.60 | - | 0.42 | no |
+  | Late-summer field, two dry weeks | 0.12, 0.32, 29 C | 0.88 | grass | 1.00 | - | 0.88 | yes |
+  | The same, on the river bank | | 0.88 | grass | 1.00 | water 0.35 | 0.31 | no |
+  | The same, two cells from the river | | 0.88 | grass | 1.00 | water 0.675 | 0.59 | barely |
+  | The same, under an oak wood (4 trees round) | | 0.88 | grass | 1.00 | shade 0.72 x 0.85 | 0.54 | barely |
+  | The same, in a hollow, a green patch | | 0.88 | grass | 1.00 | hollow 0.88, patch 0.7 | 0.54 | barely |
+  | The same, beside a pen | | 0.88 | grass | 1.00 | grazed 0.5 | 0.44 | no |
+  | Oak in that field | | 0.88 | deciduous | 0.60 | - | 0.53 | barely |
+  | Mountain pine, late summer | 0.2, 0.3, 22 C | 0.78 | conifer | 0.90 | - | 0.70 | yes, slowly |
+  | Desert cactus | 0.1, 0.15, 35 C | 0.90 | cactus | 0 | - | 0 | never |
+  | Jungle floor | 0.9, 0.85, 28 C | 0.04 | grass | 1.00 | shade | 0.03 | no |
+  | Tundra, autumn | 0.6, 0.6, 4 C | 0.12 | grass | 0.32 | - | 0.04 | no |
+  | Anything under snow | - | - | - | - | snow 0 | 0 | never |
+
+- **Green plants do not burn.** A cell whose `plant_dry` is below
+  **0.5** (`dry_min`) never catches, from a torch, a neighbour or
+  lightning. Above it the hazard grows steeply, as the square of the
+  margin: `burn(d) = ((d - 0.5) / 0.5)^2`, so 0.6 is 0.04 of a dry cell's
+  hazard, 0.75 a quarter, 0.9 0.64.
+- **"The dry season"** at a place is when its open grass would read
+  `plant_dry` >= 0.5 there. It moves with the weather and the hemisphere,
+  and differs from valley to valley.
 - **Shown**, in Survival only, as a small flame beside the HUD's
-  thermometer while the player stands where `danger` is 0.35 or more, and as
-  a layer of the world map's weather overlays (`weather-overlays`). No text.
+  thermometer while the player stands in the dry season, and as a layer of
+  the world map's weather overlays (`weather-overlays`). No text.
 
 ### 3. Fuel: what each cell has to burn
 
-Derived from the world's own generator version and records, never saved:
+Revised 2026-11-26 (decision 12). Derived from the world's own generator
+version and records, never saved. Spread is a hazard per second to each
+neighbour, multiplied by `burn(plant_dry)` of the neighbour (design 2):
 
-| Fuel | Where | Spread, per second to each neighbour, at danger 1 | Burns | Then |
+| Fuel | Where | Spread, per second to each neighbour, at `burn` 1 | Burns | Then |
 | --- | --- | --- | --- | --- |
-| Grass | a grass, dry grass or jungle grass top | 0.25, x (0.4 + 0.6 x straw) | 12 s | ash |
-| Shrub | ground cover with a bush (`scatter`) | 0.12 | 30 s | ash |
-| Tree | `grows_tree`, not felled | 0.05 (a conifer 0.07) | 120 s: 60 s crown, 60 s embers | a charred snag |
-| Litter | a deciduous tree's cell in the season's litter (`SEASON_LITTER`) | x 1.3 on grass | - | - |
-| None | water, sand, rock, snow or ice, soil without grass, a road, a cactus | never | - | a break |
+| Grass | a grass, dry grass or jungle grass top | 0.20 | 15 s | ash |
+| Shrub | ground cover with a bush (`scatter`) | 0.12 | 40 s | ash |
+| Deciduous tree | `grows_tree`, a deciduous species, not felled | 0.02 | 90 s, a ground fire round the trunk | a scorched tree |
+| Conifer | `grows_tree`, a pine or krummholz, not felled | 0.04; **x 3 as a crown fire** where `plant_dry` >= 0.85 and the wind is 6 m/s or more | 90 s; a crown fire's crown burns 30 s of it | a charred snag |
+| Evergreen broadleaf | kapok, palm | 0.02 | 90 s | a scorched tree |
+| None | water, sand, rock, snow or ice, soil without grass, a road, a path, a paved or tilled cell, a cactus | never | - | a break |
+
+Grasslands and savannas burn far more than forests (OWID, decision 12), so
+the rule is built that way: grass carries a fire, a shrub less, a tree ten
+times slower than grass and only where it is itself dry. A crown fire needs
+a very dry conifer and a strong wind together; any other tree burns at its
+foot and stands scorched.
+
+What a tree's fire does to the tree's look: a crown fire leaves a snag
+(trunk, no crown); a ground fire leaves the tree standing with a charred
+foot and browned leaves until its regrowth (design 8).
 
 Spread is a hazard per second; in a one-second tick a neighbour catches with
-`p = 1 - exp(-lambda)`. On grass at danger 1 with no wind that is a front of
-about 1 m/s; downwind in 5 m/s about 2.5 m/s; through a forest about a
-fifth of that, faster when the crowns burn in the wind. All starting numbers
-for the owner to tune (`assets/config/fire.ron`, design 11).
+`p = 1 - exp(-lambda)`. On late-summer grass (`plant_dry` about 0.85) with
+no wind the front advances about 0.1 to 0.2 m/s; in a 3 m/s wind about
+0.2 m/s downwind and half that upwind; in 8 m/s about 0.25 m/s, under
+1 m/s in any wind the atmosphere makes. Through trees it creeps. Worked
+examples in decision 12. All starting numbers for the owner to tune
+(`assets/config/fire.ron`, design 11).
 
 ### 4. The player's things never burn
 
@@ -118,6 +221,10 @@ for the owner to tune (`assets/config/fire.ron`, design 11).
 
 ### 5. The spread rule, run by the server
 
+Revised 2026-11-26 (decision 12): the hazard reads each neighbour's own
+dryness, green cells never catch, there is no ember throw, and the limits
+are tight.
+
 - **A blaze** is a record, kind `blaze`, id n, schema 1:
   `(started_s, origin: cell key, lit_by: Player(n) | Lightning,
   state: Burning | Out(day))`. Its cells are its lines: each tick's newly
@@ -125,51 +232,68 @@ for the owner to tune (`assets/config/fire.ron`, design 11).
   `@wfire:blaze/<n>`, so the fire is saved as it goes, never on exit.
 - **The tick** is 1 s of world time. For each burning cell, in cell-key
   order, for each of its 5 or 6 neighbours (the topology's explicit tables,
-  pentagons included) with fuel, not burning, not burnt and not in the
-  yield set, a hazard `lambda = spread(fuel) x danger(neighbour) x wind x
-  slope x rain` is tried against `hash(world seed, blaze id, cell, tick)`.
-  No hash map's order and no GPU result decides anything.
-  - `wind` = 1 + 0.25 x speed x max(0, cos) - 0.15 x speed x max(0, -cos),
+  pentagons included) with fuel, `plant_dry` >= 0.5, not burning, not burnt
+  and not in the yield set, a hazard
+  `lambda = spread(fuel) x burn(plant_dry) x wind x slope x rain` is tried
+  against `hash(world seed, blaze id, cell, tick)`. No hash map's order and
+  no GPU result decides anything.
+  - `burn(d) = ((d - 0.5) / 0.5)^2` (design 2);
+  - `wind` = 1 + 0.15 x speed x max(0, cos) - 0.10 x speed x max(0, -cos),
     at least 0.2, `cos` the angle between the wind and the step;
-  - `slope` = 1 + 0.15 per layer the neighbour stands higher, 0.7 lower;
-  - `rain` = exp(-rain_mm_h / 0.5).
+  - `slope` = 1 + 0.10 per layer the neighbour stands higher, 0.8 lower;
+  - `rain` = exp(-rain_mm_h / 0.5), and none at 1 mm/h or more.
+- **No ember throw**, for now (recommendation taken, ask only with
+  screenshots): a fire crosses only to a touching cell, so a break one cell
+  wide holds every fire.
+- **It burns itself out.** Nothing keeps a fire going but dry neighbours:
+  a front that meets green ground (a bank, a hollow, a shaded floor, a
+  grazed pasture, a green patch, all below 0.5) has nothing to take, and
+  its cells burn down and go out.
 - **Weather is sampled** from the server's atmosphere at each burning cell
-  once a tick. The fuel comes from the generator functions, so a blaze far
-  from every player runs without loaded terrain, and only while the world
-  is played (world time).
-- **Limits**: 4 live blazes in a world, 20,000 cells (about 14 ha) and 1,500
-  burning at once in each. At a limit the front stops spreading and burns
-  out, and the line says so. A fifth ignition while four burn is a short
-  local fire (design 6).
+  once a tick, and `plant_dry` with it. The fuel comes from the generator
+  functions, so a blaze far from every player runs without loaded terrain,
+  and only while the world is played (world time).
+- **Limits**: 2 live blazes in a world, 300 cells (about 0.2 ha, a patch
+  about 50 m across) and 40 burning at once in each. At a limit the front
+  stops spreading and burns out, and the line says so. A third ignition
+  while two burn is a short local fire (design 6).
 
 ### 6. Starting one
 
-In a Survival world, where `danger` >= 0.35:
+Revised 2026-11-26 (decision 12). In a Survival world, on a cell whose
+`plant_dry` is 0.5 or more:
 - **A lit torch** used (hold use, 1 s) on a grass, shrub or tree cell lights
-  it. It is the player's act, in the same durable line as the record's
-  creation.
+  that one cell. It is the player's act, in the same durable line as the
+  record's creation. Whether it then spreads is the rule's: on marginal
+  ground it often burns its one cell and goes out.
 - **Lightning**: a `lightning-fire` strike whose cell has less than 0.5
-  mm/h of rain and `danger` >= 0.5 starts a blaze lit by `Lightning`. A wet
-  strike keeps `lightning-fire`'s short fire and saves nothing.
+  mm/h of rain and `plant_dry` of 0.7 or more starts a blaze lit by
+  `Lightning`, and at most one in 10 world days within 2 km of the last
+  (`lightning_quiet_days`, `lightning_quiet_m`), so a dry region sees a
+  few small scars a season, never a landscape lost. A wet strike keeps
+  `lightning-fire`'s short fire and saves nothing.
 - **Never** from a placed campfire, brazier, torch or lantern: a placed fire
   is contained (recommendation taken), so the player's own camp never lights
   the dry grass it stands in.
-- Below the threshold, a torch on grass makes a small flame that dies in 3
-  s and saves nothing; no note says why (CLAUDE.md, "Game text is plain").
+- **Below 0.5**, a torch on a plant makes a small flame that dies in 3 s
+  and saves nothing; no note says why (CLAUDE.md, "Game text is plain").
+  In spring nothing catches anywhere.
 
 ### 7. Stopping one
 
 - **Rain**: the `rain` term slows the spread; and every burning cell's time
   left shrinks by `rain_mm_h x 0.5` s a second, so 4 mm/h puts grass out in
-  about 3 s and a tree in about 20 s. At 2 mm/h or more no cell catches.
+  about 5 s and a tree in about 30 s. At 1 mm/h or more no cell catches.
 - **Water**: a water cell, and a cell beside fresh or sea water, does not
   burn. A water bucket poured (`water-field`'s `pour`) on a burning cell puts
   out it and its neighbours, and leaves them wet for a world day.
-- **Breaks**: bare ground. Digging a line of grass to soil, a road, a path,
-  a paved cell, sand or rock stops a grass fire; a tree fire in wind can
-  throw embers a cell over (a second chance, at a fifth of the hazard, to a
-  cell two away downwind).
-- **It ends** when no cell burns. The record becomes `Out(day)`.
+- **Breaks**: bare ground and green ground. Digging a line of grass to
+  soil, a road, a path, a paved or tilled cell, sand or rock stops any fire,
+  and so does any cell below `plant_dry` 0.5: a river's green bank, a
+  grazed pasture, a shaded wood floor. There is no ember throw for now
+  (decision 12), so a break one cell wide holds.
+- **It ends** when no cell burns, which on a front that reaches green or
+  wetter ground is soon (design 5). The record becomes `Out(day)`.
 
 ### 8. What it leaves, and regrowth
 
@@ -189,6 +313,10 @@ In a Survival world, where `danger` >= 0.35:
   nearest first). A cell past it draws as unburnt only where it is too far
   to read; the table's reach is set from the tree draw's own reach with a
   test, as `FELLED` is.
+- **A burnt cell has nothing to burn** until its grass is whole again
+  (day 8; a tree's cell until its sapling, day 20): its `plant_dry` reads 0,
+  so ground that burned this season cannot burn again in it, and a
+  region's burnt share stays small (decision 12).
 - **Never a generation change.** The ground's blocks are not edited: the
   ash is a look over the world's own top, and the world reads the same
   cells as before.
@@ -221,27 +349,50 @@ In a Survival world, where `danger` >= 0.35:
 
 ### 11. `assets/config/fire.ron`, the proposed shape
 
+Revised 2026-11-26 (decision 12): the dryness table, the slower spread, no
+ember throw, the tight limits.
+
 ```ron
 // Fire (pbd_core::fire; openspec/changes/wildfire). Seconds of world time,
 // metres, mm/h of rain, deg C, world days of 48 minutes. Survival worlds only.
 (
     tick_s: 1.0,
     ground_wet: (per_mm: 0.1, dry_per_hour: 0.04, sun_ref_wm2: 1000.0),
-    danger: (humid_dry: 0.35, humid_wet: 0.85, warm_from_c: 0.0, warm_full_c: 25.0,
-             ignite: 0.35, lightning: 0.5, lightning_rain_below_mmh: 0.5,
-             biome: {"fields": 1.0, "desert": 1.0, "mountains": 0.8, "tundra": 0.4,
-                     "jungle": 0.3, "swamp": 0.1, "beach": 0.6, "ocean": 0.0}),
+    weather: (humid_dry: 0.35, humid_wet: 0.85, humid_keep: 0.6,
+              warm_from_c: 0.0, warm_full_c: 25.0, warm_floor: 0.4),
+    dryness: (
+        dry_min: 0.5,                  // below it nothing catches
+        burn_power: 2.0,               // burn(d) = ((d - dry_min) / (1 - dry_min))^power
+        season: (dry_peak: 0.10, dry_half: 0.20, straw_share: 0.5),
+        cure: {                        // cure = base + per_cure x c (+ per_litter x litter)
+            "grass": (base: 0.2, per_cure: 0.8),
+            "shrub": (base: 0.25, per_cure: 0.6),
+            "deciduous": (base: 0.15, per_cure: 0.45, per_litter: 0.15),
+            "conifer": (base: 0.3, per_cure: 0.6),
+            "evergreen": (base: 0.1, per_cure: 0.3),
+            "cactus": (base: 0.0, per_cure: 0.0),
+        },
+        shade: (per_tree: 0.07, own_tree: 0.85),
+        water: (bank: 0.35, from_cells: 1.0, to_cells: 3.0),
+        hollow: (per_layer: 0.06, clamp_layers: 2.0),
+        patch: (base: 0.62, span: 0.5, field_m: 60.0, cell_base: 0.92, cell_span: 0.16),
+        grazed: (mult: 0.5, cells: 2),
+    ),
     fuel: {
-        "grass": (spread_per_s: 0.25, burn_s: 12.0, straw_floor: 0.4),
-        "shrub": (spread_per_s: 0.12, burn_s: 30.0),
-        "tree": (spread_per_s: 0.05, conifer_per_s: 0.07, crown_s: 60.0, ember_s: 60.0),
-        "litter_mult": 1.3,
+        "grass": (spread_per_s: 0.20, burn_s: 15.0),
+        "shrub": (spread_per_s: 0.12, burn_s: 40.0),
+        "deciduous": (spread_per_s: 0.02, burn_s: 90.0),
+        "conifer": (spread_per_s: 0.04, burn_s: 90.0, crown_mult: 3.0,
+                    crown_dry: 0.85, crown_wind_mps: 6.0, crown_s: 30.0),
+        "evergreen": (spread_per_s: 0.02, burn_s: 90.0),
     },
-    wind: (down_per_mps: 0.25, up_per_mps: 0.15, floor: 0.2),
-    slope: (up_per_layer: 0.15, down: 0.7),
-    rain: (spread_scale_mmh: 0.5, douse_s_per_mmh: 0.5, no_catch_mmh: 2.0),
-    ember_throw: (cells: 2, share: 0.2),
-    limits: (live_blazes: 4, cells: 20000, burning: 1500),
+    wind: (down_per_mps: 0.15, up_per_mps: 0.10, floor: 0.2),
+    slope: (up_per_layer: 0.10, down: 0.8),
+    rain: (spread_scale_mmh: 0.5, douse_s_per_mmh: 0.5, no_catch_mmh: 1.0),
+    ember_throw: None,                 // none for now (decision 12)
+    ignite: (lightning_dry: 0.7, lightning_rain_below_mmh: 0.5,
+             lightning_quiet_days: 10.0, lightning_quiet_m: 2000.0),
+    limits: (live_blazes: 2, cells: 300, burning: 40),
     regrow_days: (shoots: 2.0, grass: 4.0, grass_whole: 8.0, shrub: 10.0,
                   sapling: 20.0, young: 40.0, tree: 60.0),
     torch: (placed_out_s: 20.0, held_out_s: 10.0, rain_seen: 0.3, sky_layers: 8,
@@ -252,32 +403,106 @@ In a Survival world, where `danger` >= 0.35:
 )
 ```
 
+### 12. Fires stay small, and plants burn by how dry they are (owner, 2026-11-26)
+
+**The owner's direction**, on the first draft's fire and its mockup tab:
+"Let's not spread fire too much for now , consider lots of factors like
+dryness of plants". The first draft spread about 1 m/s on grass at danger 1
+and 2.5 m/s downwind, threw embers two cells, and let a blaze reach 20,000
+cells with 1,500 burning: too much. The direction is the owner's; **every
+number below is a recommendation taken (ask only with screenshots)**.
+
+And the owner's "some ideas", 2026-11-26: Our World in Data, *Wildfires*
+(https://ourworldindata.org/wildfires), which this decision follows:
+- grasslands and savannas burn far more area each year than forests, and
+  forest fires are rarer: the fuel table favours cured grass and shrub,
+  trees burn ten times slower, and a crown fire needs a very dry conifer
+  in a strong wind (design 3);
+- how a fire spreads depends on the amount and type of dry vegetation, the
+  wind's speed and direction, moisture and heat, and some vegetation burns
+  more easily than others: that is `plant_dry`'s factors (design 2);
+- fire seasons are summer (Europe June to August, the south in its own
+  spring and summer): the fire's season follows each hemisphere's own
+  late summer, not a global calendar (design 2);
+- even the most fire-prone region, Africa, burns only about 6 to 8% of its
+  land in a year, and a burn rate is not cumulative: a region of the game
+  sees only a small share burn, with no runaway loss (the limits below,
+  lightning's quiet spell in design 6, and a burnt cell's fuel gone until
+  its grass is whole, design 8);
+- ignitions are people (an unattended fire, a burn out of control) or
+  lightning, and containment matters: the torch and lightning ignitions,
+  and the breaks of design 7;
+- global burned area has fallen about a quarter in recent decades, mostly in
+  grassland, where farming broke the fuel up: tilled fields, paths, roads
+  and grazed pasture are fuel breaks (design 2's `grazed`, design 4 and 7).
+
+What changes:
+- **A per-cell plant dryness**, `plant_dry` 0..1, derived from the plant's
+  kind, its season, the days since rain (`ground_wet`), the air's humidity
+  and warmth, shade under trees, water nearby, the ground's hollows and
+  rises, the soil's own patches, grazing, and snow (design 2, with its
+  table of examples and each factor's source in the code).
+- **Green plants do not burn**: below 0.5 a cell never catches, and above it
+  the hazard is the square of the margin (design 2).
+- **Slower spread** (design 3): grass 0.20 a second at full dryness (it was
+  0.25 at danger 1 before the dryness, which now scales it to a few
+  hundredths on most cells), trees 0.02 to 0.04, weaker wind and slope
+  terms (design 5).
+- **No ember throw** for now (design 5, 7).
+- **Crown fire** only in conifers at `plant_dry` 0.85 or more in 6 m/s or
+  more of wind (design 3).
+- **It burns itself out** when its front reaches green or wetter cells
+  (design 5).
+- **Tight limits**: 2 live blazes, 300 cells and 40 burning in each
+  (design 5).
+
+**Worked examples**, run by the rule itself (a seeded script of design 2, 3
+and 5 on a patch of fields 90 cells across: grass with one tree in eight,
+one cell in twelve a shrub, a river, the soil patches and hollows of design
+2; 24 torches lit at random cells near the middle):
+
+| Case | What happens |
+| --- | --- |
+| **A typical late-summer grass fire**, fields after two dry weeks (`ground_wet` 0.12, humidity 0.32, 29 C), a 3 m/s wind | Open grass reads `plant_dry` 0.54 to 0.89 (the 10th to 90th percentile), green round the river, the trees and the hollows. Of 24 torches: 7 burn their cell and at most one more and go out within 30 s; 2 take 10 to 30 cells and go out in about a minute; 4 run 200 to 260 cells and go out on their own at green ground in 2 to 3 minutes; 11 reach the 300-cell limit in 2.5 to 4 minutes and burn out there. Its front runs about 0.2 m/s downwind (45 m) and half that upwind (30 m); at most about 40 cells burn at once. A full-size fire is 300 cells, about 2,100 m^2 (0.2 ha), a scar about 50 m across, out within 5 minutes of world time. |
+| The same field, calm | About the same size, a rounder scar, fronts 0.1 to 0.2 m/s. |
+| The same field, 8 m/s wind | Fronts about 0.25 m/s downwind and almost none upwind; still 300 cells at most. |
+| **The same torch on spring-green grass** (`ground_wet` 0.5, humidity 0.6, 16 C) | Every grass cell reads `plant_dry` about 0.06 (0.07 at the driest): nothing catches. The torch makes its 3-second flame and nothing is saved. |
+| Midsummer, the same field | Open grass about 0.42 and the driest rises just under 0.5: nothing catches. |
+
+Without the cell limit the same 24 late-summer torches would have burned
+up to about 1,100 cells (0.8 ha) at the most; the limit, not the weather,
+keeps the biggest small.
+
 ## Questions for the owner (with screenshots), 2026-11-26
 
 | Id | Question | Options | Recommendation | Screenshots |
 | --- | --- | --- | --- | --- |
-| G9 | How fast a dry-season fire runs, and how it looks at night | as drawn (grass front about 1 m/s calm, 2.5 m/s in a 5 m/s wind; a tree burns 2 minutes); half as fast; twice as fast | as drawn: fast enough to fear, slow enough to outrun on foot, and the rain still ends it | `docs/screenshots/survival-mode/mockup/fire-night-front.png`, `fire-night-close.png`, `fire-night-rain.png`, `fire-day-after.png` |
+| G9 | How far and fast a dry-season fire runs, and how it looks at night | as drawn now (decision 12: green plants never catch; a late-summer grass front about 0.2 m/s; at most 300 cells, 40 burning, out within about 5 minutes; no embers; a tree burns 90 s at its foot); smaller still (150 cells); larger (600 cells) | as drawn: the owner asked for little spread, and a fire this size is a scare and a scar, never a lost valley | `docs/screenshots/survival-mode/mockup/fire-night-front.png`, `fire-night-close.png`, `fire-night-rain.png`, `fire-day-after.png`, `fire-dryness.png`, `fire-spring-green.png` |
 
 **Recommendations taken (ask only with screenshots)**, not the owner's own
 words: fire is its own change; the player's things never burn (house fires
 a follow-up, to be asked with screenshots then); a placed campfire, brazier,
-torch or lantern never starts a fire; danger from the ground's wetness in
-the atmosphere rather than a calendar; every number in design 2 to 11; a
+torch or lantern never starts a fire; dryness from the ground's wetness in
+the atmosphere, the plant and its own hemisphere's season rather than a
+calendar; every number in design 2 to 12 (decision 12's direction, "Let's
+not spread fire too much for now , consider lots of factors like dryness of
+plants", is the owner's; its numbers are not); no ember throw for now; a
 placed torch going out kept as the world's record, not an edit of the
 player's block; Explorer has no forest fires and its torches never go out.
 
 ## Risks / Trade-offs
 
-- **A fire could take a forest the player loved.** It heals in 60 world
-  days, never touches the player's own things, starts only in the dry season
+- **A fire could take a wood the player loved.** It takes at most 300
+  cells (about 50 m across), seldom a wood (trees burn ten times slower
+  than grass, and their shaded floor is green), heals in 60 world days, never touches the player's own things, starts only in the dry season
   and is seen from far off; the rain ends it.
-- **Cost.** 1,500 burning cells a second is small CPU work in the core, and
-  no frame time was measured in this write-up (a cloud session, no GPU). The
+- **Cost.** 40 burning cells a blaze, two blazes, is small CPU work in the
+  core (`plant_dry` is a few multiplications per neighbour), and no frame time was measured in this write-up (a cloud session, no GPU). The
   flames and their light are the frame cost: measured with `perf_suite.py`
   on the owner's hardware before a number is claimed, and the light's
   cluster size chosen from that measurement.
 - **Multiplayer bandwidth.** A blaze's lines are its cells (a key each) once
-  a second; at the limit a few kilobytes a second to clients near it.
+  a second; at the limit (40 burning) well under a kilobyte a second to clients near it.
 - **The atmosphere's save grows** by one float per cell; it is additive and
   an older save restores without it.
 - **`lightning-fire` is not built.** The dry strike waits for it; torches
@@ -285,8 +510,12 @@ player's block; Explorer has no forest fires and its torches never go out.
 
 ## Verification
 
-- Unit tests in `pbd_core::fire`: the danger's terms; a grass front's speed
-  at danger 1 with no wind and with 5 m/s; rain stopping a front; a bucket;
+- Unit tests in `pbd_core::fire`: the weather's terms; `plant_dry` against
+  design 2's table of examples, row by row; a cell below 0.5 never
+  catching, from a torch or a neighbour; spring-green grass never catching
+  anywhere on a test patch; a late-summer grass front's speed calm and in
+  3 m/s and 8 m/s inside design 3's ranges; a blaze stopping at the cell and
+  burning limits; a front going out at a green bank; rain stopping a front; a bucket;
   a dug line holding; the yield set holding; the same blaze from the same
   seed giving the same cells on two runs and on a reload mid-fire; regrowth
   by day; a pentagon cell's five neighbours.
