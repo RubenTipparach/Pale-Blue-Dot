@@ -1,0 +1,16 @@
+// MEASUREMENT (`memory-leak`, cut 6): stills of the town from where the
+// bot stands, two ways round, to compare a render change pixel for pixel.
+(
+    goal: "Goal: stills of the town",
+    at: None,
+    hour: 10.0,
+    shots: [
+        (
+            caption: "Stills",
+            max_s: 120.0,
+            acts: [
+                Wait(30.0), Still, Look(150.0, 0.0, 1.0), Wait(4.0), Still,
+            ],
+        ),
+    ],
+)

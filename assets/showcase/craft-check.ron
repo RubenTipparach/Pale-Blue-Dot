@@ -1,0 +1,20 @@
+// MEASUREMENT: the pack's Craft panel while a hand craft runs (its bar),
+// stilled the moment CRAFT is pressed: the starter gathering, a log, then
+// the stone axe by hand.
+(
+    goal: "Goal: craft a stone axe by hand",
+    at: Some((11.5085, -25.0992)),
+    hour: 10.0,
+    shots: [
+        (
+            caption: "Gather by hand",
+            max_s: 400.0,
+            acts: [Focus("gather"), PickUp(Have("fibre", 8)), PickUp(Have("stone", 9)), Dig(Mission("gather"), 2)],
+        ),
+        (
+            caption: "Craft a stone axe",
+            max_s: 300.0,
+            acts: [Focus("axe"), Chop(Have("log", 1)), Craft("stone-axe", 1), Still],
+        ),
+    ],
+)

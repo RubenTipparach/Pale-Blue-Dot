@@ -942,6 +942,10 @@ pub(super) struct LightState {
     /// The flame's base last frame (eye space), for its lean.
     flame_was: Option<Vec3>,
     lean: Vec3,
+    /// Whether the flame's meshes were last written empty (`memory-leak`
+    /// cut 7): with no flame and no ember alight they are left as they are,
+    /// not written empty again and uploaded every frame.
+    fx_empty: bool,
 }
 
 impl LightState {
@@ -1171,6 +1175,11 @@ pub(super) fn hold_lights(
         // In the world: the eye's own motion is taken off.
         ember.off += ember.vel * dt - moved;
     }
+    let idle = flame_base.is_none() && state.embers.iter().all(|e| e.t <= 0.0);
+    if idle && state.fx_empty {
+        return;
+    }
+    state.fx_empty = idle;
     for (part, mesh, mut visibility) in &mut fx {
         let Some(mesh) = meshes.get_mut(&mesh.0) else {
             continue;

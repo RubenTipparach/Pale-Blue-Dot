@@ -1232,6 +1232,54 @@ impl ColumnTier {
     /// `record` is the finest record the point is over, `direction` its unit
     /// direction and `altitude` its metres above the planet's radius. Off the
     /// tier it answers the open sky and no lamp.
+    /// A digest of everything [`Self::sample`] reads at these probes, each
+    /// a finest record and the lower of the two layers a point sits
+    /// between (`memory-leak` cut 9): for the probe's column and each of
+    /// its neighbours, whether it is in the region, where its centre is,
+    /// and at both layers whether it is solid and the light it holds. Two
+    /// tiers with the same digest at a town's probes sample the same light
+    /// at every point of it, so its bake is kept.
+    pub fn light_digest(&self, probes: &[(Option<usize>, u16)]) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        for &(record, lo) in probes {
+            let slot = record
+                .and_then(|record| self.slots.get(record).copied())
+                .filter(|&slot| slot != usize::MAX && slot < self.sides.len());
+            let Some(slot) = slot else {
+                0u8.hash(&mut h);
+                continue;
+            };
+            1u8.hash(&mut h);
+            let levels = [
+                usize::from(lo).min(LAYERS - 1),
+                (usize::from(lo) + 1).min(LAYERS - 1),
+            ];
+            for cell in std::iter::once(slot as u32).chain(self.sides[slot].iter().copied()) {
+                let in_region =
+                    cell != pbd_core::light::OFF_REGION && (cell as usize) < self.centres.len();
+                in_region.hash(&mut h);
+                if !in_region {
+                    continue;
+                }
+                let c = cell as usize;
+                self.centres[c].to_array().map(f32::to_bits).hash(&mut h);
+                for level in levels {
+                    self.columns
+                        .get(c)
+                        .is_none_or(|col| col.solid(level))
+                        .hash(&mut h);
+                    self.light
+                        .get(c)
+                        .and_then(|l| l.get(level))
+                        .map(|l| l.0)
+                        .hash(&mut h);
+                }
+            }
+        }
+        h.finish()
+    }
+
     pub fn sample(&self, record: Option<usize>, direction: Vec3, altitude: f32) -> (f32, f32) {
         let slot = record
             .and_then(|record| self.slots.get(record).copied())

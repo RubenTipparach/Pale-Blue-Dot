@@ -61,8 +61,14 @@ fn bar_colour(ms: f32) -> Color {
 #[derive(Component)]
 pub struct FrameGraph;
 
+/// The bars, drawn into one image (`memory-leak`, towns at 60 fps: 240 bar
+/// nodes resized each frame laid the whole UI out again every frame).
 #[derive(Component)]
-pub struct FrameGraphBar(usize);
+pub struct FrameGraphBars(Handle<Image>);
+
+/// The bars' image: two texels a logical pixel, so a half-pixel bar is a
+/// column of texels.
+const TEXELS_PER_PX: f32 = 2.0;
 
 #[derive(Component)]
 pub struct FrameGraphText;
@@ -76,8 +82,25 @@ type SpanBatch = (std::time::Instant, Vec<(String, f64)>);
 /// Passes listed in the breakdown, the costliest first.
 const BREAKDOWN_ROWS: usize = 12;
 
-pub fn setup(mut commands: Commands, launch: Res<super::Launch>) {
+pub fn setup(
+    mut commands: Commands,
+    launch: Res<super::Launch>,
+    mut images: ResMut<Assets<Image>>,
+) {
     let width = BARS as f32 * BAR_W;
+    let mut image = Image::new_fill(
+        bevy::render::render_resource::Extent3d {
+            width: (width * TEXELS_PER_PX) as u32,
+            height: (GRAPH_H * TEXELS_PER_PX) as u32,
+            depth_or_array_layers: 1,
+        },
+        bevy::render::render_resource::TextureDimension::D2,
+        &[0, 0, 0, 0],
+        bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb,
+        bevy::asset::RenderAssetUsages::default(),
+    );
+    image.sampler = bevy::image::ImageSampler::nearest();
+    let bars = images.add(image);
     commands
         .spawn((
             FrameGraph,
@@ -122,17 +145,18 @@ pub fn setup(mut commands: Commands, launch: Res<super::Launch>) {
                 ..default()
             })
             .with_children(|plot| {
-                for i in 0..BARS {
-                    plot.spawn((
-                        FrameGraphBar(i),
-                        Node {
-                            width: px(BAR_W),
-                            height: px(0),
-                            ..default()
-                        },
-                        BackgroundColor(Color::NONE),
-                    ));
-                }
+                plot.spawn((
+                    FrameGraphBars(bars.clone()),
+                    ImageNode::new(bars),
+                    Node {
+                        position_type: PositionType::Absolute,
+                        left: px(0),
+                        bottom: px(0),
+                        width: px(width),
+                        height: px(GRAPH_H),
+                        ..default()
+                    },
+                ));
                 for budget in [BUDGET_60, BUDGET_30, STALL_MS] {
                     plot.spawn((
                         Node {
@@ -305,7 +329,8 @@ pub fn breakdown(
 pub fn update(
     stats: Res<FrameStats>,
     graphs: Query<&Visibility, With<FrameGraph>>,
-    mut bars: Query<(&FrameGraphBar, &mut Node, &mut BackgroundColor)>,
+    bars: Query<&FrameGraphBars>,
+    mut images: ResMut<Assets<Image>>,
     mut text: Query<&mut Text, With<FrameGraphText>>,
 ) {
     if graphs.iter().all(|v| *v == Visibility::Hidden) {
@@ -314,15 +339,30 @@ pub fn update(
     let samples = &stats.samples;
     let recent = &samples[samples.len().saturating_sub(BARS)..];
     let offset = BARS - recent.len();
-    for (bar, mut node, mut colour) in &mut bars {
-        let Some(&ms) = bar.0.checked_sub(offset).and_then(|i| recent.get(i)) else {
-            node.height = px(0);
-            *colour = BackgroundColor(Color::NONE);
+    for bars in &bars {
+        let Some(image) = images.get_mut(&bars.0) else {
             continue;
         };
-        let ms = ms as f32;
-        node.height = px(bar_height(ms));
-        *colour = BackgroundColor(bar_colour(ms));
+        let (w, h) = (image.width() as usize, image.height() as usize);
+        let Some(data) = image.data.as_mut() else {
+            continue;
+        };
+        data.fill(0);
+        let per = (w / BARS).max(1);
+        for bar in 0..BARS {
+            let Some(&ms) = bar.checked_sub(offset).and_then(|i| recent.get(i)) else {
+                continue;
+            };
+            let ms = ms as f32;
+            let tall = ((bar_height(ms) * TEXELS_PER_PX).round() as usize).min(h);
+            let [r, g, b, a] = bar_colour(ms).to_srgba().to_u8_array();
+            for x in bar * per..((bar + 1) * per).min(w) {
+                for y in h - tall..h {
+                    let i = (y * w + x) * 4;
+                    data[i..i + 4].copy_from_slice(&[r, g, b, a]);
+                }
+            }
+        }
     }
     if recent.is_empty() {
         return;

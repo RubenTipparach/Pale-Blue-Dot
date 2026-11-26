@@ -244,6 +244,7 @@ controls:
     build_turn: "turn a stair or blueprint; with shift, the next blueprint"
     build_view: "architecture mode: a camera over the plot, panned with the move keys and turned with a right drag; double-click to walk there"
     build_zoom: "with ctrl, zoom the architecture camera"
+    bot_takeover: "in a bot run, take the controls or give them back"
     camera: change the camera
     cruise: cruise
     dampeners: dampeners
@@ -286,6 +287,7 @@ controls:
     wind_in: wind the line in
   group:
     building: BUILDING
+    debug: DEBUG
     fishing_afloat: FISHING AFLOAT
     flying: FLYING
     hands: HANDS
@@ -390,6 +392,7 @@ controls:
     tab: TAB
     wheel: WHEEL
   tab:
+    debug: DEBUG
     flying: FLYING
     hands: HANDS
     menus: MENUS
@@ -1156,9 +1159,9 @@ mission:
       "1": Dig coal
     title: Find ore
   pack:
-    help: Press Tab to open your pack and craft with what you gathered.
+    help: "Press I or Tab to open your pack and craft with what you gathered."
     objective:
-      "0": Open the pack
+      "0": "Open the pack (I)"
     title: Open your pack
   pen:
     help: Set fences on the cell edges round a yard, close it with a gate, and lead your animal in.

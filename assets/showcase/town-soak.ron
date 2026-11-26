@@ -1,0 +1,56 @@
+// MEASUREMENT (`memory-leak`): a long play round a town (owner,
+// 2026-11-25: "run around for about 15-30 minutes ... start off at one of
+// the recent bot saves. Run around gathering resources and stash them at
+// the town"). Run with `PBD_MEMORY_TRACE` and `--frame-log`.
+(
+    goal: "Goal: gather round a town and stash it there, for half an hour",
+    at: None,
+    hour: 10.0,
+    shots: [
+        (
+            caption: "Go to the town",
+            max_s: 600.0,
+            acts: [Seek("town")],
+        ),
+        (
+            caption: "Gather wood and stone, stash them in town (1 of 8)",
+            max_s: 420.0,
+            acts: [Away(120.0), Hand("axe"), Chop(Have("log", 4)), Hand("shovel"), Dig(Times(10), 1), Seek("town"), Talk(1), Store, Store],
+        ),
+        (
+            caption: "Gather wood and stone, stash them in town (2 of 8)",
+            max_s: 420.0,
+            acts: [Away(120.0), Hand("axe"), Chop(Have("log", 8)), Hand("shovel"), Dig(Times(10), 1), Seek("town"), Talk(1), Store, Store],
+        ),
+        (
+            caption: "Gather wood and stone, stash them in town (3 of 8)",
+            max_s: 420.0,
+            acts: [Away(120.0), Hand("axe"), Chop(Have("log", 12)), Hand("shovel"), Dig(Times(10), 1), Seek("town"), Talk(1), Store, Store],
+        ),
+        (
+            caption: "Gather wood and stone, stash them in town (4 of 8)",
+            max_s: 420.0,
+            acts: [Away(120.0), Hand("axe"), Chop(Have("log", 16)), Hand("shovel"), Dig(Times(10), 1), Seek("town"), Talk(1), Store, Store],
+        ),
+        (
+            caption: "Gather wood and stone, stash them in town (5 of 8)",
+            max_s: 420.0,
+            acts: [Away(120.0), Hand("axe"), Chop(Have("log", 20)), Hand("shovel"), Dig(Times(10), 1), Seek("town"), Talk(1), Store, Store],
+        ),
+        (
+            caption: "Gather wood and stone, stash them in town (6 of 8)",
+            max_s: 420.0,
+            acts: [Away(120.0), Hand("axe"), Chop(Have("log", 24)), Hand("shovel"), Dig(Times(10), 1), Seek("town"), Talk(1), Store, Store],
+        ),
+        (
+            caption: "Gather wood and stone, stash them in town (7 of 8)",
+            max_s: 420.0,
+            acts: [Away(120.0), Hand("axe"), Chop(Have("log", 28)), Hand("shovel"), Dig(Times(10), 1), Seek("town"), Talk(1), Store, Store],
+        ),
+        (
+            caption: "Gather wood and stone, stash them in town (8 of 8)",
+            max_s: 420.0,
+            acts: [Away(120.0), Hand("axe"), Chop(Have("log", 32)), Hand("shovel"), Dig(Times(10), 1), Seek("town"), Talk(1), Store, Store],
+        ),
+    ],
+)
