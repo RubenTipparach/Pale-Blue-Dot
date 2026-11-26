@@ -414,3 +414,34 @@ from the early depth test: 7% fewer fragments shaded, 6.07 to 5.90 ms
 depth wins each texel in any order. The rest of it is the crowns' own
 overdraw under a low sun; the leaf cut-out's share is priced next
 (`PBD_SHADOW_PRICE=no_leaf,no_part`).
+
+**The biome sweep (owner, 2026-11-26: "It could also be a number of biomes
+adding lag").** `biome-check` (stand, a full turn a quarter at a time, at
+17:30 when the shadows cost the most) at the place nearest Holbrook well
+inside each biome (`cargo run -p pbd-core --example biome_places`), one
+after another, after the first 40 s:
+
+| Biome | at 60 fps | at 40 fps | p99 | GPU | shadow | terrain | main |
+|---|---|---|---|---|---|---|---|
+| Desert | 100% | 99.9% | 12.0 | 6.4 | 3.1 | 2.4 | 4.8 |
+| Mountains | 99% | 99.8% | 14.2 | 7.0 | 3.0 | 2.7 | 5.6 |
+| Swamp | 99% | 99.9% | 16.9 | 9.2 | 5.7 | 2.9 | 7.7 |
+| Holbrook | 98% | 98.8% | 29.0 | 7.8 | 4.3 | 2.6 | 7.5 |
+| Ocean | 96% | 99.6% | 19.6 | 6.8 | 4.2 | 1.2 | 7.8 |
+| Fields | 95% | 99.9% | 19.2 | 11.2 | 6.2 | 4.2 | 7.5 |
+| Jungle | 82% | 99.3% | 23.3 | 13.7 | 8.5 | 4.5 | 5.2 |
+| Tundra | 82% | 98.0% | 64.6 | 12.4 | 7.2 | 4.4 | 6.0 |
+
+The trees' biomes are the costly ones, by their shadows: 8.5 ms in the
+jungle and 7.2 in the tundra's pines against 3 in the desert. The tundra's
+hitches did not come back on a quiet machine (one frame over 50 ms in two
+minutes, 99.4% at 40 fps): the first run's were its load, which can run
+past the 40 s the sweep leaves out, and a second run's started beside a
+large file being deleted. The bounce bake (36 to 41 ms, on a worker, each
+2 degrees of sun) priced with `PBD_BOUNCE=0`: no difference on a quiet
+machine.
+
+The bot's own time on the main thread is now a frame log column
+(`bot_ms`), so a walk's frames can be read without the measuring
+instrument: the town route's bot re-planned for twelve minutes at 15 ms a
+plan on its second leg (`town-route`, stopped), and is not the game.

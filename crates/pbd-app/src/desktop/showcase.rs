@@ -3034,6 +3034,19 @@ pub struct World<'w, 's> {
 
 /// The bot's frame: look, decide, press.
 #[allow(clippy::too_many_arguments)]
+/// The bot's time this frame, ms, as f64 bits: read by the frame log.
+pub static BOT_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+struct BotTimer(std::time::Instant);
+impl Drop for BotTimer {
+    fn drop(&mut self) {
+        BOT_MS.store(
+            (self.0.elapsed().as_secs_f64() * 1e3).to_bits(),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
+}
+
 pub fn drive(
     mut commands: Commands,
     mut player: ResMut<Player>,
@@ -3044,6 +3057,10 @@ pub fn drive(
     mut exit: MessageWriter<AppExit>,
     control: Option<Res<control::Control>>,
 ) {
+    // MEASUREMENT (`memory-leak`): the bot's own time on the main thread,
+    // into the frame log's `bot_ms`, so a run's frames can be read with the
+    // measuring instrument's cost taken out.
+    let _bot_timer = BotTimer(std::time::Instant::now());
     let live = control.is_some();
     let player = &mut *player;
     let bot = &mut player.bot;

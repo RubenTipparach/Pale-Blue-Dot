@@ -5744,7 +5744,7 @@ impl FrameLog {
                 .collect();
             writeln!(
                 out,
-                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m,gpu_clouds_ms,gpu_total_ms,route_m{passes},gpu_other_ms,frame_latency,cpu_main_ms,cpu_render_ms,acquire_ms,shot,main_between_ms,submit_ms,present_ms"
+                "frame,since_start_s,wall_ms,fine_version,rebuild_s,clearance_m,speed_mps,walked_m,gpu_clouds_ms,gpu_total_ms,route_m{passes},gpu_other_ms,frame_latency,cpu_main_ms,cpu_render_ms,acquire_ms,shot,main_between_ms,submit_ms,present_ms,bot_ms"
             )
             .expect("frame log header");
             out
@@ -5795,7 +5795,7 @@ fn write_frame_log(
     let passes: String = gpu.passes.iter().map(|ms| format!(",{ms:.3}")).collect();
     let _ = writeln!(
         out,
-        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1},{gpu_clouds:.3},{gpu_total:.3},{:.0}{passes},{:.3},{latency},{:.3},{:.3},{:.3},{},{:.3},{:.3},{:.3}",
+        "{},{:.3},{ms:.3},{},{rebuild},{clearance:.1},{speed:.1},{:.1},{gpu_clouds:.3},{gpu_total:.3},{:.0}{passes},{:.3},{latency},{:.3},{:.3},{:.3},{},{:.3},{:.3},{:.3},{:.3}",
         stats.frames,
         stats.started.elapsed().as_secs_f64(),
         fine.map_or(0, |fine| fine.version),
@@ -5812,6 +5812,8 @@ fn write_frame_log(
         cpu.between_ms,
         cpu.submit_ms(),
         cpu.present_ms(),
+        // The bot's own share of `cpu_main_ms` (0 when nothing drives).
+        f64::from_bits(showcase::BOT_MS.load(std::sync::atomic::Ordering::Relaxed)),
     );
 }
 

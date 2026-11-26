@@ -1,0 +1,20 @@
+// MEASUREMENT (`memory-leak`, towns at 60 fps, the biome sweep): stand
+// where `--at` puts the bot and turn a full circle, a quarter at a time, in
+// the late afternoon when the shadows cost the most. Run once per biome
+// (`cargo run -p pbd-core --example biome_places` lists a place in each).
+(
+    goal: "Goal: look round this biome",
+    at: None,
+    hour: 17.5,
+    shots: [
+        (
+            caption: "Look round",
+            max_s: 200.0,
+            acts: [
+                Wait(40.0), Look(90.0, 0.0, 1.0), Wait(15.0),
+                Look(90.0, 0.0, 1.0), Wait(15.0), Look(90.0, 0.0, 1.0), Wait(15.0),
+                Look(90.0, 0.0, 1.0), Wait(15.0),
+            ],
+        ),
+    ],
+)
