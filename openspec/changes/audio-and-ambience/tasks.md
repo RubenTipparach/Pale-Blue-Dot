@@ -153,7 +153,10 @@
  Done 2026-11-15: `every_cue_the_code_names_is_in_the_book` and
   `every_file_exists_and_placed_files_are_mono` (beds stereo, every bed
   with a level).
-- [ ] 5.9 Eating munches (design, "Eating munches"; owner, 2026-11-26:
+- [x] 5.9 (Built 2026-11-26: `hooks::deeds`, `pbd_core::audio::eat_cue`;
+  `eating_asks_for_a_munch_at_the_eye` and `every_munch_take_decodes`; the
+  sheet is `docs/screenshots/audio/eat-sheet.jpg`. Only the owner's ears
+  approve it.) Eating munches (design, "Eating munches"; owner, 2026-11-26:
   "eating sounds should have munching sounds"): `eat_crisp` and `eat_soft`,
   four takes each, cut from CC0 recordings; `Ate` plays the one
   `pbd_core::audio::eat_cue` names from `mix.ron`'s `crisp_foods`, at the eye,

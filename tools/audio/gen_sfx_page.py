@@ -28,6 +28,7 @@ SECTIONS = {
     "water": "In the water (placed)",
     "fishing": "Fishing (placed at the rod or the float)",
     "craft": "Craft (placed at the craft's parts)",
+    "body": "The player's body: eating (at the eye)",
     "weather": "Weather: rain, thunder and fire (placed)",
     "night": "Night (beds and scatters)",
     "menus": "Menus and HUD (not placed)",
@@ -36,7 +37,7 @@ SECTIONS = {
     "beds_place": "Beds: towns, caves and under water (stereo, not placed)",
 }
 
-GROUP_SECTION = {"Steps": "foot", "Ground": "dig", "Water": "water", "Fishing": "fishing", "Craft": "craft",
+GROUP_SECTION = {"Steps": "foot", "Ground": "dig", "Water": "water", "Fishing": "fishing", "Craft": "craft", "Body": "body",
                  "Weather": "weather", "Fauna": "beds_day", "Menu": "menus"}
 
 

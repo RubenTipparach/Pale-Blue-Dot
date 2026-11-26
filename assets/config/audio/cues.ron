@@ -31,6 +31,8 @@
         "dig_stone": (takes: 3, volume_db: -5.0, pitch: (0.94, 1.06), cap: 3, audible_m: 40.0),
         "dig_wood": (takes: 3, volume_db: -5.0, pitch: (0.94, 1.06), cap: 3, audible_m: 40.0),
         "dog_far": (takes: 2, volume_db: -12.0, pitch: (0.93, 1.07), cap: 2, full_within_m: 20.0, audible_m: 400.0),
+        "eat_crisp": (takes: 4, volume_db: -6.0, pitch: (0.95, 1.05), cap: 1),
+        "eat_soft": (takes: 4, volume_db: -6.0, pitch: (0.95, 1.05), cap: 1),
         "fall_light": (volume_db: -6.0, cap: 4, full_within_m: 3.0, audible_m: 40.0, looped: true, stream: true),
         "fall_medium": (volume_db: -7.0, cap: 4, full_within_m: 6.0, audible_m: 90.0, looped: true, stream: true),
         "fall_roar": (volume_db: -4.0, cap: 4, full_within_m: 12.0, audible_m: 220.0, looped: true, stream: true),

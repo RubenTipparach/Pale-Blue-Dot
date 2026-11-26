@@ -194,5 +194,89 @@
    "352902.mp3"
   ],
   "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/379343": {
+  "pack": "379343",
+  "url": "https://freesound.org/people/Leafs67/sounds/379343/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Carrot Crunching.wav",
+  "author": "Leafs67",
+  "files": [
+   "379343.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/518049": {
+  "pack": "518049",
+  "url": "https://freesound.org/people/GentlemanWalrus/sounds/518049/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "Apple Munch.wav",
+  "author": "GentlemanWalrus",
+  "files": [
+   "518049.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/707806": {
+  "pack": "707806",
+  "url": "https://freesound.org/people/stevielematt/sounds/707806/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "CHEWING_02_44100",
+  "author": "stevielematt",
+  "files": [
+   "707806.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/707807": {
+  "pack": "707807",
+  "url": "https://freesound.org/people/stevielematt/sounds/707807/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "CHEWING_03_44100",
+  "author": "stevielematt",
+  "files": [
+   "707807.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/707808": {
+  "pack": "707808",
+  "url": "https://freesound.org/people/stevielematt/sounds/707808/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "CHEWING_04_44100",
+  "author": "stevielematt",
+  "files": [
+   "707808.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/398757": {
+  "pack": "398757",
+  "url": "https://freesound.org/people/Anthousai/sounds/398757/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "apple - bite & chew.wav",
+  "author": "Anthousai",
+  "files": [
+   "398757.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
  }
 }

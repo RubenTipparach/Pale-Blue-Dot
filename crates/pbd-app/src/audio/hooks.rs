@@ -28,6 +28,8 @@ pub const NAMED: &[&str] = &[
     "swim_stroke_under",
     "bubbles",
     "breath",
+    "eat_crisp",
+    "eat_soft",
     "pickup",
     "place_dirt",
     "dig_dirt",
@@ -516,6 +518,7 @@ pub fn material_under(
 #[allow(clippy::too_many_arguments)]
 fn deeds(
     listener: Res<Listener>,
+    data: Res<AudioData>,
     mut gained: MessageReader<crate::hotbar::Gained>,
     mut planted: MessageReader<crate::hotbar::Planted>,
     mut deeds: MessageReader<crate::husbandry::Deed>,
@@ -544,8 +547,12 @@ fn deeds(
     if cooked.read().count() > 0 {
         sfx.play("pickup", Where::Menu);
     }
-    if ate.read().count() > 0 {
-        sfx.play("breath", Where::At(listener.eye));
+    // Eating munches (design "Eating munches"; owner, 2026-11-26): at the
+    // eye, the player's own mouth, on the effects bus; the cue's cap of one
+    // makes two meals in a frame one munch.
+    for crate::kitchen::Ate { dish, .. } in ate.read() {
+        let cue = pbd_core::audio::eat_cue(*dish, &data.mix);
+        sfx.play(cue, Where::At(listener.eye));
     }
     for crate::missions::Did(happened) in did.read() {
         if happened.kind == pbd_core::missions::Kind::Till {
@@ -995,6 +1002,81 @@ mod tests {
             ron::from_str(include_str!("../../../../assets/config/audio/mix.ron")).unwrap();
         problems.extend(mix.problems());
         assert!(problems.is_empty(), "{problems:#?}");
+    }
+
+    /// Design "Eating munches": a cooked dish eaten asks for `eat_soft`, a
+    /// crisp food (the glowing mushroom, eaten raw) for `eat_crisp`, each at
+    /// the eye and nowhere else.
+    #[test]
+    fn eating_asks_for_a_munch_at_the_eye() {
+        use pbd_core::cooking::Effect;
+        use pbd_core::goods::Good;
+        let eye = Vec3::new(0.0, 4801.6, 0.0);
+        // A fresh world for each meal: a reader run once starts from the
+        // first message in the queue.
+        let heard = |dish: &str, effect| {
+            let mut world = World::new();
+            world.init_resource::<Messages<crate::hotbar::Gained>>();
+            world.init_resource::<Messages<crate::hotbar::Planted>>();
+            world.init_resource::<Messages<crate::husbandry::Deed>>();
+            world.init_resource::<Messages<crate::kitchen::Cooked>>();
+            world.init_resource::<Messages<crate::kitchen::Ate>>();
+            world.init_resource::<Messages<crate::missions::Did>>();
+            world.init_resource::<Messages<crate::missions::MissionDone>>();
+            world.init_resource::<Sfx>();
+            world.insert_resource(Listener {
+                eye,
+                valid: true,
+                ..Listener::default()
+            });
+            world.insert_resource(AudioData {
+                cues: book(),
+                mix: ron::from_str(include_str!("../../../../assets/config/audio/mix.ron"))
+                    .unwrap(),
+                ambience: Default::default(),
+            });
+            world.write_message(crate::kitchen::Ate {
+                dish: Good::by_code(dish).unwrap(),
+                effect,
+            });
+            bevy::ecs::system::RunSystemOnce::run_system_once(&mut world, deeds).unwrap();
+            let mut sfx = world.resource_mut::<Sfx>();
+            std::mem::take(&mut sfx.requests)
+                .into_iter()
+                .map(|r| (r.cue, r.at))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            heard("grilled-fish", Effect::Steady),
+            vec![("eat_soft", Where::At(eye))]
+        );
+        assert_eq!(
+            heard("glowing-mushroom", Effect::Glow),
+            vec![("eat_crisp", Where::At(eye))]
+        );
+        let book = book();
+        for cue in ["eat_crisp", "eat_soft"] {
+            assert_eq!(book.cues[cue].bus, pbd_core::audio::Bus::Effects, "{cue}");
+        }
+    }
+
+    /// Design "Eating munches": every munch take is a file that decodes,
+    /// mono, about a second long.
+    #[test]
+    fn every_munch_take_decodes() {
+        let book = book();
+        let dir = super::super::engine::audio_dir().join("sfx");
+        for cue in ["eat_crisp", "eat_soft"] {
+            let files = book.cues[cue].files(cue);
+            assert!(files.len() >= 3, "{cue}: {} takes", files.len());
+            for file in files {
+                let data = kira::sound::static_sound::StaticSoundData::from_file(dir.join(&file))
+                    .unwrap_or_else(|e| panic!("{file}: {e}"));
+                let seconds = data.duration().as_secs_f64();
+                assert!((0.5..=1.5).contains(&seconds), "{file}: {seconds:.2} s");
+                assert_eq!(ogg_channels(&dir.join(&file)), Some(1), "{file}");
+            }
+        }
     }
 
     /// The channel count from an Ogg Vorbis identification header.

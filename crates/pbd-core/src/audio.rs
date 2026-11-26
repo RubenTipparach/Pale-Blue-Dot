@@ -215,6 +215,9 @@ pub struct MixConfig {
     /// A fall already sounding is ranked this much louder, so two of a
     /// like loudness do not trade places every frame.
     pub fall_hold_db: f32,
+    /// The dishes that crunch when eaten, by good code (design "Eating
+    /// munches"): they play `eat_crisp`, every other dish `eat_soft`.
+    pub crisp_foods: Vec<String>,
 }
 
 impl Default for MixConfig {
@@ -257,6 +260,7 @@ impl Default for MixConfig {
             fall_merge_m: 10.0,
             fall_fade_s: 1.5,
             fall_hold_db: 3.0,
+            crisp_foods: vec!["glowing-mushroom".into(), "kelp-crisps".into()],
         }
     }
 }
@@ -319,7 +323,23 @@ impl MixConfig {
         if !(self.fall_hold_db >= 0.0 && self.fall_hold_db.is_finite()) {
             out.push(format!("fall_hold_db {} is negative", self.fall_hold_db));
         }
+        for code in &self.crisp_foods {
+            if crate::goods::Good::by_code(code).is_none() {
+                out.push(format!("crisp_foods names {code}, which is no good"));
+            }
+        }
         out
+    }
+}
+
+/// The munch a dish makes when the player eats it (design "Eating
+/// munches"): `eat_crisp` for a good `mix.crisp_foods` names, `eat_soft`
+/// for every other.
+pub fn eat_cue(good: crate::goods::Good, mix: &MixConfig) -> &'static str {
+    if mix.crisp_foods.iter().any(|code| code == good.code()) {
+        "eat_crisp"
+    } else {
+        "eat_soft"
     }
 }
 
@@ -1076,6 +1096,25 @@ mod tests {
     }
 
     use super::*;
+
+    /// Design "Eating munches": the crisp foods crunch, every other dish is
+    /// chewed soft; a code that is no good is refused.
+    #[test]
+    fn crisp_foods_crunch_and_cooked_dishes_chew() {
+        use crate::goods::Good;
+        let mix = MixConfig::default();
+        let good = |code| Good::by_code(code).unwrap();
+        assert_eq!(eat_cue(good("glowing-mushroom"), &mix), "eat_crisp");
+        assert_eq!(eat_cue(good("kelp-crisps"), &mix), "eat_crisp");
+        assert_eq!(eat_cue(good("grilled-fish"), &mix), "eat_soft");
+        assert_eq!(eat_cue(good("flatbread"), &mix), "eat_soft");
+        assert!(mix.problems().is_empty(), "{:?}", mix.problems());
+        let wrong = MixConfig {
+            crisp_foods: vec!["no-such-food".into()],
+            ..MixConfig::default()
+        };
+        assert_eq!(wrong.problems().len(), 1);
+    }
 
     const R: f32 = 4800.0;
 
