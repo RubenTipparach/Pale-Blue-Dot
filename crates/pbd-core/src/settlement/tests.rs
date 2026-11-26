@@ -4507,6 +4507,114 @@ fn a_new_town_stands_its_forge_and_an_old_one_is_as_it_was() {
     }
 }
 
+/// `playtest-fixes` design 6 (the owner's survey P5, 2026-11-26): the
+/// layout ladder's two questions, and an old town raised to its smithies
+/// with every other field as stored, refused where a smithy cell is
+/// touched; a raised town stands its forge where a layout-3 town does, on
+/// the same ground.
+#[test]
+fn an_old_town_is_raised_to_its_forge_unless_its_cells_are_touched() {
+    let chord = [(1, false), (2, true), (3, true), (4, true), (5, false)];
+    for (layout, by_chord) in chord {
+        assert_eq!(record::finds_by_chord(layout), by_chord, "layout {layout}");
+        assert_eq!(
+            record::stands_smithies(layout),
+            layout >= 3,
+            "layout {layout}"
+        );
+    }
+    assert_eq!(record::raised_layout(1), Some(record::RAISED_DOT_LAYOUT));
+    assert_eq!(record::raised_layout(2), Some(record::RAISED_CHORD_LAYOUT));
+    assert_eq!(record::raised_layout(3), None);
+    let (patch, _) = patch();
+    let natural = slope();
+    for template in [village(), walled()] {
+        let town = laid_village(&template);
+        let keys = record::smithy_keys(&town, &template).expect("the smithy's cells");
+        assert_eq!(
+            keys.len(),
+            6,
+            "the shed's six cells, the forge's among them"
+        );
+        assert!(
+            record::raise_forge(&town, &template, &|_| false).is_none(),
+            "layout 3"
+        );
+        for (was, to) in [
+            (1, record::RAISED_DOT_LAYOUT),
+            (2, record::RAISED_CHORD_LAYOUT),
+        ] {
+            let old = record::Town {
+                layout: was,
+                ..town.clone()
+            };
+            let raised = record::raise_forge(&old, &template, &|_| false).expect("raised");
+            assert_eq!(raised.layout, to);
+            assert_eq!(
+                record::Town {
+                    layout: was,
+                    ..raised.clone()
+                },
+                old,
+                "only the layout"
+            );
+            // The same ground, cell for cell, as the town had.
+            let ground = |t: &record::Town| {
+                let (_, g) = record::ground_of(t, patch, RADIUS_M, slope()).expect("ground");
+                patch
+                    .cells
+                    .iter()
+                    .take(4000)
+                    .map(|c| {
+                        g.at(c.direction)
+                            .map(|h| h.height(natural(c.direction)).to_bits())
+                    })
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(
+                ground(&raised),
+                ground(&old),
+                "layout {was}: the ground stays"
+            );
+            let cut = |t: &record::Town| {
+                record::build_town(
+                    t,
+                    Some(&template),
+                    patch,
+                    &kits(),
+                    &|_: &str| 2.0,
+                    RADIUS_M,
+                    |d| natural(d).floor(),
+                )
+                .unwrap_or_else(|e| panic!("{e}"))
+            };
+            assert_eq!(
+                cut(&raised).solids.len(),
+                cut(&old).solids.len() + 1,
+                "its smithy"
+            );
+            // A player's block on any one smithy cell keeps it as it is.
+            for &k in &keys {
+                assert!(record::raise_forge(&old, &template, &|c| c == k).is_none());
+            }
+            // Another template's record is not this template's to raise.
+            let mut other = template.clone();
+            other.scene = "elsewhere".into();
+            assert!(record::raise_forge(&old, &other, &|_| false).is_none());
+        }
+        let mut bare = template.clone();
+        bare.smithies.clear();
+        let old = record::Town {
+            layout: 2,
+            ..town.clone()
+        };
+        assert!(
+            record::raise_forge(&old, &bare, &|_| false).is_none(),
+            "no smithy"
+        );
+    }
+}
+
 /// `townsfolk` design 26b: the forge's fire is a bed of coals in `embers`
 /// over the hearth bed and one flame body in `forgefire` standing on it,
 /// three ribbons of [`smithy::FLAME_ROWS`] rows, rooted in the coals and

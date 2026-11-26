@@ -147,7 +147,8 @@ pub struct Template {
     pub people: Vec<crate::townsfolk::PersonDef>,
     /// Its smithies (`townsfolk` design 26a): each forge's fire and the
     /// cells of its open shed. Cut only in a town laid at
-    /// [`record::FORGE_LAYOUT`] or later.
+    /// [`record::FORGE_LAYOUT`] or raised to its smithies after
+    /// ([`record::stands_smithies`]).
     #[serde(default)]
     pub smithies: Vec<Smithy>,
 }

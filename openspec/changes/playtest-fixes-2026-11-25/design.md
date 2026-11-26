@@ -225,6 +225,23 @@ here before the code; as built below once it is.
   its record is unchanged; the raised town's ground is the old town's
   ground, cell for cell; a layout-3 town writes nothing.
 
+**As built (2026-11-26).** As written above. The smithy's cells are six
+(the shed's two rows of three; the forge's cell is one of them).
+- Core: `record::RAISED_CHORD_LAYOUT` (4), `RAISED_DOT_LAYOUT` (5),
+  `finds_by_chord`, `stands_smithies`, `raised_layout`, `smithy_keys`,
+  `raise_forge` and `settlement_record`; test
+  `settlement::tests::an_old_town_is_raised_to_its_forge_unless_its_cells_are_touched`.
+- App: `towns::raise_forge`, called from `towns::ensure` on a stored town,
+  logging `TOWN_FORGE`, authored `@wtowns:settlement/<site>`; test
+  `towns::tests::an_old_town_gains_its_forge_unless_something_is_built_on_it`.
+- Captures (lavapipe, no frame times) in `docs/screenshots/playtest-fixes/`,
+  from the forge spot of `smith-forge-2045.jpg` at 11:00, in one capture
+  world laid fresh and its Holbrook record then set back to layout 2:
+  `old-town-forge-before.jpg` (the build before this, the smith at work on
+  bare ground) and `old-town-forge-after.jpg` (this build: the log says
+  `TOWN_FORGE site 10215 raised from layout 2 to 4`, and the forge, the
+  anvil and the shed stand round him on the same ground).
+
 ## 7. A parcel's pick-up and drop-off
 
 The design is `townsfolk` design 47.
