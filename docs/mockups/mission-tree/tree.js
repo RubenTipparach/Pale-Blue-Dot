@@ -1,13 +1,16 @@
 // Mission Tree mockup: the starter-missions tree (openspec/changes/starter-missions/design.md,
 // "Missions are a tree that unlocks the tech" and "The full tree") and, on the Town tab, the town
 // tree (openspec/changes/town-missions-tree/design.md, decision 2), each drawn as the game's
-// Missions screen. The open tree is the page's #anchor (#starter, #town). Nothing moves until the
+// Missions screen; on the Survival tab, the starter tree as a Survival world shows it, with its
+// SURVIVAL branch (openspec/changes/survival-mode/design.md, decision 18). The open tree is the
+// page's #anchor (#starter, #town, #survival). Nothing moves until the
 // viewer drags, zooms, steps or presses Play.
 (function () {
   "use strict";
   const IMG = "mission-tree/items/";
   const UI = "mission-tree/ui/";
-  const TREE = location.hash.slice(1) === "town" ? "town" : "starter";
+  const HASH = location.hash.slice(1);
+  const TREE = HASH === "town" || HASH === "survival" ? HASH : "starter";
 
   // ---- what a mission can unlock: recipes and stations (a code the recipe list shows), or a skill
   // or branch (no recipe). new = a recipe the game does not have yet.
@@ -321,13 +324,108 @@
       obj: [o("take", 1, "take something from a chest in a town house", true)], unl: [],
       help: "Open a chest in a town house and take something." },
   ];
-  const U = TREE === "town" ? T_U : S_U;
-  const BRANCHES = TREE === "town" ? T_BRANCHES : S_BRANCHES;
-  const M = TREE === "town" ? T_M : S_M;
+
+  // ---- the Survival tab (survival-mode design 18): the starter tree as a Survival world shows it.
+  // The trunk gains the game's "Open the pack" (missions.ron), whose child the branch is; every
+  // Survival mission is marked mode: survival and is never shown in an Explorer world. Its
+  // unlocks are recipes the game does not have yet (NEW). Icons are stand-ins
+  // (tools/mockup_survival_icons.py).
+  const SV_U = Object.assign({}, S_U, {
+    straw: { name: "Straw", icon: "straw", kind: "recipe", new: true },
+    "stone-spear": { name: "Stone spear", icon: "stone-spear", kind: "recipe", new: true },
+    "meat-stew": { name: "Meat stew", icon: "meat-stew", kind: "recipe", new: true },
+    bedroll: { name: "Bedroll", icon: "bedroll", kind: "recipe", new: true },
+    "tanning-rack": { name: "Tanning rack", icon: "tanning-rack", kind: "station", new: true },
+    bow: { name: "Bow", icon: "bow", kind: "recipe", new: true },
+    "stone-arrows": { name: "Stone arrows", icon: "arrows", kind: "recipe", new: true },
+    "bone-arrows": { name: "Bone arrows", icon: "arrows", kind: "recipe", new: true },
+    "bronze-hunting-axe": { name: "Bronze hunting axe", icon: "hunting-axe", kind: "recipe", new: true },
+    "bronze-sword": { name: "Bronze sword", icon: "sword", kind: "recipe", new: true },
+    "bronze-spear": { name: "Bronze spear", icon: "bronze-spear", kind: "recipe", new: true },
+    "bronze-arrows": { name: "Bronze arrows", icon: "arrows", kind: "recipe", new: true },
+    "iron-sword": { name: "Iron sword (with the iron age)", icon: "iron-sword", kind: "recipe", new: true },
+    "straw-hat": { name: "Straw hat", icon: "straw-hat", kind: "recipe", new: true },
+    "wool-cloak": { name: "Wool cloak", icon: "wool-cloak", kind: "recipe", new: true },
+  });
+  const SV_BRANCHES = [S_BRANCHES[0], { key: "survival", name: "8 · SURVIVAL" }].concat(S_BRANCHES.slice(1));
+  const SV_ONLY = [
+    { id: "drink", b: "survival", icon: "water-drop", title: "Drink water", needs: [["pack"]],
+      obj: [o("drink", 3, "drink 3 sips of fresh water", true)], unl: ["straw"], help: "Crouch at a river or lake and hold use." },
+    { id: "forage", b: "survival", icon: "fruit", title: "Something to eat", needs: [["drink"]],
+      obj: [o("eat raw food", 2, "eat 2 raw foods: fruit or an egg")], unl: ["stone-spear"], help: "Pick fruit from a tree, or take an egg from a nest." },
+    { id: "spear", b: "survival", icon: "stone-spear", title: "Make a spear", needs: [["forage"]],
+      obj: [o("craft a stone spear", 1, "craft a stone spear (in the pack)")], unl: [], help: "In the pack, the Craft row makes a spear from a log, stone and fibre." },
+    { id: "hunt", b: "survival", icon: "hare", title: "Hunt", needs: [["spear"]],
+      obj: [o("kill", 1, "kill a wild hen, hare or goat", true)], unl: [], help: "Hunt with the spear. Thrown, it hits harder." },
+    { id: "cook-meat", b: "survival", icon: "roast-meat", title: "Cook meat", needs: [["hunt"]], after: ["fire"],
+      obj: [o("cook roast meat", 2, "cook 2 roast meat at the campfire")], unl: ["meat-stew"], help: "Put raw meat on the campfire." },
+    { id: "first-night", b: "survival", icon: "moon", title: "The first night", needs: [["cook-meat"]],
+      obj: [o("see the dawn", 1, "be out past 20:00 and alive at 06:00", true)], unl: ["bedroll"], help: "Keep warm, fed and watered until morning." },
+    // hunting and weapons
+    { id: "dress", b: "survival", icon: "hide", title: "Dress a kill", needs: [["hunt"]],
+      obj: [o("take a hide", 1, "take 1 hide from a kill", true)], unl: ["tanning-rack"], help: "Use a blade on the kill before it is gone." },
+    { id: "tan", b: "survival", icon: "tanning-rack", title: "Tan a hide", needs: [["dress"]],
+      obj: [o("make leather", 1, "make 1 leather at the tanning rack")], unl: ["bow", "stone-arrows"], help: "Hang a hide on the tanning rack." },
+    { id: "bow", b: "survival", icon: "bow", title: "Bow and arrows", needs: [["tan"]],
+      obj: [o("craft a bow", 1, "craft a bow"), o("craft arrows", 8, "craft 8 arrows")], unl: ["bone-arrows"], help: "Make the bow at the workbench." },
+    { id: "long-shot", b: "survival", icon: "arrows", title: "A long shot", needs: [["bow"]],
+      obj: [o("kill from 20 m", 1, "kill an animal with an arrow from 20 m or more", true)], unl: ["bronze-hunting-axe"], help: "Draw fully and aim above it." },
+    { id: "hunting-axe", b: "survival", icon: "hunting-axe", title: "A hunting axe", needs: [["long-shot"]], after: ["smelt"],
+      obj: [o("craft it", 1, "craft a bronze hunting axe"), o("dress a kill", 1, "dress a kill with it", true)],
+      unl: ["bronze-sword", "bronze-spear", "bronze-arrows"], help: "A kill dressed with it gives its hide and more meat." },
+    { id: "sword", b: "survival", icon: "sword", title: "A sword", needs: [["hunting-axe"]],
+      obj: [o("craft a sword", 1, "craft a bronze sword")], unl: ["iron-sword"], help: "Make it at the workbench from bronze." },
+    { id: "fend-off", b: "survival", icon: "fox", title: "Drive off a predator", needs: [["sword"]],
+      obj: [o("drive off", 1, "make a predator flee, or kill it", true)], unl: [], help: "Foxes come at night. Strike back." },
+    // heat and cold
+    { id: "straw", b: "survival", icon: "straw", title: "A cactus straw", needs: [["drink"]],
+      obj: [o("craft a straw", 1, "craft a straw (in the pack)")], unl: [], help: "Two fibre make a straw." },
+    { id: "cactus", b: "survival", icon: "cactus", title: "Cactus juice", needs: [["straw"]],
+      obj: [o("sip a cactus", 3, "drink 3 sips from a cactus", true)], unl: ["straw-hat"], help: "Hold the straw to a desert cactus." },
+    { id: "cool-down", b: "survival", icon: "sun", title: "Out of the heat", needs: [["cactus"]],
+      obj: [o("cool down", 1, "cool from hot to fine", true)], unl: [], help: "Stand in the shade or get in the water." },
+    { id: "warm-up", b: "survival", icon: "snowflake", title: "Warm by the fire", needs: [["cool-down"]], after: ["fire"],
+      obj: [o("warm up", 1, "warm from cold to fine by a fire", true)], unl: ["wool-cloak"], help: "Stand close to a campfire." },
+    { id: "dress-weather", b: "survival", icon: "wool-cloak", title: "Dress for the weather", needs: [["warm-up"]],
+      obj: [o("wear", 1, "wear a straw hat or a wool cloak", true)], unl: [], help: "Put it on in the pack." },
+    // the body in water
+    { id: "long-swim", b: "survival", icon: "water-bucket", title: "A long swim", needs: [["forage"]],
+      obj: [o("swim 100 m", 100, "swim 100 m without being winded")], unl: [], help: "Swim steady. Sprinting tires you fast." },
+    { id: "hold-breath", b: "survival", icon: "breath", title: "Hold your breath", needs: [["long-swim"]],
+      obj: [o("stay under 15 s", 1, "stay under for 15 s and surface", true)], unl: [], help: "Dive and come up before your breath runs out." },
+    { id: "soft-landing", b: "survival", icon: "splash", title: "Into the water", needs: [["hold-breath"]],
+      obj: [o("fall into water", 1, "fall 10 layers or more into deep water", true)], unl: [], help: "Deep water breaks a fall." },
+    // fire (wildfire)
+    { id: "relight", b: "survival", icon: "torch-out", title: "Relight a torch", needs: [["cook-meat"]], after: ["torch"],
+      obj: [o("relight", 1, "relight a torch the rain put out", true)], unl: [], help: "Touch it to a fire." },
+    { id: "put-out", b: "survival", icon: "water-bucket", title: "Put out a fire", needs: [["relight"]],
+      obj: [o("put out", 3, "put out 3 burning cells with water", true)], unl: [], help: "Fires start in the dry season." },
+  ];
+  const SV_M = TREE === "survival" ? (() => {
+    const copy = S_M.map((m) => Object.assign({}, m));
+    const pack = { id: "pack", b: "trunk", icon: "chest", title: "Open the pack", needs: [["gather"]],
+      obj: [o("open the pack", 1, "open the pack (I)")], unl: [], help: "Press I to open the pack." };
+    copy.splice(1, 0, pack);
+    copy.find((m) => m.id === "axe").needs = [["pack"]];
+    return copy.concat(SV_ONLY);
+  })() : [];
+  const U = TREE === "town" ? T_U : TREE === "survival" ? SV_U : S_U;
+  const BRANCHES = TREE === "town" ? T_BRANCHES : TREE === "survival" ? SV_BRANCHES : S_BRANCHES;
+  const M = TREE === "town" ? T_M : TREE === "survival" ? SV_M : S_M;
 
   const byId = Object.fromEntries(M.map((m) => [m.id, m]));
   const byIdRaw = byId;
-  const order = BRANCHES.flatMap((b) => M.filter((m) => m.b === b.key).map((m) => m.id));
+  let order = BRANCHES.flatMap((b) => M.filter((m) => m.b === b.key).map((m) => m.id));
+  // On the Survival tab some missions wait on another branch (after: fire, smelt, torch): the bot
+  // plays each mission once everything it waits on is done, in branch order otherwise.
+  if (TREE === "survival") {
+    const placed = new Set(), out = [];
+    while (out.length < order.length) {
+      const id = order.find((x) => !placed.has(x) && byId[x].needs.flat().concat(byId[x].after || []).every((y) => placed.has(y)));
+      placed.add(id); out.push(id);
+    }
+    order = out;
+  }
   const unlockedBy = {};
   M.forEach((m) => m.unl.forEach((u) => (unlockedBy[u] = m.id)));
 
@@ -876,7 +974,7 @@
 
   // ---- a world partway through: the bot in the middle of "Go fishing" (cast, one fish of three), or on
   // the Town tab in the middle of "Mark a road" (both stakes driven, four cells of eight marked)
-  const SAMPLE = TREE === "town" ? { m: "mark", i: 1 } : { m: "go-fishing", i: 1 };
+  const SAMPLE = TREE === "town" ? { m: "mark", i: 1 } : TREE === "survival" ? { m: "hunt", i: 0 } : { m: "go-fishing", i: 1 };
   const sample = steps.findIndex((s) => s.t === "obj" && s.m === SAMPLE.m && s.i === SAMPLE.i) + 1;
   // centre a mission at a level (used by the stills; the page never calls it on its own)
   function focus(id, level) {
@@ -901,7 +999,8 @@
   if (location.hash.slice(1) !== TREE && location.hash.slice(1) !== "crew") history.replaceState(null, "", "#" + TREE);
   window.addEventListener("hashchange", () => {
     if (location.hash.slice(1) === "crew") return;
-    const want = location.hash.slice(1) === "town" ? "town" : "starter";
+    const h = location.hash.slice(1);
+    const want = h === "town" || h === "survival" ? h : "starter";
     if (want !== TREE) location.reload();
   });
 })();

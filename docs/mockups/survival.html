@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Survival Mode</title>
+<meta name="description" content="Pale Blue Dot's Survival mode: the survival HUD by day and at night beside Explorer, the stamina and food curve on sliders, a forest fire at night in the dry season, and the hunting weapons at true scale.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Tokens: the stone-and-carved-wood kit's colours (tools/art/ui_art.py, Sweaft-64), as mission-tree.html.
+   The game UI has one look by day and by night, so both schemes share them. */
+:root {
+  --ink: #010000; --face: #1f3b52; --well: #011c34;
+  --text: #eab798; --title: #faaf5c; --label: #fffefe; --label-dim: #92a3b2;
+  --stone-1: #1f3b52; --stone-2: #3e586e; --stone-3: #92a3b2;
+  --rune: #84e3b5; --rune-dim: #53998b;
+  --page: #010e1a; --page-2: #011c34; --page-line: #1f3b52; --page-text: #bfcad7; --page-dim: #92a3b2;
+  --hp: #d8443a; --st: #c9d24a; --fd: #e0893a; --wt: #4fa3e0; --br: #bfe6ff;
+  --body: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #010e1a; } }
+:root[data-theme="dark"] { --page: #010e1a; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--page); color: var(--page-text); font: 17px/1.3 var(--body); display: flex; flex-direction: column; overflow: hidden; }
+a { color: var(--rune); }
+img { image-rendering: pixelated; }
+header.top { padding: 8px 16px 6px; border-bottom: 1px solid var(--page-line); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+header.top h1 { font: 600 24px/1.1 var(--body); color: var(--title); margin: 0; letter-spacing: 1px; text-shadow: 0 2px 0 var(--ink); }
+.pbd-tracker { margin: 0; font: 16px/1.2 var(--body); }
+.infobtn { font: 600 18px/1 var(--body); width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--rune-dim); background: var(--page-2); color: var(--rune); cursor: pointer; }
+nav.tabs { display: flex; gap: 4px; padding: 6px 16px 0; flex-wrap: wrap; }
+.tab { border-style: solid; border-width: 12px 12px 0; border-image: url(mission-tree/ui/oak-tab-shut.png) 56 56 0 fill stretch; image-rendering: pixelated;
+  font: 600 17px/1 var(--body); letter-spacing: 1px; color: var(--label); text-decoration: none; padding: 0 6px 6px; }
+.tab[aria-selected="true"] { border-image-source: url(mission-tree/ui/oak-tab-open.png); color: var(--ink); }
+.tab:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--rune); }
+main { flex: 1; min-height: 0; position: relative; border-top: 3px solid var(--stone-2); }
+section.pane { position: absolute; inset: 0; display: none; }
+section.pane.on { display: flex; }
+.bar { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 6px 10px; background: var(--page-2); border-bottom: 1px solid var(--page-line); }
+.btn { font: 600 15px/1 var(--body); color: var(--label); background: var(--stone-1); border: 2px solid var(--stone-2); padding: 6px 10px; cursor: pointer; }
+.btn[aria-pressed="true"] { background: #5a3a1c; border-color: var(--title); color: var(--title); }
+.lbl { font: 600 13px/1 var(--body); letter-spacing: 1px; color: var(--page-dim); }
+label.sl { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; font-size: 14px; color: var(--page-text); }
+label.sl input { grid-column: 1 / 3; width: 100%; }
+label.sl b { color: var(--title); font-weight: 600; }
+dialog.infomodal { width: min(780px, 94vw); max-height: 88vh; max-height: 88dvh; padding: 0; border: 4px solid var(--stone-2); outline: 2px solid var(--ink); background: var(--page-2); color: var(--page-text); }
+dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
+.mhead { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--page-line); position: sticky; top: 0; background: var(--page-2); }
+.mhead b { color: var(--title); font-size: 20px; }
+.mhead button { font-size: 20px; background: none; border: 0; color: var(--label); cursor: pointer; }
+.mbody { padding: 4px 16px 16px; font-size: 16px; }
+.mbody h3 { color: var(--title); margin: 14px 0 4px; font-size: 18px; }
+.mbody table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.mbody td, .mbody th { border: 1px solid var(--page-line); padding: 3px 6px; text-align: left; vertical-align: top; }
+.mbody section { display: none; } .mbody section.on { display: block; }
+
+/* ---- HUD tab ---- */
+#hud { flex-direction: column; }
+.hudrow { flex: 1; min-height: 0; display: flex; gap: 10px; padding: 10px; }
+.view { flex: 1; min-width: 0; position: relative; background: #000; overflow: hidden; }
+.view canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; object-fit: cover; }
+.view .tag { position: absolute; top: 8px; left: 8px; font: 600 15px/1 var(--body); letter-spacing: 1px; color: var(--label); background: rgba(1,14,26,.7); padding: 4px 8px; }
+.ov { position: absolute; inset: 0; pointer-events: none; }
+.vign { position: absolute; inset: 0; }
+.hotbar { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); display: flex; gap: 2px; }
+.slot { width: 44px; height: 44px; background: url(mission-tree/ui/stone-slot-idle.png) center / 100% 100%; position: relative; }
+.slot.sel { background-image: url(mission-tree/ui/stone-slot-selected.png); }
+.slot img { position: absolute; left: 7px; top: 7px; width: 30px; height: 30px; }
+.slot .wear { position: absolute; left: 7px; right: 7px; bottom: 5px; height: 3px; background: #011c34; }
+.slot .wear i { display: block; height: 100%; background: var(--rune); }
+.bars { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); display: flex; gap: 6px; align-items: flex-end; }
+.sbar { width: 92px; height: 22px; position: relative; border-style: solid; border-width: 6px; border-image: url(mission-tree/ui/stone-bar.png) 20 fill stretch; image-rendering: pixelated; }
+.sbar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--c); }
+.sbar i.s { background: repeating-linear-gradient(90deg, rgba(0,0,0,.35) 0 3px, transparent 3px 6px), var(--c); opacity: .55; }
+.sbar img { position: absolute; left: -10px; top: -7px; width: 22px; height: 22px; }
+.sbar.flash i { animation: fl .5s steps(2) infinite; }
+@keyframes fl { 50% { opacity: .3; } }
+.therm { display: flex; align-items: center; gap: 2px; height: 22px; font: 600 14px/1 var(--body); color: var(--label); text-shadow: 0 1px 0 var(--ink); }
+.therm .tube { width: 10px; height: 26px; background: #011c34; border: 2px solid var(--stone-2); position: relative; border-radius: 5px 5px 6px 6px; }
+.therm .tube i { position: absolute; left: 1px; right: 1px; bottom: 1px; border-radius: 3px; }
+.therm img { width: 20px; height: 20px; }
+.breath { position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%); display: flex; gap: 2px; }
+.breath img { width: 18px; height: 18px; }
+.cap { position: absolute; left: 50%; top: 38%; transform: translateX(-50%); font: 600 22px/1 var(--body); color: var(--label); text-shadow: 0 2px 0 var(--ink); }
+.compass { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); width: 46%; height: 22px; border-style: solid; border-width: 6px; border-image: url(mission-tree/ui/stone-bar.png) 20 fill stretch; font: 600 12px/10px var(--body); color: var(--label); display: flex; justify-content: space-around; }
+
+/* ---- Stamina tab ---- */
+#stamina { flex-direction: row; }
+.side { width: 300px; overflow: auto; padding: 10px; border-right: 1px solid var(--page-line); display: flex; flex-direction: column; gap: 8px; }
+.graphs { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 10px; gap: 8px; }
+.graphs canvas { width: 100%; background: #06121d; border: 1px solid var(--page-line); }
+#gMain { flex: 1; min-height: 0; }
+#gCost { height: 150px; flex: none; }
+.read { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 15px; }
+.read b { color: var(--title); }
+.key { display: flex; gap: 12px; font-size: 14px; flex-wrap: wrap; }
+.key span::before { content: ""; display: inline-block; width: 14px; height: 4px; margin-right: 5px; vertical-align: middle; background: var(--c); }
+
+/* ---- 3D tabs ---- */
+#fire, #weapons { flex-direction: column; }
+.stage { flex: 1; min-height: 0; position: relative; }
+.stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.wlabel { position: absolute; transform: translate(-50%, -100%); font: 600 14px/1 var(--body); color: var(--label); background: rgba(1,14,26,.72); padding: 3px 6px; pointer-events: none; white-space: nowrap; }
+.stat { position: absolute; right: 10px; top: 10px; font: 600 14px/1.4 var(--body); color: var(--label); background: rgba(1,14,26,.72); padding: 6px 10px; }
+
+/* ---- Missions tab ---- */
+#missions { align-items: center; justify-content: center; }
+.go { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.go a.btn { font-size: 20px; padding: 12px 18px; text-decoration: none; }
+.go img { width: min(720px, 92vw); border: 2px solid var(--stone-2); }
+
+@media (max-width: 760px) {
+  .hudrow { flex-direction: column; }
+  #stamina { flex-direction: column; }
+  .side { width: auto; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--page-line); }
+  .sbar { width: 58px; }
+  .slot { width: 30px; height: 30px; } .slot img { left: 5px; top: 5px; width: 20px; height: 20px; }
+  .bars { bottom: 44px; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>SURVIVAL</h1>
+  <button class="infobtn" id="infoBtn" aria-label="About this tab" title="About this tab">i</button>
+  <p class="pbd-tracker"><a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
+</header>
+<nav class="tabs" role="tablist" aria-label="Survival mockups">
+  <a class="tab" role="tab" href="#hud" data-tab="hud">HUD</a>
+  <a class="tab" role="tab" href="#stamina" data-tab="stamina">STAMINA</a>
+  <a class="tab" role="tab" href="#fire" data-tab="fire">FIRE</a>
+  <a class="tab" role="tab" href="#weapons" data-tab="weapons">WEAPONS</a>
+  <a class="tab" role="tab" href="#missions" data-tab="missions">MISSIONS</a>
+</nav>
+<main>
+  <!-- HUD -->
+  <section class="pane" id="hud" aria-label="Survival HUD">
+    <div class="bar">
+      <span class="lbl">TIME</span>
+      <button class="btn" data-time="day">Day</button><button class="btn" data-time="night">Night</button>
+      <span class="lbl">STATE</span>
+      <select class="btn" id="hudState" aria-label="State">
+        <option value="fine">Fields, fine</option>
+        <option value="hot">Desert noon, watered</option>
+        <option value="stroke">Desert, out of water: heat stroke</option>
+        <option value="cold">Tundra, cold</option>
+        <option value="winded">Winded after a sprint</option>
+        <option value="under">Under water</option>
+        <option value="worn">A worn and a broken tool</option>
+        <option value="dead">You died</option>
+      </select>
+    </div>
+    <div class="hudrow">
+      <div class="view" id="vEx"><canvas width="320" height="180"></canvas><div class="ov"></div><span class="tag">EXPLORER</span></div>
+      <div class="view" id="vSv"><canvas width="320" height="180"></canvas><div class="ov"></div><span class="tag">SURVIVAL</span></div>
+    </div>
+  </section>
+
+  <!-- STAMINA -->
+  <section class="pane" id="stamina" aria-label="Stamina and food">
+    <div class="side" id="sliders">
+      <label class="sl">Case <select class="btn" id="case">
+        <option value="sprint">A minute of sprinting</option>
+        <option value="swim">A 200 m swim</option>
+        <option value="day">A world day of play</option>
+      </select></label>
+    </div>
+    <div class="graphs">
+      <div class="key"><span style="--c:#c9d24a">Stamina</span><span style="--c:#8a6a2a">Strain owed</span><span style="--c:#e0893a">Food spent</span><span style="--c:#5d7387">Food spent standing about</span></div>
+      <canvas id="gMain" width="1200" height="520"></canvas>
+      <div class="read" id="read"></div>
+      <canvas id="gCost" width="1200" height="150"></canvas>
+    </div>
+  </section>
+
+  <!-- FIRE -->
+  <section class="pane" id="fire" aria-label="Forest fire">
+    <div class="bar">
+      <button class="btn" id="fPlay" aria-pressed="true">Pause</button>
+      <button class="btn" id="fReset">Reset</button>
+      <span class="lbl">TIME</span><button class="btn" data-ftime="night">Night</button><button class="btn" data-ftime="day">Day after</button>
+      <label class="sl" style="width:150px">Fire danger <b id="vDanger"></b><input type="range" id="fDanger" min="0" max="1" step="0.05" value="0.8"></label>
+      <label class="sl" style="width:150px">Wind <b id="vWind"></b><input type="range" id="fWind" min="0" max="10" step="0.5" value="4"></label>
+      <label class="sl" style="width:150px">Rain <b id="vRain"></b><input type="range" id="fRain" min="0" max="8" step="0.25" value="0"></label>
+      <span class="lbl">CLICK A CELL TO LIGHT IT</span>
+    </div>
+    <div class="stage" id="fStage"><div class="stat" id="fStat"></div></div>
+  </section>
+
+  <!-- WEAPONS -->
+  <section class="pane" id="weapons" aria-label="Weapons">
+    <div class="bar">
+      <span class="lbl">TIME</span><button class="btn" data-wtime="day">Day</button><button class="btn" data-wtime="night">Night</button>
+      <span class="lbl">LOOK AT</span>
+      <button class="btn" data-wlook="all">All</button>
+      <button class="btn" data-wlook="spear">Spear</button>
+      <button class="btn" data-wlook="bow">Bow</button>
+      <button class="btn" data-wlook="axe">Hunting axe</button>
+      <button class="btn" data-wlook="sword">Sword</button>
+    </div>
+    <div class="stage" id="wStage"></div>
+  </section>
+
+  <!-- MISSIONS -->
+  <section class="pane" id="missions" aria-label="Survival missions">
+    <div class="go">
+      <a class="btn" href="mission-tree.html#survival">Open the Survival tree (M33)</a>
+    </div>
+  </section>
+</main>
+
+<dialog class="infomodal" id="info">
+  <div class="mhead"><b id="infoTitle">Survival</b><button id="infoClose" aria-label="Close">✕</button></div>
+  <div class="mbody">
+    <section data-for="all">
+      <p>The owner, 2026-11-26: <em>"start working on phase 4, we're gonna work on survival mode which will add new branch to starter missions to handle survival."</em> This page draws <code>openspec/changes/survival-mode</code> (decisions 9 and 12 to 18) and <code>openspec/changes/wildfire</code>. Written up, not built: nothing here is in the game yet. Five tabs, each a bare <code>#anchor</code>; one 3D view at a time (Fire, Weapons), made when its tab first opens.</p>
+    </section>
+    <section data-for="hud">
+      <h3>HUD: Explorer beside Survival</h3>
+      <p>The same view twice: on the left an Explorer world (today's calm game: the hotbar and the compass, nothing else), on the right a Survival world. Day and Night: at night the scene is lit by its own campfire and torch and a dim moon.</p>
+      <ul>
+        <li><b>Four short bars</b> above the hotbar, Survival only: health (red), stamina (yellow), hunger (orange), water (blue). Hatching on the stamina bar is the strain still owed: points that cost half as much again in food to refill (design 12).</li>
+        <li><b>A thermometer</b> at their end with the body's temperature, a trend arrow and the cause (sun, snow, fire, water) beside it (design 13).</li>
+        <li><b>A flame</b> beside the thermometer where it is dry enough to burn (<code>wildfire</code> design 2), no text.</li>
+        <li><b>Breath</b> shows only under water, as bubbles (design 5).</li>
+        <li><b>States</b> are the bars' and the screen's, never a line of text: winded flashes the empty stamina bar; heat warms the screen's edge, and heat stroke fades it to dark; cold frosts it; a worn tool has a thin bar under its slot, red below a tenth, and a broken one is cracked and dim (design 11). The one line is "You died" (design 9).</li>
+        <li>Bars and slots are the game's stone-and-carved-wood kit (<code>assets/ui</code>, as M33). Item icons are the game's where it has them; the spear, hide, meat and marks are stand-ins (<code>tools/mockup_survival_icons.py</code>).</li>
+        <li>The scene is a flat pixel painting standing in for the game's view, lit per pixel by every light in it, so the HUD can be judged by day and at night.</li>
+      </ul>
+      <h3>The states</h3>
+      <table><tr><th>State</th><th>Where</th><th>Body</th></tr>
+      <tr><td>Fields, fine</td><td>temperate grass</td><td>37.0 C</td></tr>
+      <tr><td>Desert noon, watered</td><td>38 C air, 900 W/m^2 sun: feels 43 C</td><td>settles at 39.1 C: hot, drinking fast</td></tr>
+      <tr><td>Out of water: heat stroke</td><td>the same, water empty</td><td>past 40 C in about 8 minutes: 10 health, passes out 30 s</td></tr>
+      <tr><td>Tundra, cold</td><td>-18 C, 6 m/s wind: feels -20 C</td><td>heading for 34 C; a cloak and a fire hold it</td></tr>
+      <tr><td>Winded</td><td>after 100 s of sprinting</td><td>no sprint until a quarter is back</td></tr>
+      <tr><td>Under water</td><td>a dive</td><td>breath 30 s, then health</td></tr></table>
+    </section>
+    <section data-for="stamina">
+      <h3>Stamina and food</h3>
+      <p>The owner: <em>"Stamina regen relies on food levels. It'll consume stored energy when it regens. Half stamina consumes less food. Pushing or exerting yourself further, the stamina bar will decrease slowly but also consume food at the same time and consume more food to regen back up."</em></p>
+      <p>The graph runs <code>survival-mode</code> design 12 in the page, the same model as <code>tools/survival/stamina_model.py</code> (10 ms steps). Every slider is a number of the proposed <code>survival.ron</code>; move one and the curve, the totals and the cost-per-point chart redraw.</p>
+      <ul>
+        <li><b>Spend</b>: sprint and swim drain the bar slowly and burn food while they do (strain); a jump and a climbed metre spend a little and leave no strain. Tool work spends nothing.</li>
+        <li><b>Refill</b>: after the delay, at the rate, each point costing food at the bar's height: the low cost up to half, rising in a straight line to the high cost at full (the lower chart). Strain multiplies it.</li>
+        <li><b>Food sets the rate</b>: full at 50 food or more, down to 40% at none.</li>
+      </ul>
+      <h3>The worked examples (design defaults)</h3>
+      <table><tr><th>Case</th><th>Food spent</th><th>Of it the effort</th></tr>
+      <tr><td>A minute of sprinting, then 10 s</td><td>6.28</td><td>4.72</td></tr>
+      <tr><td>The same 70 s walking</td><td>1.56</td><td>0</td></tr>
+      <tr><td>A 200 m swim (50 s), then 6 s</td><td>4.77</td><td>3.53</td></tr>
+      <tr><td>A world day (48 min) of normal play</td><td>112.9</td><td>48.9</td></tr>
+      <tr><td>A world day standing about</td><td>64.0</td><td>0</td></tr></table>
+      <p>A normal day eats a little over one full bar of food: three or four meals (roast meat fills 35, grilled fish 25).</p>
+    </section>
+    <section data-for="fire">
+      <h3>A forest fire at night in the dry season</h3>
+      <p>The owner: <em>"Survival: you can start foresr fires during dry seasons. Torches can light up stuff or can be out out by rain."</em> This tab runs <code>wildfire</code> design 3, 5 and 7 on a patch of hex cells (2.83 m, 1 m layers): grass, shrubs and broadleaf and conifer trees, a stream, a dug break of bare soil, and a player's tilled field.</p>
+      <ul>
+        <li><b>The rule</b>: every second each burning cell tries each of its six neighbours with fuel, at a hazard of the fuel's spread x the fire danger x the wind (faster downwind, slower up it) x the slope x the rain. Grass burns 12 s, a tree 120 s (its crown, then embers).</li>
+        <li><b>It stops</b> at water, the dug break and the player's field (a change the world makes never touches the player's), and in rain: slide Rain up and the front slows, then goes out.</li>
+        <li><b>It leaves</b> ash and charred snags. "Day after" shows the scar by daylight; the game grows it back over 60 world days.</li>
+        <li><b>Lit by its own fire</b>: every burning cell lights the ground and trees near it (grouped into up to 48 lights), under a dim moon. Flames, smoke and embers are particles.</li>
+        <li>The fire spreads because the world spreads it; Pause stops it. Click a cell to light it with a torch.</li>
+        <li>Trees here are this page's stand-ins for the game's tree draw, shaped and textured, not the game's own models.</li>
+      </ul>
+    </section>
+    <section data-for="weapons">
+      <h3>The weapons at true scale</h3>
+      <p>The owner: <em>"Making spears, arrows , hunting axe, swords will all be a thing."</em> <code>survival-mode</code> design 16, beside a 1.8 m figure on the hex grid (2.83 m cells), by day and at night by a campfire:</p>
+      <table><tr><th>Weapon</th><th>Size</th><th>Made</th><th>Damage</th></tr>
+      <tr><td>Stone spear</td><td>2.0 m</td><td>by hand: 1 log, 2 stone, 2 fibre</td><td>14, thrown 22</td></tr>
+      <tr><td>Bow and arrows</td><td>1.5 m bow, 0.75 m arrows</td><td>workbench: 2 planks, 2 rope; arrows by hand</td><td>18 a stone arrow</td></tr>
+      <tr><td>Bronze hunting axe</td><td>0.6 m</td><td>workbench: 2 bronze, 1 planks, 1 leather</td><td>24</td></tr>
+      <tr><td>Bronze sword</td><td>0.9 m</td><td>workbench: 3 bronze, 1 planks, 1 leather</td><td>28</td></tr></table>
+      <ul>
+        <li>Each is one fitted form with smooth normals and its own 32 px pixel texture (wood grain, knapped stone, hammered bronze, leather wrap), sampled nearest: a binding or a wrap is painted, never a stuck-on box.</li>
+        <li>The figure is a stand-in yardstick for the game's walker.</li>
+        <li>Drag to turn, scroll or pinch to zoom; nothing turns on its own. "Look at" moves the camera to one weapon.</li>
+        <li>The held models and their swings go through the <code>animation</code> skill (M36) before the game.</li>
+      </ul>
+    </section>
+    <section data-for="missions">
+      <h3>The Survival branch</h3>
+      <p>The branch is drawn on M33, the mission tree, as its Survival tab (<code>mission-tree.html#survival</code>), so there is one copy of the tree (CLAUDE.md, "Update the existing artifact"). <code>survival-mode</code> design 18: 23 missions off "Open the pack", shown only in Survival worlds.</p>
+    </section>
+  </div>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="survival/common.js"></script>
+<script src="survival/hud.js"></script>
+<script src="survival/stamina.js"></script>
+<script src="survival/fire.js"></script>
+<script src="survival/weapons.js"></script>
+<script>
+// Tabs: one pane at a time, the open one a bare #anchor; a 3D tab's view is made when it first opens and
+// its loop stopped when it closes (CLAUDE.md, "One 3D view at a time, in tabs").
+(function () {
+  const TABS = ["hud", "stamina", "fire", "weapons", "missions"];
+  const mods = { hud: window.hudTab, stamina: window.staminaTab, fire: window.fireTab, weapons: window.weaponsTab };
+  let cur = null;
+  function show(t) {
+    if (!TABS.includes(t)) t = "hud";
+    if (cur && mods[cur] && mods[cur].stop) mods[cur].stop();
+    cur = t;
+    document.querySelectorAll("section.pane").forEach((p) => p.classList.toggle("on", p.id === t));
+    document.querySelectorAll("[data-tab]").forEach((a) => a.setAttribute("aria-selected", String(a.dataset.tab === t)));
+    if (mods[t] && mods[t].start) mods[t].start();
+    if (location.hash.slice(1) !== t) history.replaceState(null, "", "#" + t);
+  }
+  window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+  show(location.hash.slice(1));
+  const info = document.getElementById("info");
+  document.getElementById("infoBtn").addEventListener("click", () => {
+    info.querySelectorAll(".mbody section").forEach((s) => s.classList.toggle("on", s.dataset.for === cur || s.dataset.for === "all"));
+    info.showModal();
+  });
+  document.getElementById("infoClose").addEventListener("click", () => info.close());
+  info.addEventListener("click", (e) => { if (e.target === info) info.close(); });
+  window.survivalPage = { show };
+})();
+</script>
+</body>
+</html>

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mission Tree</title>
-<meta name="description" content="Pale Blue Dot's Missions screen as two trees, the starter tree that unlocks the tech and the town tree of phase 3, each with a bot run, and the CREW tab of crew missions with each player's share.">
+<meta name="description" content="Pale Blue Dot's Missions screen as trees: the starter tree that unlocks the tech, the town tree of phase 3, the starter tree with its Survival branch, each with a bot run, and the CREW tab of crew missions with each player's share.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
 <style>
@@ -291,6 +291,7 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
 <nav class="trees" role="tablist" aria-label="Mission trees">
   <a class="ttab" role="tab" href="#starter" data-tree="starter" aria-selected="true">STARTER</a>
   <a class="ttab" role="tab" href="#town" data-tree="town" aria-selected="false">TOWN</a>
+  <a class="ttab" role="tab" href="#survival" data-tree="survival" aria-selected="false">SURVIVAL</a>
   <a class="ttab" role="tab" href="#crew" data-tree="crew" aria-selected="false">CREW</a>
 </nav>
 <div class="bar">
@@ -327,7 +328,21 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
 <dialog class="infomodal" id="info">
   <div class="mhead"><b>The mission tree</b><button id="infoClose" aria-label="Close">✕</button></div>
   <div class="mbody">
-    <p>Three tabs: a tree each on <b>Starter</b> (<code>#starter</code>) and <b>Town</b> (<code>#town</code>), as the game's Missions screen will have them, and <b>Crew</b> (<code>#crew</code>), the crew missions of multiplayer.</p>
+    <p>Four tabs: a tree each on <b>Starter</b> (<code>#starter</code>) and <b>Town</b> (<code>#town</code>), as the game's Missions screen will have them; <b>Survival</b> (<code>#survival</code>), the starter tree as a Survival world shows it; and <b>Crew</b> (<code>#crew</code>), the crew missions of multiplayer.</p>
+    <h3>The SURVIVAL tab (version 8) <span class="nw">NEW</span></h3>
+    <p>The owner, 2026-11-26: <em>"start working on phase 4, we're gonna work on survival mode which will add new branch to starter missions to handle survival"</em>. The tab draws <code>survival-mode</code> design 18: the starter tree with one more branch, <b>8 · SURVIVAL</b>, shown only in Survival worlds. Written up, not built.</p>
+    <ul>
+      <li><b>One more branch, not a third tree</b>: the survival loop is the starter loop with its pressures on. Every mission in it is marked <code>mode: survival</code> and never shown or counted in an Explorer world.</li>
+      <li><b>It hangs off "Open the pack"</b>, the trunk's second mission in the game (<code>missions.ron</code>; this tab adds it to the trunk drawn here), so the first thing a Survival player is told is to drink: water empties first.</li>
+      <li><b>Its trunk</b>: drink water, something to eat, a spear, a hunt, cook meat (waits on Make a fire), the first night (unlocks the bedroll, which sets where you wake).</li>
+      <li><b>Hunting and weapons</b> off the hunt: dress a kill, tan a hide, bow and arrows, a long shot, a hunting axe (waits on Smelt bronze), a sword, drive off a predator.</li>
+      <li><b>Heat and cold</b> off drinking: a cactus straw, cactus juice, out of the heat, warm by the fire (waits on Make a fire), dress for the weather.</li>
+      <li><b>The body in water</b> off eating: a long swim, hold your breath, into the water.</li>
+      <li><b>Fire</b> (<code>wildfire</code>) off cooking: relight a torch the rain put out (waits on Light the night), put out a fire.</li>
+      <li>Rewards are unlocks, as on the starter tree: the branch opens the survival recipes in the order a player needs them.</li>
+      <li>The tab opens with the bot partway through "Hunt": the trunk, drinking, eating and the spear done.</li>
+      <li>Icons on this tab for things the game does not have yet (spears, bow, arrows, hunting axe, sword, straw, hide, the marks for heat, cold, breath and the moon) are stand-ins from <code>tools/mockup_survival_icons.py</code>.</li>
+    </ul>
     <h3>The CREW tab (version 7) <span class="nw">NEW</span></h3>
     <p>The crew missions of <code>coop-missions</code> (design 7: "The panel shows the crew and each share"). A crew is whoever is in the world; its progress is the world's, counted by the server, so a player who joins halfway sees it as it stands and adds to it. Each objective shows the crew's total and a short bar per player in their colour, so nobody carries the crew unseen.</p>
     <ul>
@@ -391,6 +406,7 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
       <li><b>Version 5</b> (2026-11-22): the Town tab, phase 3's town tree; the starter tree on its own tab.</li>
       <li><b>Version 6</b> (2026-11-23): the Town tab's Carpentry branch (<code>furniture</code>), with the game's own furniture icons.</li>
       <li><b>Version 7</b> (2026-11-23): the Crew tab, crew missions for multiplayer (<code>coop-missions</code>).</li>
+      <li><b>Version 8</b> (2026-11-26): the Survival tab, the starter tree's Survival branch (<code>survival-mode</code> design 18).</li>
     </ul>
     <h3>Art</h3>
     <p>Panels, plaques, slots, checks and bars are the game's own stone-and-carved-wood kit (<code>assets/ui/stone</code>, <code>assets/ui/oak</code>); item icons are the game's (<code>assets/items</code>), kept with their 1 px UI outline. The yard hen is the husbandry mockup's sprite and the map glyph the UI mockup's, since the game has no item icon for either. Where a mission has no icon of its own (a rowboat, a town), it borrows the nearest good. Help lines for missions that exist today are the game's (<code>missions.ron</code>); the others are drafted for this mockup.</p>
