@@ -323,3 +323,50 @@ stands, both ways round, differ only where the grass sways, a townsperson
 walks and the clouds move (`still-check`). The one frame of 288 ms in the
 second run is the main thread: traced, the spikes left standing in town are
 `fish::places::tiles` (27 to 45 ms when it runs long), the next cut.
+
+**The half hour, after cut 6.** `town-soak` from Holbrook, 31 minutes,
+`--no-audio` (the bot did not finish its first gathering trip: it kept
+restarting its walk away from town, so it played round the town's edge, not
+the whole loop). Over the run: p50 12.1, p80 15.8, p99 22.1 ms; 88% of
+frames at 60 fps or better, 99.6% at 40; memory and entities flat
+(12,472 entities, 40.6 MB of mesh at the start and the end). By stretch:
+
+| Minutes | GPU | terrain | shadow | main | at 60 fps |
+|---|---|---|---|---|---|
+| 0.5 to 2 | 9.7 | 3.4 | 5.1 | 8.5 | 98% |
+| 2 to 10 | 11.3 to 12.4 | 5.1 to 5.9 | 4.7 to 5.0 | 10.1 to 14.0 | 68 to 94% |
+| 10 to 20 | 14.0 to 15.1 | 4.7 to 6.4 | 6.3 to 9.3 | 5.9 to 7.0 | 60 to 78% |
+| 20 to 24 | 10.9 to 12.4 | 4.2 to 4.6 | 6.1 to 7.1 | 5.7 to 5.9 | 90 to 96% |
+| 24 to 31 | 7.7 to 8.2 | 4.1 | 3.0 to 3.4 | 5.9 | 100% |
+
+Two things are left. In minutes 2 to 10 the main thread climbs to 14 ms
+while the bot walks round the town's edge (traced next). In minutes 10 to
+20 the sun is low (the day runs about two minutes an hour: 10:00 at the
+start, the dusk lamps at 20:24) and the shadow pass is 6 to 9 ms.
+
+Priced at 18:30 in Holbrook (`shadow-check`, `PBD_SHADOW_SKIP`): the pass
+is 5.9 ms and its four cascades shade 85 million fragments a frame; with
+the trees' crowns left out, 2.5 ms and 21 million, and with the ground
+left out, 4.8 ms. A low sun looks through a forest sideways: each texel's
+ray crosses crown after crown, and every leaf card's fragment runs the
+cut-out test, since a card with a discard cannot be rejected before its
+shader by depth it has not written yet.
+
+**Cut 7: a town's bake no longer re-uploads the town.** Traced over the
+soak's first 3.5 minutes (the trace build; every number inflated), the
+main thread's climb in minutes 2 to 10 is `field_light::bake_town_outsides`
+(0 in town, 14.7 ms a frame at the town's edge), the mesh allocator (0.5 to
+8.6) and the mesh extract (2.1). Each fine set that lands, and each dig,
+changes the field's light version, and every town in reach is baked again,
+a slice a frame. The bake took each town's mesh mutably on every frame of
+it, even a frame it only read or had no budget left: a mutably taken mesh
+is a changed one, so Bevy uploaded the whole town again every frame a bake
+was in progress. The cut: the mesh is read with `get` and taken mutably
+only to swap the finished bake in. Nothing drawn changes.
+
+`town-soak` minutes 2 to 4, against the half hour above: the main thread
+10 ms (was 13.5 to 14), frames at 60 fps 87 to 94% (were 68 to 79%). The
+run had main-thread stalls of 0.2 to 1.5 s in its first 40 s of play, when
+the bot plans its first walk (`showcase: planned 7 steps`); the bot's
+planner is the measuring instrument's cost, not the game's, and is taken
+off the main thread next so the numbers are the game's.

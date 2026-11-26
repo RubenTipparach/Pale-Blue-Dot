@@ -1377,7 +1377,10 @@ fn bake_town_outsides(
             state.pending = None;
             continue;
         }
-        let Some(m) = meshes.get_mut(&mesh.0) else {
+        // Read, not written, until a bake is swapped in (`memory-leak` cut
+        // 7): a mesh taken mutably is a changed mesh, and Bevy uploads the
+        // whole town to the GPU again, every frame a bake was in progress.
+        let Some(m) = meshes.get(&mesh.0) else {
             continue;
         };
         let Some(count) = m.attribute(Mesh::ATTRIBUTE_POSITION).map(|a| a.len()) else {
@@ -1387,7 +1390,9 @@ fn bake_town_outsides(
             // Open sky everywhere: no field to read, nothing to slice.
             let open = vec![[1.0f32, 0.0]; count];
             log_bake_change(frame, true, uv_1(m), &open);
-            swap_bake(m, state, open, now_s);
+            if let Some(m) = meshes.get_mut(&mesh.0) {
+                swap_bake(m, state, open, now_s);
+            }
             state.baked = Some(BakeSource::Open);
             state.pending = None;
             continue;
@@ -1443,7 +1448,9 @@ fn bake_town_outsides(
             let done = std::mem::take(&mut pending.done);
             state.pending = None;
             log_bake_change(frame, false, uv_1(m), &done);
-            swap_bake(m, state, done, now_s);
+            if let Some(m) = meshes.get_mut(&mesh.0) {
+                swap_bake(m, state, done, now_s);
+            }
             state.baked = Some(want);
         }
     }

@@ -1,0 +1,17 @@
+// MEASUREMENT (`memory-leak`, towns at 60 fps): stand in Holbrook in the
+// late afternoon, when the sun's cascades cost the most, and turn once.
+(
+    goal: "Goal: stand in town in the late afternoon",
+    at: None,
+    hour: 18.5,
+    shots: [
+        (
+            caption: "Stand and turn",
+            max_s: 200.0,
+            acts: [
+                Wait(40.0), Look(90.0, 0.0, 1.0), Wait(15.0),
+                Look(90.0, 0.0, 1.0), Wait(15.0), Look(90.0, 0.0, 1.0), Wait(15.0),
+            ],
+        ),
+    ],
+)
