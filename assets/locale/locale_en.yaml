@@ -1159,9 +1159,9 @@ mission:
       "1": Dig coal
     title: Find ore
   pack:
-    help: Press Tab to open your pack and craft with what you gathered.
+    help: "Press I or Tab to open your pack and craft with what you gathered."
     objective:
-      "0": Open the pack
+      "0": "Open the pack (I)"
     title: Open your pack
   pen:
     help: Set fences on the cell edges round a yard, close it with a gate, and lead your animal in.
