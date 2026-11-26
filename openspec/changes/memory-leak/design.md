@@ -251,3 +251,34 @@ on the route (the bot stalled in the second run, so it stood more):
 
 The bot's stall near Holbrook comes and goes (a different cell each run),
 so further A/Bs use a fixed scene that does not walk.
+
+**Cut 5: shut screens are parked out of the UI (owner, 2026-11-25: "100%
+frames above 40, and about 80% 60 or above").** Measured on the route with
+cut 4: p50 15.9, p80 18.5, p99 28.2 ms; 64% of frames at 60 fps or better,
+97.4% at 40 or better. The main thread sets the pace (13.5 ms on a fast
+frame, 16.7 on a slow one). Traced, Bevy's UI is still the biggest cost:
+layout 4.0 ms, clipping 0.8, stack 0.8, focus 0.5 a frame, because each
+walks every node from every root each frame, and a shut screen's root is a
+root like any other. The cut: a root that has been shut (`Display::None`)
+for 30 frames, with 64 nodes or more under it, is made the child of one
+hidden entity that is not a UI node (`ui_park`). It is then no root, and
+no UI pass reaches it; the game's own systems still find and fill it. When
+anything sets its display back, it is unparked before that frame's layout,
+so a screen opens on the frame it is asked to, as today. Nothing drawn
+changes: a shut screen draws nothing either way.
+
+Measured on the route (150 s, `--no-audio`, so no audio mix in either):
+
+| Build | p50 | p80 | p99 | max | at 60 fps | at 40 fps | main p50 |
+|---|---|---|---|---|---|---|---|
+| Cut 4 | 15.9 | 18.5 | 28.2 | 201 | 64% | 97.4% | 14.4 |
+| + shut screens parked | 11.1 | 13.5 | 27.7 | 56 | 89% | 98.2% | 10.0 |
+| Cut 4, after the first 65 s | 15.4 | 17.0 | 23.6 | 201 | 76% | 99.4% | 14.0 |
+| Parked, after the first 65 s | 10.8 | 11.9 | 15.6 | 38 | 99% | 99.9% | 9.9 |
+
+The UI's roots hold 1,056 nodes, not 8,452. The `ui-check` showcase opens
+the pause menu, the missions, the pack and the map after they were parked,
+and each opens whole, the same as with `PBD_UI_PARK_OFF` (the bot's `Tap`
+now knows O, M, Tab and Escape). What is left under 40 fps is the first
+minute: while the near terrain's fine tier builds in (versions 1 to 8,
+25 to 60 s), the GPU's terrain pass is 12 to 16 ms and its shadow 8 to 12.

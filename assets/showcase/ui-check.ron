@@ -1,0 +1,22 @@
+// MEASUREMENT (`memory-leak`, cut 5): the shut screens, parked out of the
+// UI after 30 frames, opened again with their keys and stilled, to check
+// each opens whole (settings, missions, pack, map, then the settings again).
+(
+    goal: "Goal: open each screen after it has been parked",
+    at: None,
+    hour: 10.0,
+    shots: [
+        (
+            caption: "Open each screen",
+            max_s: 120.0,
+            acts: [
+                Wait(30.0),
+                Tap("Escape"), Wait(1.5), Still, Tap("Escape"), Wait(2.0),
+                Tap("O"), Wait(1.5), Still, Tap("O"), Wait(2.0),
+                Tap("Tab"), Wait(1.5), Still, Tap("Tab"), Wait(2.0),
+                Tap("M"), Wait(2.5), Still, Tap("M"), Wait(2.0),
+                Tap("Escape"), Wait(1.5), Still, Tap("Escape"), Wait(2.0),
+            ],
+        ),
+    ],
+)

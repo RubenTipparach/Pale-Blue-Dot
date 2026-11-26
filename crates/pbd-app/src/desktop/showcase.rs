@@ -5873,6 +5873,10 @@ fn key_named(name: &str) -> Option<KeyCode> {
         "E" => KeyCode::KeyE,
         "Q" => KeyCode::KeyQ,
         "Space" => KeyCode::Space,
+        "O" => KeyCode::KeyO,
+        "M" => KeyCode::KeyM,
+        "Tab" => KeyCode::Tab,
+        "Escape" => KeyCode::Escape,
         _ => return None,
     })
 }

@@ -99,6 +99,7 @@ pub mod tree_shake;
 pub mod trees_taken;
 #[cfg(feature = "desktop")]
 pub mod ui_kit;
+pub mod ui_park;
 #[cfg(feature = "desktop")]
 pub mod vehicles;
 #[cfg(feature = "desktop")]
