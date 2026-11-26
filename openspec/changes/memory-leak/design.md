@@ -445,3 +445,21 @@ The bot's own time on the main thread is now a frame log column
 (`bot_ms`), so a walk's frames can be read without the measuring
 instrument: the town route's bot re-planned for twelve minutes at 15 ms a
 plan on its second leg (`town-route`, stopped), and is not the game.
+
+**Next, cut 10 (planned): the crowns drawn nearest the sun first.** The
+shadow pass is the cost the trees' biomes add (above), and nearly all of it
+is the casters' cut-out test run on fragments that end up hidden: cascade 1
+shades 36 million fragments a frame for a map of some 4 million texels at
+18:30, eight or nine leaves deep. A caster that can discard is still
+rejected by depth already written (the ground drawn after the crowns shaded
+7% fewer fragments), so the order the crowns are drawn in decides how many
+are shaded. Today it is the order the cull's threads reach their atomics,
+which has nothing to do with the sun. The plan: in a cascade's cull, each
+tree's depth along the sun (its centre through the cascade's own
+`clip_from_body`) picks one of four bands, and the foliage list is cut into
+four regions, one per band, each with its own indirect draw whose
+`first_instance` is its region's start; the cascade draws the band nearest
+the sun first. The maps are the same (the nearest depth wins each texel in
+any order). To be priced on `shadow-check` at 18:30 and on `biome-check` in
+the jungle and the tundra before and after, with the shadow pass's fragment
+count beside its time.
