@@ -1,20 +1,29 @@
 // Survival mockup, HUD tab (survival-mode design 9, 12 to 14): the same first-person view twice,
 // Explorer and Survival, painted at 320 x 180 and lit per pixel by every light in it (the sun or the
 // moon, the campfire, the placed torch), so the HUD reads by day and at night. Nothing moves.
+// Version 2 (owner, 2026-11-26, survey G7 and G8): the bars stack at the left edge, a full bar is
+// hidden, hunger and water show only at 50% or lower, every stat is in the pack's stats panel, and
+// heat stroke is one short warning above the hotbar.
 (function () {
   "use strict";
   const IMG = "mission-tree/items/";
   const W = 320, H = 180, HOR = 76;
   let time = "night", state = "fine";
 
+  // hp, st (stamina), fd (hunger), wt (water) 0..100; strain is the stamina owed (design 12);
+  // t the body's temperature, tr its trend, cause its icon (design 13); warn the heat stroke warning
   const STATES = {
+    full: { biome: "fields", hp: 100, st: 100, strain: 0, fd: 82, wt: 88, t: 37.0, tr: "", cause: null },
     fine: { biome: "fields", hp: 92, st: 100, strain: 0, fd: 68, wt: 74, t: 37.0, tr: "", cause: null },
-    hot: { biome: "desert", hp: 96, st: 84, strain: 12, fd: 60, wt: 41, t: 39.1, tr: "up", cause: "sun", danger: true },
-    stroke: { biome: "desert", hp: 38, st: 70, strain: 0, fd: 55, wt: 0, t: 40.2, tr: "up", cause: "sun", danger: true, fx: "stroke", flash: "wt" },
+    hungry: { biome: "fields", hp: 100, st: 100, strain: 0, fd: 40, wt: 63, t: 37.1, tr: "", cause: null },
+    pack: { biome: "fields", hp: 92, st: 100, strain: 0, fd: 68, wt: 74, t: 37.0, tr: "", cause: null, pack: true },
+    hot: { biome: "desert", hp: 100, st: 84, strain: 12, fd: 60, wt: 41, t: 39.1, tr: "up", cause: "sun", danger: true },
+    exhaust: { biome: "desert", hp: 71, st: 100, strain: 0, fd: 57, wt: 4, t: 39.7, tr: "up", cause: "sun", danger: true, warn: true, flash: "wt" },
+    stroke: { biome: "desert", hp: 38, st: 70, strain: 0, fd: 55, wt: 0, t: 40.2, tr: "up", cause: "sun", danger: true, fx: "stroke", warn: true, flash: "wt" },
     cold: { biome: "tundra", hp: 80, st: 62, strain: 20, fd: 30, wt: 70, t: 34.8, tr: "down", cause: "snowflake", fx: "cold" },
     winded: { biome: "fields", hp: 90, st: 0, strain: 60, fd: 52, wt: 66, t: 37.6, tr: "up", cause: null, flash: "st" },
     under: { biome: "under", hp: 85, st: 70, strain: 20, fd: 64, wt: 80, t: 36.6, tr: "down", cause: "water-drop", breath: 4 },
-    worn: { biome: "fields", hp: 92, st: 100, strain: 0, fd: 68, wt: 74, t: 37.0, tr: "", cause: null, worn: true },
+    worn: { biome: "fields", hp: 100, st: 100, strain: 0, fd: 68, wt: 74, t: 37.0, tr: "", cause: null, worn: true },
     dead: { biome: "fields", hp: 0, st: 0, strain: 0, fd: 50, wt: 50, t: 37.0, tr: "", cause: null, fx: "dead" },
   };
 
@@ -164,30 +173,62 @@
     }).join("") + `</div>`;
   }
   const compass = `<div class="compass"><span>W</span><span>·</span><span>N</span><span>·</span><span>E</span></div>`;
+  // A bar of the left stack: its icon, then the stone bar; strain hatched past the fill.
   function sbar(cls, v, c, ic, strain) {
-    return `<div class="sbar${cls}" style="--c:${c}">${strain ? `<i class="s" style="width:${Math.min(100, v + strain)}%"></i>` : ""}<i style="width:${v}%"></i>${icon(ic)}</div>`;
+    return `<div class="srow${cls}" style="--c:${c}">${icon(ic)}<div class="sbar">${strain ? `<i class="s" style="width:${Math.min(100, v + strain)}%"></i>` : ""}<i style="width:${v}%"></i></div></div>`;
+  }
+  const tempCol = (t) => (t >= 39.5 ? "#e0502a" : t >= 38 ? "#e0893a" : t <= 35.5 ? "#7fc4ff" : "#c9d24a");
+  function therm(s) {
+    const tcol = tempCol(s.t), tfill = Math.max(8, Math.min(100, (s.t - 33) / 8 * 100));
+    const arrow = s.tr === "up" ? "▲" : s.tr === "down" ? "▼" : "";
+    return `<div class="therm"><span class="tube"><i style="height:${tfill}%;background:${tcol}"></i></span>${s.t.toFixed(1)}°<span style="color:${tcol}">${arrow}</span>${s.cause ? icon(s.cause) : ""}${s.danger ? `<img src="${IMG}campfire.png" alt="" style="width:18px;height:18px;margin-left:4px">` : ""}</div>`;
+  }
+  // design 9 (G7): a full bar is hidden; hunger and water only at 50% or lower; the thermometer only
+  // outside fine (36.0 to 38.0 C)
+  const showBar = { hp: (v) => v < 100, st: (v) => v < 100, fd: (v) => v <= 50, wt: (v) => v <= 50 };
+  const tempShown = (t) => t < 36.0 || t >= 38.0;
+  function leftStack(s) {
+    let h = "";
+    if (showBar.hp(s.hp)) h += sbar(s.hp < 30 ? " flash" : "", s.hp, "var(--hp)", "heart");
+    if (showBar.st(s.st)) h += sbar(s.flash === "st" ? " flash" : "", s.st, "var(--st)", "stamina", s.strain);
+    if (showBar.fd(s.fd)) h += sbar(s.fd < 15 ? " flash" : "", s.fd, "var(--fd)", "roast-meat");
+    if (showBar.wt(s.wt)) h += sbar(s.flash === "wt" ? " flash" : "", s.wt, "var(--wt)", "water-drop");
+    if (tempShown(s.t)) h += therm(s);
+    return h ? `<div class="bars">${h}</div>` : "";
+  }
+  // The pack, open: its slots, and in Survival the stats panel beside them with every stat (G7) and
+  // the two worn slots (design 13).
+  const PACK = ["log", "log", "planks", "stone", "stone", "fibre", "rope", "fruit", "egg", "raw-meat", "hide", "bone", "feather", "turnip", "wheat-seed", "coal", "", "", "", "", "", "", "", "", "", "", ""];
+  function stat(ic, v, c) {
+    return `<div class="prow">${icon(ic)}<div class="sbar" style="--c:${c}"><i style="width:${v}%"></i></div><b>${Math.round(v)}</b></div>`;
+  }
+  function pack(s, survival) {
+    const grid = `<div class="pgrid">` + PACK.map((n) => `<div class="slot">${n ? icon(n) : ""}</div>`).join("") + `</div>`;
+    let stats = "";
+    if (survival) {
+      stats = `<div class="pstats">` + stat("heart", s.hp, "var(--hp)") + stat("stamina", s.st, "var(--st)") + stat("roast-meat", s.fd, "var(--fd)") + stat("water-drop", s.wt, "var(--wt)") +
+        therm(s) + `<div class="worn"><div class="slot">${icon("straw-hat")}</div><div class="slot"></div></div></div>`;
+    }
+    return `<div class="vign" style="background:rgba(1,14,26,.55)"></div><div class="pack"><div class="ptitle">Pack</div><div class="pbody">${stats}${grid}</div></div>`;
   }
   function overlay(s, survival) {
     let h = compass;
-    if (!survival) return h + hotbar(["stone-axe", "stone-pickaxe", "stone-shovel", "rod", "torch", "planks", "log", "grilled-fish", "bucket"]);
+    if (!survival) {
+      if (s.pack) h += pack(s, false);
+      return h + hotbar(["stone-axe", "stone-pickaxe", "stone-shovel", "rod", "torch", "planks", "log", "grilled-fish", "bucket"]);
+    }
     const items = ["stone-axe", "stone-pickaxe", "stone-shovel", "rod", "torch", "stone-spear", "water-bucket", "roast-meat", "straw"];
     let vig = "";
     if (s.fx === "stroke") vig = `<div class="vign" style="background:radial-gradient(ellipse at center, rgba(40,10,0,.25) 30%, rgba(170,60,10,.75) 100%)"></div><div class="vign" style="background:rgba(0,0,0,.55)"></div>`;
-    if (s.t >= 38.5 && s.fx !== "stroke") vig = `<div class="vign" style="background:radial-gradient(ellipse at center, transparent 55%, rgba(220,110,30,.35) 100%)"></div>`;
+    if (s.t >= 38.5 && s.fx !== "stroke") vig = `<div class="vign" style="background:radial-gradient(ellipse at center, transparent 55%, rgba(220,110,30,${s.t >= 39.5 ? .5 : .35}) 100%)"></div>`;
     if (s.fx === "cold") vig = `<div class="vign" style="background:radial-gradient(ellipse at center, transparent 50%, rgba(200,230,255,.28) 100%)"></div>`;
     if (s.fx === "dead") vig = `<div class="vign" style="background:rgba(40,0,0,.6)"></div><div class="cap">You died<br><span class="btn" style="display:inline-block;margin-top:12px;font-size:17px;pointer-events:auto">Wake up</span></div>`;
-    const tcol = s.t >= 39.5 ? "#e0502a" : s.t >= 38 ? "#e0893a" : s.t <= 35.5 ? "#7fc4ff" : "#c9d24a";
-    const tfill = Math.max(8, Math.min(100, (s.t - 33) / 8 * 100));
-    const arrow = s.tr === "up" ? "▲" : s.tr === "down" ? "▼" : "";
     h += vig;
-    h += `<div class="bars">` +
-      sbar(s.hp < 30 ? " flash" : "", s.hp, "var(--hp)", "heart") +
-      sbar(s.flash === "st" ? " flash" : "", s.st, "var(--st)", "stamina", s.strain) +
-      sbar("", s.fd, "var(--fd)", "roast-meat") +
-      sbar(s.flash === "wt" ? " flash" : "", s.wt, "var(--wt)", "water-drop") +
-      `<div class="therm"><span class="tube"><i style="height:${tfill}%;background:${tcol}"></i></span>${s.t.toFixed(1)}°<span style="color:${tcol}">${arrow}</span>${s.cause ? icon(s.cause) : ""}${s.danger ? `<img src="${IMG}campfire.png" alt="" style="width:18px;height:18px;margin-left:4px">` : ""}</div>` +
-      `</div>`;
+    if (s.pack) return h + pack(s, true) + hotbar(items, s.worn);
+    if (s.fx !== "dead") h += leftStack(s);
     if (s.breath !== undefined) h += `<div class="breath">` + Array.from({ length: 10 }, (_, k) => `<img src="${IMG}breath.png" alt="" style="opacity:${k < s.breath ? 1 : 0.18}">`).join("") + `</div>`;
+    // design 9 and 14 (G8): the one warning above the hotbar, from heat exhaustion on
+    if (s.warn) h += `<div class="warn">${icon("sun")}Heat stroke</div>`;
     return h + hotbar(items, s.worn);
   }
 

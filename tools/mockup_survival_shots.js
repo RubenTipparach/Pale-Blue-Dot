@@ -21,12 +21,21 @@ const want = (k) => !only || only.includes(k);
   const shot = async (n) => { await p.waitForTimeout(400); await p.screenshot({ path: path.join(OUT, n + ".png") }); console.log(n); };
   // HUD
   await p.goto(url + "#hud"); await p.waitForTimeout(1500);
-  if (want("hud")) for (const [t, s] of [["day", "fine"], ["night", "fine"], ["day", "hot"], ["day", "stroke"], ["night", "cold"], ["night", "under"], ["night", "winded"], ["day", "worn"], ["night", "dead"]]) {
+  if (want("hud")) for (const [t, s] of [["day", "full"], ["night", "full"], ["day", "fine"], ["night", "fine"], ["day", "hungry"], ["night", "hungry"], ["day", "pack"], ["night", "pack"],
+    ["day", "hot"], ["day", "exhaust"], ["night", "exhaust"], ["day", "stroke"], ["night", "cold"], ["night", "under"], ["night", "winded"], ["day", "worn"], ["night", "dead"]]) {
     await p.evaluate(([t, s]) => window.hudTab.set(t, s), [t, s]); await shot(`hud-${t}-${s}`);
   }
   // Stamina
   await p.evaluate(() => window.survivalPage.show("stamina")); await p.waitForTimeout(500);
-  if (want("stamina")) for (const k of ["sprint", "swim", "day"]) { await p.evaluate((k) => window.staminaTab.setCase(k), k); await shot(`stamina-${k}`); }
+  if (want("stamina")) {
+    for (const k of ["sprint", "swim", "day"]) { await p.evaluate((k) => window.staminaTab.setCase(k), k); await shot(`stamina-${k}`); }
+    // the model in action, behind Expand (survey G6)
+    await p.evaluate(() => window.staminaTab.setCase("sprint"));
+    for (const [n, o] of [["stamina-anim-sprint-day", { t: 15, night: false }], ["stamina-anim-swim-day", { t: 38, night: false }], ["stamina-anim-sprint-night", { t: 15, night: true }],
+      ["stamina-anim-swim-night", { t: 38, night: true }], ["stamina-anim-climb-night", { t: 52.6, night: true }], ["stamina-anim-rest-night", { t: 62, night: true }]]) {
+      console.log(JSON.stringify(await p.evaluate((o) => window.staminaAnim.at(o), o))); await shot(n);
+    }
+  }
   // Fire
   if (want("fire")) {
   await p.evaluate(() => window.survivalPage.show("fire")); await p.waitForTimeout(3000);

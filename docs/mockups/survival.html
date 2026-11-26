@@ -71,14 +71,29 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
 .slot img { position: absolute; left: 7px; top: 7px; width: 30px; height: 30px; }
 .slot .wear { position: absolute; left: 7px; right: 7px; bottom: 5px; height: 3px; background: #011c34; }
 .slot .wear i { display: block; height: 100%; background: var(--rune); }
-.bars { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); display: flex; gap: 6px; align-items: flex-end; }
-.sbar { width: 92px; height: 22px; position: relative; border-style: solid; border-width: 6px; border-image: url(mission-tree/ui/stone-bar.png) 20 fill stretch; image-rendering: pixelated; }
+.bars { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.srow { display: flex; align-items: center; gap: 4px; }
+.srow > img { width: 22px; height: 22px; }
+.sbar { width: 104px; height: 22px; position: relative; border-style: solid; border-width: 6px; border-image: url(mission-tree/ui/stone-bar.png) 20 fill stretch; image-rendering: pixelated; }
 .sbar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--c); }
 .sbar i.s { background: repeating-linear-gradient(90deg, rgba(0,0,0,.35) 0 3px, transparent 3px 6px), var(--c); opacity: .55; }
-.sbar img { position: absolute; left: -10px; top: -7px; width: 22px; height: 22px; }
-.sbar.flash i { animation: fl .5s steps(2) infinite; }
+.srow.flash .sbar i { animation: fl .5s steps(2) infinite; }
 @keyframes fl { 50% { opacity: .3; } }
-.therm { display: flex; align-items: center; gap: 2px; height: 22px; font: 600 14px/1 var(--body); color: var(--label); text-shadow: 0 1px 0 var(--ink); }
+.warn { position: absolute; left: 50%; bottom: 62px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; font: 600 17px/1 var(--body); color: #ffb27a; text-shadow: 0 2px 0 var(--ink); background: rgba(1,14,26,.55); padding: 4px 10px 4px 6px; white-space: nowrap; }
+.warn img { width: 22px; height: 22px; }
+.pack { position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); border-style: solid; border-width: 18px; border-image: url(mission-tree/ui/stone-frame.png) 96 fill stretch; image-rendering: pixelated; padding: 2px 6px 8px; }
+.ptitle { font: 600 18px/1 var(--body); letter-spacing: 1px; color: var(--title); text-shadow: 0 2px 0 var(--ink); margin: 0 0 8px; }
+.pbody { display: flex; gap: 14px; align-items: flex-start; }
+.pgrid { display: grid; grid-template-columns: repeat(9, 40px); gap: 2px; }
+.pgrid .slot, .worn .slot { width: 40px; height: 40px; }
+.pgrid .slot img, .worn .slot img { left: 6px; top: 6px; width: 28px; height: 28px; }
+.pstats { display: flex; flex-direction: column; gap: 6px; }
+.prow { display: flex; align-items: center; gap: 4px; font: 600 15px/1 var(--body); color: var(--label); }
+.prow > img { width: 22px; height: 22px; }
+.prow .sbar { width: 86px; }
+.prow b { width: 26px; text-align: right; }
+.worn { display: flex; gap: 4px; margin-top: 4px; }
+.therm { display: flex; align-items: center; gap: 3px; height: 26px; font: 600 16px/1 var(--body); color: var(--label); text-shadow: 0 1px 0 var(--ink), 1px 0 0 var(--ink), -1px 0 0 var(--ink), 0 -1px 0 var(--ink); }
 .therm .tube { width: 10px; height: 26px; background: #011c34; border: 2px solid var(--stone-2); position: relative; border-radius: 5px 5px 6px 6px; }
 .therm .tube i { position: absolute; left: 1px; right: 1px; bottom: 1px; border-radius: 3px; }
 .therm img { width: 20px; height: 20px; }
@@ -90,13 +105,19 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
 /* ---- Stamina tab ---- */
 #stamina { flex-direction: row; }
 .side { width: 300px; overflow: auto; padding: 10px; border-right: 1px solid var(--page-line); display: flex; flex-direction: column; gap: 8px; }
-.graphs { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 10px; gap: 8px; }
+.graphs { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 10px; gap: 8px; overflow: auto; }
 .graphs canvas { width: 100%; background: #06121d; border: 1px solid var(--page-line); }
-#gMain { flex: 1; min-height: 0; }
+#gMain { flex: 1; min-height: 180px; }
 #gCost { height: 150px; flex: none; }
 .read { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 15px; }
 .read b { color: var(--title); }
 .key { display: flex; gap: 12px; font-size: 14px; flex-wrap: wrap; }
+.arow { display: flex; align-items: center; gap: 10px; }
+#animHost { flex: none; display: flex; flex-direction: column; gap: 6px; }
+#animHost[hidden] { display: none; }
+.abar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.abar .srow { margin-left: 8px; }
+#aCv { width: 100%; height: auto; max-height: 46vh; object-fit: contain; image-rendering: pixelated; border: 1px solid var(--page-line); background: #000; }
 .key span::before { content: ""; display: inline-block; width: 14px; height: 4px; margin-right: 5px; vertical-align: middle; background: var(--c); }
 
 /* ---- 3D tabs ---- */
@@ -116,9 +137,11 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
   .hudrow { flex-direction: column; }
   #stamina { flex-direction: column; }
   .side { width: auto; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--page-line); }
-  .sbar { width: 58px; }
-  .slot { width: 30px; height: 30px; } .slot img { left: 5px; top: 5px; width: 20px; height: 20px; }
-  .bars { bottom: 44px; }
+  .sbar { width: 58px; } .prow .sbar { width: 46px; }
+  .slot, .pgrid .slot, .worn .slot { width: 30px; height: 30px; } .slot img, .pgrid .slot img, .worn .slot img { left: 5px; top: 5px; width: 20px; height: 20px; }
+  .pgrid { grid-template-columns: repeat(5, 30px); }
+  .pbody { gap: 8px; }
+  .warn { bottom: 44px; font-size: 14px; }
 }
 </style>
 </head>
@@ -143,9 +166,13 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
       <button class="btn" data-time="day">Day</button><button class="btn" data-time="night">Night</button>
       <span class="lbl">STATE</span>
       <select class="btn" id="hudState" aria-label="State">
-        <option value="fine">Fields, fine</option>
+        <option value="full">All full: nothing shown</option>
+        <option value="fine">Fields, a little hurt</option>
+        <option value="hungry">Hunger at 40%</option>
+        <option value="pack">Pack open</option>
         <option value="hot">Desert noon, watered</option>
-        <option value="stroke">Desert, out of water: heat stroke</option>
+        <option value="exhaust">Desert, water out: stroke warning</option>
+        <option value="stroke">Heat stroke: passed out</option>
         <option value="cold">Tundra, cold</option>
         <option value="winded">Winded after a sprint</option>
         <option value="under">Under water</option>
@@ -169,6 +196,8 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
       </select></label>
     </div>
     <div class="graphs">
+      <div class="arow"><button class="btn" id="animExpand" aria-expanded="false" aria-controls="animHost">Expand</button><span class="lbl">IN ACTION</span></div>
+      <div id="animHost" hidden></div>
       <div class="key"><span style="--c:#c9d24a">Stamina</span><span style="--c:#8a6a2a">Strain owed</span><span style="--c:#e0893a">Food spent</span><span style="--c:#5d7387">Food spent standing about</span></div>
       <canvas id="gMain" width="1200" height="520"></canvas>
       <div class="read" id="read"></div>
@@ -220,25 +249,31 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
       <p>The owner, 2026-11-26: <em>"start working on phase 4, we're gonna work on survival mode which will add new branch to starter missions to handle survival."</em> This page draws <code>openspec/changes/survival-mode</code> (decisions 9 and 12 to 18) and <code>openspec/changes/wildfire</code>. Written up, not built: nothing here is in the game yet. Five tabs, each a bare <code>#anchor</code>; one 3D view at a time (Fire, Weapons), made when its tab first opens.</p>
     </section>
     <section data-for="hud">
-      <h3>HUD: Explorer beside Survival</h3>
+      <h3>HUD: Explorer beside Survival (version 2)</h3>
       <p>The same view twice: on the left an Explorer world (today's calm game: the hotbar and the compass, nothing else), on the right a Survival world. Day and Night: at night the scene is lit by its own campfire and torch and a dim moon.</p>
+      <p>The owner, 2026-11-26 (survey G7, picking "a vertical stack at the left edge"): <em>"Don't need to show food or water till it's 50% or lower. You can check in pack these stats at any time..if stats are full hide them."</em> And on heat stroke (G8, as drawn): <em>"Just show stroke warning above hot bar. See G 7 for data."</em></p>
       <ul>
-        <li><b>Four short bars</b> above the hotbar, Survival only: health (red), stamina (yellow), hunger (orange), water (blue). Hatching on the stamina bar is the strain still owed: points that cost half as much again in food to refill (design 12).</li>
-        <li><b>A thermometer</b> at their end with the body's temperature, a trend arrow and the cause (sun, snow, fire, water) beside it (design 13).</li>
-        <li><b>A flame</b> beside the thermometer where it is dry enough to burn (<code>wildfire</code> design 2), no text.</li>
+        <li><b>A stack at the left edge</b>, Survival only: health (red), stamina (yellow), hunger (orange), water (blue), each with its icon. Hatching on the stamina bar is the strain still owed (design 12).</li>
+        <li><b>A full bar is hidden.</b> Health and stamina show once below full; hunger and water only at 50% or lower. Fed, watered, rested and unhurt, the screen is the hotbar and the compass, as in Explorer ("All full").</li>
+        <li><b>The thermometer</b> sits under the bars with the body's temperature, a trend arrow and the cause (sun, snow, water), shown only outside fine (36 to 38 C); a flame beside it where it is dry enough to burn (<code>wildfire</code> design 2). Recommendation taken, as a full bar is hidden.</li>
+        <li><b>The pack</b> ("Pack open") holds every stat, full or not: a small panel beside the slots with the four bars and their numbers, the thermometer, and the two worn slots (hat, cloak; design 13). Explorer's pack has no panel.</li>
+        <li><b>Heat stroke's warning</b> is the one word above the hotbar: a sun and "Heat stroke", from heat exhaustion (39.5 C) on and over the pass-out fade. The numbers stay on the left.</li>
         <li><b>Breath</b> shows only under water, as bubbles (design 5).</li>
-        <li><b>States</b> are the bars' and the screen's, never a line of text: winded flashes the empty stamina bar; heat warms the screen's edge, and heat stroke fades it to dark; cold frosts it; a worn tool has a thin bar under its slot, red below a tenth, and a broken one is cracked and dim (design 11). The one line is "You died" (design 9).</li>
-        <li>Bars and slots are the game's stone-and-carved-wood kit (<code>assets/ui</code>, as M33). Item icons are the game's where it has them; the spear, hide, meat and marks are stand-ins (<code>tools/mockup_survival_icons.py</code>).</li>
+        <li><b>Other states</b> are the bars' and the screen's: winded flashes the empty stamina bar; heat warms the screen's edge, and passing out fades it to dark; cold frosts it; a worn tool has a thin bar under its slot, red below a tenth, and a broken one is cracked and dim (design 11). "You died" has one button.</li>
+        <li>Bars, slots and the pack's frame are the game's stone-and-carved-wood kit (<code>assets/ui</code>, as M33). Item icons are the game's where it has them; the spear, hide, meat and marks are stand-ins (<code>tools/mockup_survival_icons.py</code>).</li>
         <li>The scene is a flat pixel painting standing in for the game's view, lit per pixel by every light in it, so the HUD can be judged by day and at night.</li>
       </ul>
       <h3>The states</h3>
-      <table><tr><th>State</th><th>Where</th><th>Body</th></tr>
-      <tr><td>Fields, fine</td><td>temperate grass</td><td>37.0 C</td></tr>
-      <tr><td>Desert noon, watered</td><td>38 C air, 900 W/m^2 sun: feels 43 C</td><td>settles at 39.1 C: hot, drinking fast</td></tr>
-      <tr><td>Out of water: heat stroke</td><td>the same, water empty</td><td>past 40 C in about 8 minutes: 10 health, passes out 30 s</td></tr>
-      <tr><td>Tundra, cold</td><td>-18 C, 6 m/s wind: feels -20 C</td><td>heading for 34 C; a cloak and a fire hold it</td></tr>
-      <tr><td>Winded</td><td>after 100 s of sprinting</td><td>no sprint until a quarter is back</td></tr>
-      <tr><td>Under water</td><td>a dive</td><td>breath 30 s, then health</td></tr></table>
+      <table><tr><th>State</th><th>Where</th><th>Body</th><th>On the stack</th></tr>
+      <tr><td>All full</td><td>temperate grass</td><td>37.0 C</td><td>nothing</td></tr>
+      <tr><td>A little hurt</td><td>temperate grass</td><td>health 92, hunger 68, water 74</td><td>health</td></tr>
+      <tr><td>Hunger at 40%</td><td>temperate grass</td><td>hunger 40, water 63</td><td>hunger</td></tr>
+      <tr><td>Desert noon, watered</td><td>38 C air, 900 W/m^2 sun: feels 43 C</td><td>settles at 39.1 C: hot, drinking fast</td><td>stamina, water, thermometer</td></tr>
+      <tr><td>Stroke warning</td><td>the same, water out</td><td>39.7 C: heat exhaustion</td><td>health, water, thermometer; the warning</td></tr>
+      <tr><td>Passed out</td><td>the same</td><td>past 40 C in about 8 minutes: 10 health, out 30 s</td><td>the warning over the fade</td></tr>
+      <tr><td>Tundra, cold</td><td>-18 C, 6 m/s wind: feels -20 C</td><td>heading for 34 C; a cloak and a fire hold it</td><td>health, stamina, hunger, thermometer</td></tr>
+      <tr><td>Winded</td><td>after 100 s of sprinting</td><td>no sprint until a quarter is back</td><td>health, stamina</td></tr>
+      <tr><td>Under water</td><td>a dive</td><td>breath 30 s, then health</td><td>health, stamina, breath</td></tr></table>
     </section>
     <section data-for="stamina">
       <h3>Stamina and food</h3>
@@ -249,6 +284,8 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
         <li><b>Refill</b>: after the delay, at the rate, each point costing food at the bar's height: the low cost up to half, rising in a straight line to the high cost at full (the lower chart). Strain multiplies it.</li>
         <li><b>Food sets the rate</b>: full at 50 food or more, down to 40% at none.</li>
       </ul>
+      <h3>In action (version 2)</h3>
+      <p>The owner, 2026-11-26 (survey G6, no option picked, so the numbers stay as drawn): <em>"Some sort of js animation would be nice to see this in action. Add an expand button to lazy load"</em>. <b>Expand</b> makes it (nothing of it exists before), and it stands still until <b>Play</b>: a player sprints 350 m across a field, wades in and swims 80 m of lake, jumps up four rock steps, climbs a 4 m ledge and sits by the campfire, while the stamina bar (strain hatched) and the food bar move by the same model as the graph, in 10 ms steps, with the sliders' numbers. 1x is the game's own time; 4x and 10x run it faster. At night the field's torches and the campfire light what is near them under a dim moon. Food starts at 80, as in the worked examples.</p>
       <h3>The worked examples (design defaults)</h3>
       <table><tr><th>Case</th><th>Food spent</th><th>Of it the effort</th></tr>
       <tr><td>A minute of sprinting, then 10 s</td><td>6.28</td><td>4.72</td></tr>

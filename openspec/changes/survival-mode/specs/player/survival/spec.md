@@ -260,6 +260,29 @@ SHALL NOT be harmed.
 - **WHEN** a Survival player strikes a river otter
 - **THEN** it takes no damage
 
+### Requirement: The survival HUD shows a stat only when it matters
+In Survival, health, stamina, hunger and water SHALL be shown as bars
+stacked at the left edge of the screen. A full bar SHALL be hidden, and
+hunger and water SHALL be shown only at half or lower. Every stat SHALL be
+shown, full or not, in the pack. While the body is in heat exhaustion or
+heat stroke, a short warning SHALL be shown above the hotbar. In Explorer
+none of it SHALL be shown.
+
+#### Scenario: Fed, watered and rested
+- **WHEN** a Survival player is at full health and stamina with hunger and
+  water above half
+- **THEN** no survival bar is on the screen, and opening the pack shows all
+  four with their values
+
+#### Scenario: Getting hungry
+- **WHEN** hunger falls from 60 to 40
+- **THEN** the hunger bar appears on the left stack as it passes half
+
+#### Scenario: Heading for heat stroke
+- **WHEN** a Survival player's body passes 39.5 C
+- **THEN** the heat stroke warning appears above the hotbar, and goes once
+  the body is back under 39.5 C
+
 ### Requirement: The server decides survival
 In a multiplayer world, health, hunger, breath, damage, death and the
 dropped pack SHALL be decided by the server like any other stored change.

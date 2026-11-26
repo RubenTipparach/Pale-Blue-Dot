@@ -418,7 +418,13 @@
   let order = BRANCHES.flatMap((b) => M.filter((m) => m.b === b.key).map((m) => m.id));
   // On the Survival tab some missions wait on another branch (after: fire, smelt, torch): the bot
   // plays each mission once everything it waits on is done, in branch order otherwise.
+  // In a Survival world "Drink water" is the goal the moment the pack is open, then "Something to
+  // eat", before the starter trunk's axe (owner, 2026-11-26, survey G11: "Go right into survival
+  // after pack is opened (if survival mode is active)"); the spear waits on a log, so on the axe.
   if (TREE === "survival") {
+    const first = ["drink", "forage"];
+    order = order.filter((x) => !first.includes(x));
+    order.splice(order.indexOf("pack") + 1, 0, ...first);
     const placed = new Set(), out = [];
     while (out.length < order.length) {
       const id = order.find((x) => !placed.has(x) && byId[x].needs.flat().concat(byId[x].after || []).every((y) => placed.has(y)));

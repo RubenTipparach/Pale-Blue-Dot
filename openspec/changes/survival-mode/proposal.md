@@ -108,8 +108,22 @@ HUD and the danger look go to the owner as mockups.
   night, with side branches for hunting and weapons, heat and cold, the
   body in water, and fire. Design 18.
 - **The HUD**: health, stamina, hunger, water and body temperature show
-  only in Survival; breath only while it is not full. A mockup first
+  only in Survival, stacked at the left edge, and only when they matter: a
+  full bar is hidden, and hunger and water show only at 50% or lower (owner,
+  2026-11-26, survey G7: "Don't need to show food or water till it's 50% or
+  lower. You can check in pack these stats at any time..if stats are full
+  hide them."). Every stat is always in the pack's new stats panel. Heat
+  stroke is one short warning above the hotbar (G8: "Just show stroke
+  warning above hot bar"). Breath only while it is not full. A mockup first
   (`docs/mockups/survival.html`, task 1.1).
+- **The owner's answers of 2026-11-26** (survey G6 to G11): the stamina and
+  food numbers stay as drawn, shown in action by an animation on the
+  mockup's Stamina tab (G6: "Some sort of js animation would be nice to see
+  this in action. Add an expand button to lazy load"); heat stroke as drawn
+  (G8); the weapons' looks approved for the animation step (G10); the
+  Survival branch off "Open the pack", its first mission the goal right
+  after it in a Survival world (G11: "Go right into survival after pack is
+  opened (if survival mode is active)").
 
 Not in this change: PvP (still off in multiplayer), armour, disease, sleep
 needs, food spoiling, difficulty levels beyond one tuning file, and craft

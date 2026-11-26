@@ -14,11 +14,18 @@ cooked meal and a first night, with side branches for hunting and weapons,
 heat and cold, the body in water, and fire. Its missions SHALL keep the
 tree's rules (one parent each, hidden gates for extra needs, unlocks as
 rewards) and SHALL unlock the survival recipes in the order the player needs
-them. An Explorer world SHALL NOT show or count any of them.
+them. In a Survival world, the branch's first mission SHALL be the current
+goal as soon as the pack's mission is done, ahead of the trunk's next. An
+Explorer world SHALL NOT show or count any of them.
 
 #### Scenario: The first mission after the pack
 - **WHEN** a player in a new Survival world finishes the pack's mission
-- **THEN** "Drink water" opens beside the trunk's next mission
+- **THEN** "Drink water" opens beside the trunk's next mission and is the
+  current goal
+
+#### Scenario: The same moment in Explorer
+- **WHEN** a player in an Explorer world finishes the pack's mission
+- **THEN** the trunk's next mission is the current goal, as before
 
 #### Scenario: Explorer never sees it
 - **WHEN** a player opens the Missions screen in an Explorer world

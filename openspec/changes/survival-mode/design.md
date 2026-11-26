@@ -138,18 +138,47 @@ entry.
 
 ### 9. The HUD
 
+The owner, 2026-11-26 (survey G7, picking "a vertical stack at the left
+edge"): "Don't need to show food or water till it's 50% or lower. You can
+check in pack these stats at any time..if stats are full hide them." And on
+heat stroke (G8): "Just show stroke warning above hot bar. See G 7 for
+data."
+
 - Survival only:
-  - health, stamina, hunger and water as four short bars beside the hotbar
-    (2026-11-26 adds stamina and water);
-  - body temperature as a small thermometer at their end, with its trend
-    and its cause (design 13);
-  - breath or suit air as a bar, only while not full;
-  - "Winded", "Heat stroke" and the pass-out fade as states of those bars,
-    not as lines of text;
+  - health, stamina, hunger and water as short bars **stacked one above the
+    other at the left edge of the screen**, each with its icon (2026-11-26
+    adds stamina and water; G7 moves them from beside the hotbar);
+  - **a bar that is full is hidden.** Health and stamina show once they are
+    below full; **hunger and water show only at 50% or lower** (G7). A
+    player who is fed, watered, rested and unhurt sees only the hotbar and
+    the compass, as in Explorer;
+  - body temperature as a small thermometer under the bars, with its trend
+    and its cause (design 13), shown only while the body is outside fine
+    (36.0 to 38.0 C): the same rule as a full bar (recommendation taken, ask
+    only with screenshots);
+  - breath or suit air as a row of bubbles, only while not full;
+  - **every stat, full or not, in the pack** (G7): the pack screen gains a
+    small stats panel beside its slots, with health, stamina, hunger and
+    water as bars with their numbers, the body's temperature with its trend
+    and cause, and the two worn slots (hat, cloak; design 13). It is the one
+    place to check a stat that the HUD is hiding;
+  - **one warning above the hotbar for heat stroke** (G8): an icon and the
+    locale's "Heat stroke", shown from heat exhaustion (39.5 C, design 14)
+    until the body is back under 39.5 C, and over the pass-out fade. It is
+    the only word the survival HUD shows while alive. The bars and the
+    thermometer stay on the left stack;
+  - "Winded" and the pass-out fade as states of those bars and the screen,
+    not as lines of text: the empty stamina bar flashes;
   - a red edge on the screen for a moment when hit;
   - a plain line on death, "You died", with one button, "Wake up".
 - In the stone-and-carved-wood UI (M29), a mockup first, lit at night. No
-  explaining text on screen (CLAUDE.md, "Game text is plain").
+  explaining text on screen (CLAUDE.md, "Game text is plain"). Every word
+  from the locale file (`hud.heat_stroke`, `pack.stats`, `hud.you_died`,
+  `hud.wake_up`).
+- Mocked up in `docs/mockups/survival.html#hud` (version 2): every state
+  by day and lit at night, Explorer beside Survival, including all full
+  (nothing shown), hunger at 40%, the stroke warning, and the pack open
+  with its stats panel.
 
 ### 10. Rules in the core, run by the server
 
@@ -216,6 +245,16 @@ Every number below is a recommendation taken (ask only with screenshots),
 except where the owner's words set the shape. The curve goes to the owner on
 the mockup's Stamina tab, whose sliders run this exact model
 (`docs/mockups/survival.html#stamina`).
+
+The owner looked at the curve on 2026-11-26 (survey G6) and picked no
+option: "Some sort of js animation would be nice to see this in action. Add
+an expand button to lazy load". So the numbers stay as drawn (still a
+recommendation taken, not the owner's own numbers), and the Stamina tab
+gains the model in action: behind an **Expand** button, made only when it
+is pressed, a side view of a player sprinting across a field, swimming a
+lake, jumping up rocks, climbing a ledge and resting by a campfire, with the
+stamina bar (its strain hatched) and the food bar moving live by this
+model and the page's sliders. It stands still until **Play** is pressed.
 
 - **The bar.** Stamina, 0 to 100 points (pts), its own bar beside health.
 - **What spends it.**
@@ -328,7 +367,8 @@ world, and the server already runs it.
   - tundra night, - 18 C air, 6 m/s wind: `feel` - 20 C, the body heads
     for 34.0 C (hypothermia); with a wool cloak, 35.0 C (cold, not hurting);
     with the cloak and 2 m from a campfire, 36.1 C.
-- **Shown** as a thermometer beside the bars (Survival only), with the
+- **Shown** as a thermometer under the left stack's bars (Survival only;
+  design 9: only while outside fine, and always in the pack), with the
   trend arrow the design doc's "telegraph cause, trend, threshold" asks for:
   the cause shows as a small icon (sun, wind, wet, fire, snow) beside it.
 - **Worn slots.** Two, head and body, beside the pack's grid, in Survival
@@ -340,6 +380,12 @@ world, and the server already runs it.
 
 The owner: "Heat strokes will cause damage to health and cause players to
 pass out."
+
+Approved as drawn on 2026-11-26 (survey G8: the warm edge from 38 C, then
+passing out for 30 s), with: "Just show stroke warning above hot bar. See G
+7 for data". The warning is design 9's: an icon and "Heat stroke" above the
+hotbar from heat exhaustion (39.5 C) on; the numbers stay on the left
+stack.
 
 | `body_c` | State | What it does |
 | --- | --- | --- |
@@ -401,6 +447,11 @@ The owner: "When in hot weather the body will need to consume more water",
 ### 16. Weapons (owner, 2026-11-26)
 
 The owner: "Making spears, arrows, hunting axe, swords will all be a thing."
+
+The looks drawn on `survival.html#weapons` (the stone spear, the bow and
+arrows, the bronze hunting axe and the bronze sword) were approved as drawn
+on 2026-11-26 (survey G10), for the animation step: the held models and
+their swings go through the `animation` skill (M36) next, mockup first.
 
 On the existing mechanism: recipes in `recipes.ron` at the pack's Craft row
 (`hand`), the workbench and, through their ingots, the forge; each tier
@@ -501,7 +552,17 @@ starter missions to handle survival."
   Explorer world never shows them, and they are never counted there.
 - **It opens with the pack** (`pack`, the trunk's second mission), so the
   first thing a new Survival player is told is to drink: water empties
-  first. It keeps the tree's rules: one parent each, a hidden `after` gate
+  first. The owner, 2026-11-26 (survey G11): "Off Open the pack", and "Go
+  right into survival after pack is opened (if survival mode is active)".
+  So in a Survival world, the moment "Open the pack" is done, "Drink water"
+  is the **current goal** (the one the HUD's mission line and the Missions
+  screen's Now point at), ahead of the trunk's "Craft an axe", and
+  "Something to eat" after it; the starter trunk stays open beside them and
+  is the goal again after the meal, because "Make a spear" needs a log and
+  so the axe (recommendation taken, ask only with screenshots: the owner's
+  words set the first goal, the meal after it is ours). In an Explorer
+  world nothing changes: "Craft an axe" follows the pack as today.
+  It keeps the tree's rules: one parent each, a hidden `after` gate
   for an extra need, unlocks as each mission's reward.
 - Mocked up on M33's Survival tab (`docs/mockups/mission-tree.html#survival`).
 
@@ -661,7 +722,7 @@ defaults. Units in the names or the comments. Not written until the build
 )
 ```
 
-## Questions for the owner (with screenshots), 2026-11-26
+## Questions for the owner (with screenshots), 2026-11-26: answered
 
 Asked only where there is something to look at (CLAUDE.md, "Ask only with
 screenshots"); each recommendation is built into the mockup while the
@@ -679,6 +740,16 @@ published.
 
 (G9 is `wildfire`'s.)
 
+**Answered by the owner, 2026-11-26** (the survey's "Already decided"):
+
+| Id | The owner's answer | Where it went |
+| --- | --- | --- |
+| G6 | no option picked; "Some sort of js animation would be nice to see this in action. Add an expand button to lazy load" | the numbers stay as drawn; the Stamina tab's animation behind Expand (design 12) |
+| G7 | "a vertical stack at the left edge"; "Don't need to show food or water till it's 50% or lower. You can check in pack these stats at any time..if stats are full hide them." | design 9: the left stack, full bars hidden, hunger and water from 50%, the pack's stats panel |
+| G8 | as drawn; "Just show stroke warning above hot bar. See G 7 for data" | design 9 and 14: the warning above the hotbar |
+| G10 | approved as drawn, for the animation step | design 16 |
+| G11 | "Off Open the pack"; "Go right into survival after pack is opened (if survival mode is active)" | design 18: "Drink water" is the current goal right after the pack |
+
 **Recommendations taken (ask only with screenshots)**, not the owner's own
 words: every number in design 12 to 17 and 20; tool work spends no stamina;
 cold hurts but never knocks the player down; a winded swimmer floats; two
@@ -687,7 +758,10 @@ the straw from 2 fibre with 30 sips; no hunting, weapons or worn slots in
 Explorer; kept and bought animals cannot be struck (butchering a follow-up);
 a kill's hide needs dressing; herds back after 3 world days; the branch as
 a branch of the starter tree, not a third tree; rewards as unlocks, the
-bedroll as its payoff.
+bedroll as its payoff; and, after G7 and G8, health and stamina hidden only
+when full, the thermometer shown only outside fine (36 to 38 C), the stroke
+warning from heat exhaustion (39.5 C), and the pack's stats panel holding
+the worn slots.
 
 ## Risks / Trade-offs
 

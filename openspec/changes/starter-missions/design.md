@@ -843,3 +843,9 @@ designed in `survival-mode` design 18: 23 missions off `pack`, each marked
 `mode: survival` and shown only in Survival worlds, mocked up on M33's
 Survival tab (`docs/mockups/mission-tree.html#survival`). Its tasks are
 `survival-mode`'s section 6; nothing in this change's tree moves for it.
+
+The owner, 2026-11-26 (survey G11): "Off Open the pack", and "Go right into
+survival after pack is opened (if survival mode is active)". So in a
+Survival world, "Drink water" is the current goal the moment `pack` is done,
+ahead of `axe`; in an Explorer world `axe` follows `pack` as it does today
+(`survival-mode` design 18).
