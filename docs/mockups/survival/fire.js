@@ -1,18 +1,29 @@
-// Survival mockup, Fire tab: wildfire design 3, 5 and 7 on a patch of hex cells (2.83 m apart, 1 m
-// layers) at night in the dry season. Grass, broadleaf and conifer trees, a stream, a dug break and a
-// player's tilled field (the fire never takes the player's). Every second of fire time each burning
-// cell tries its six neighbours. Shown at four seconds of fire a real second. Built when the tab first
-// opens; its loop stops when the tab closes.
+// Survival mockup, Fire tab: wildfire design 2, 3, 5, 7 and 12 on a patch of hex cells (2.83 m apart,
+// 1 m layers). Each cell's plant dryness (plant_dry, design 2) comes from its plant's kind, the season,
+// the ground's wetness, the air, shade under trees, water nearby, hollows, the soil's patches and
+// grazing; below 0.5 nothing catches. Grass, shrubs, broadleaf and conifer trees, a stream with its
+// green banks, a dug break, a pen's grazed pasture and a player's tilled field (the fire never takes
+// the player's). Every second of fire time each burning cell tries its six neighbours. Shown at six
+// seconds of fire a real second. Built when the tab first opens; its loop stops when the tab closes.
 (function () {
   "use strict";
   const S = () => window.SurvivalCommon;
-  const CELL = 2.83, RAD = 19, SPEED = 4;
-  let built = false, running = false, playing = true, raf = 0, night = true;
+  const CELL = 2.83, RAD = 19, SPEED = 6;
+  let built = false, running = false, playing = true, raf = 0, night = true, overlay = false;
   let renderer, scene, cam, orbitSt, applyOrbit, ground, groundCol, cells = [], byKey = new Map();
   let trunks, crownsB, crownsC, flames, smoke, rain, water, moon, hemi, sun, stage, stat;
   let simT = 0, acc = 0, ft = 0, rng, last = 0;
   const DIRS = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
-  const P = { danger: 0.8, wind: 4, rain: 0 };
+  const P = { season: "dry", wind: 3, rain: 0 };
+  // design 2's seasons: the place's own year (0 its midsummer), ground_wet, humidity, air in C
+  const SEASONS = { spring: { y: 0.75, gw: 0.5, h: 0.6, t: 16 }, summer: { y: 0.0, gw: 0.25, h: 0.45, t: 26 }, dry: { y: 0.1, gw: 0.12, h: 0.32, t: 29 } };
+  // design 3 and 11 (decision 12): spread per second at burn 1, burn seconds; limits
+  const SPREAD = { grass: 0.2, shrub: 0.12, broad: 0.02, conifer: 0.04 }, BURN = { grass: 15, shrub: 40, broad: 90, conifer: 90 };
+  const LIMIT = { cells: 300, burning: 40 }, DRY_MIN = 0.5;
+  const smooth = (lo, hi, x) => { const t = Math.min(1, Math.max(0, (x - lo) / (hi - lo))); return t * t * (3 - 2 * t); };
+  const bump = (x, at) => { const d = Math.abs(x - at[0]); return 1 - smooth(0, at[1], Math.min(d, 1 - d)); };
+  const burnOf = (d) => (d < DRY_MIN ? 0 : ((d - DRY_MIN) / (1 - DRY_MIN)) ** 2);
+  let litCount = 0;
 
   function cellXZ(q, r) { return [CELL * (q + r / 2), CELL * 0.866 * r]; }
   function makeCells() {
@@ -27,23 +38,61 @@
       if (Math.abs(x - sx) < 2.6) { c.fuel = "water"; c.h = Math.round(sx * 0.03) - 2; }
       else if (Math.abs(x + 8) < 1.6 && z > -26 && z < 18) c.fuel = "soil";
       else if (x > 2 && x < 15 && z > 14 && z < 30) c.fuel = "field";
-      else if (H(q, r, 5) < 0.42) c.tree = { kind: c.h >= 2 || H(q, r, 6) < 0.35 ? "conifer" : "broad", s: 0.8 + 0.45 * H(q, r, 7), rot: H(q, r, 8) * 6.28, ox: (H(q, r, 9) - 0.5) * 0.8, oz: (H(q, r, 10) - 0.5) * 0.8 };
+      else if (x > -30 && x < -18 && z > 14 && z < 26) c.fuel = "pen";
+      else if (H(q, r, 5) < (x > -4 && x < 18 ? 0.5 : 0.1)) c.tree = { kind: c.h >= 2 || H(q, r, 6) < 0.35 ? "conifer" : "broad", s: 0.8 + 0.45 * H(q, r, 7), rot: H(q, r, 8) * 6.28, ox: (H(q, r, 9) - 0.5) * 0.8, oz: (H(q, r, 10) - 0.5) * 0.8 };
+      else if (H(q, r, 11) < 0.08) c.fuel = "shrub";
       byKey.set(q + "," + r, c);
       cells.push(c);
     }
+    // cells to the nearest water, by the neighbour tables (design 2's water term)
+    let ring = cells.filter((c) => c.fuel === "water");
+    cells.forEach((c) => (c.dw = c.fuel === "water" ? 0 : 99));
+    for (let d = 1; ring.length && d < 6; d++) { const next = []; ring.forEach((c) => nbrs(c).forEach((n) => { if (n.dw > d) { n.dw = d; next.push(n); } })); ring = next; }
+    // the pen's grazed pasture: its own cells and two round them
+    cells.forEach((c) => (c.grazed = cells.some((p) => p.fuel === "pen" && Math.hypot(p.x - c.x, p.z - c.z) < 2.2 * CELL)));
+    cells.forEach((c) => { const n = nbrs(c); c.trees = n.filter((m) => m.tree).length; c.mh = n.reduce((s, m) => s + m.h, 0) / n.length; });
+    setDryness();
+  }
+  const kindOf = (c) => (c.tree ? c.tree.kind : c.fuel);
+  // design 2: plant_dry = cure(kind, season) x weather x shade x water x hollow x patch x grazed
+  function setDryness() {
+    const se = SEASONS[P.season];
+    const cs = Math.max(bump(se.y, [0.1, 0.2]), 0.5 * bump(se.y, [0.47, 0.22]));
+    const weather = (1 - se.gw) * (1 - 0.6 * smooth(0.35, 0.85, se.h)) * (0.4 + 0.6 * smooth(0, 25, se.t));
+    const H = S().hash;
+    cells.forEach((c) => {
+      const k = kindOf(c);
+      const cure = { grass: 0.2 + 0.8 * cs, shrub: 0.25 + 0.6 * cs, broad: 0.15 + 0.45 * cs, conifer: 0.3 + 0.6 * cs }[k];
+      if (cure === undefined) { c.dry = 0; return; }
+      const shade = k === "grass" || k === "shrub" ? 1 - 0.07 * c.trees : 1;
+      const water = 0.35 + 0.65 * smooth(1, 3, c.dw);
+      const hollow = 1 + 0.06 * Math.max(-2, Math.min(2, c.h - c.mh));
+      const n = 0.5 + 0.25 * Math.sin(c.x / 9 + 1.3) + 0.25 * Math.sin(c.z / 11 + 0.4 + c.x / 23);
+      const patch = (0.62 + 0.5 * n) * (0.92 + 0.16 * H(c.q, c.r, 21));
+      const grazed = c.grazed && k === "grass" ? 0.5 : 1;
+      c.dry = Math.min(1, cure * weather * shade * water * hollow * patch * grazed);
+    });
   }
   const nbrs = (c) => DIRS.map(([dq, dr]) => byKey.get((c.q + dq) + "," + (c.r + dr))).filter(Boolean);
-  const burnable = (c) => c.fuel === "grass";
+  const burnable = (c) => c.fuel === "grass" || c.fuel === "shrub";
 
   // ---- colours a cell's top takes
   function topColour(c) {
     if (c.fuel === "water") return [0.16, 0.3, 0.42];
     if (c.fuel === "soil") return [0.5, 0.36, 0.24];
     if (c.fuel === "field") return [0.44, 0.3, 0.18];
+    if (c.fuel === "pen") return [0.42, 0.5, 0.24];
     if (c.state === 1) return [0.16, 0.12, 0.1];
     if (c.state === 2) return c.tree ? [0.2, 0.19, 0.18] : [0.36, 0.35, 0.33];
-    const d = P.danger;
-    return [0.55 + 0.25 * d, 0.62 + 0.06 * d, 0.32 - 0.04 * d];
+    const d = c.dry;
+    if (overlay) {
+      // dryness overlay: greener is wetter; from 0.5 (catches) yellow to burnt orange
+      if (d < DRY_MIN) { const t = d / DRY_MIN; return [0.12 + 0.3 * t, 0.42 + 0.16 * t, 0.22 - 0.06 * t]; }
+      const t = (d - DRY_MIN) / (1 - DRY_MIN); return [0.82 + 0.1 * t, 0.7 - 0.36 * t, 0.2 - 0.08 * t];
+    }
+    // the grass's own look: lush green when wet, cured straw when dry
+    const t = smooth(0.15, 0.95, d), k = c.fuel === "shrub" ? 0.82 : 1;
+    return [(0.3 + 0.48 * t) * k, (0.5 + 0.16 * t) * k, (0.2 + 0.14 * t) * k];
   }
 
   function buildGround() {
@@ -137,16 +186,19 @@
     const pos = new THREE.Vector3(c.x + t.ox, c.h, c.z + t.oz);
     q4.setFromEuler(e4.set(0, t.rot, 0));
     const trunkS = t.kind === "conifer" ? s * 0.9 : s;
-    const snag = c.state === 2 ? 0.72 : 1;
+    const crowned = c.crown, snag = c.state === 2 && crowned ? 0.72 : 1;
     m4.compose(pos, q4, new THREE.Vector3(trunkS, trunkS * (t.kind === "conifer" ? 1.3 : 1) * snag, trunkS));
     trunks.setMatrixAt(t.ti, m4);
-    const ch = c.state === 2 ? 0.2 : c.state === 1 && c.left < 60 ? 0.35 : 1;
+    const ch = c.state === 2 ? (crowned ? 0.2 : 0.45) : c.state === 1 ? 0.6 : 1;
     trunks.instanceColor.setXYZ(t.ti, ch, ch, ch);
     const crown = t.kind === "broad" ? crownsB : crownsC;
-    const gone = c.state === 2 || (c.state === 1 && c.left < 60);
+    const gone = crowned && (c.state === 2 || (c.state === 1 && c.left < BURN[t.kind] - 30));
     m4.compose(pos, q4, gone ? new THREE.Vector3(0, 0, 0) : new THREE.Vector3(s, s, s));
     crown.setMatrixAt(t.ci, m4);
-    if (c.state === 1) crown.instanceColor.setXYZ(t.ci, 0.5, 0.3, 0.18); else crown.instanceColor.setXYZ(t.ci, 1, 1, 1);
+    // a ground fire browns the leaves; a dry tree is a little yellower than a wet one
+    const dt = smooth(0.3, 0.9, c.dry);
+    if (c.state >= 1) crown.instanceColor.setXYZ(t.ci, 0.62, 0.42, 0.24);
+    else crown.instanceColor.setXYZ(t.ci, 0.92 + 0.22 * dt, 1.02 - 0.02 * dt, 0.95 - 0.3 * dt);
     trunks.instanceMatrix.needsUpdate = trunks.instanceColor.needsUpdate = true;
     crown.instanceMatrix.needsUpdate = crown.instanceColor.needsUpdate = true;
   }
@@ -180,9 +232,9 @@
     let nf = 0, ns = 0;
     const NF = fp.size.count, NS = sp.size.count;
     burning.forEach((c) => {
-      const crown = c.tree && c.state === 1 && c.left >= 60;
+      const crown = c.tree && c.crown && c.state === 1 && c.left >= BURN[c.tree.kind] - 30;
       const ember = c.state === 2;
-      const per = ember ? 2 : crown ? 16 : 7;
+      const per = ember ? 2 : crown ? 16 : c.damp ? 3 : c.tree ? 9 : 7;
       for (let k = 0; k < per && nf < NF; k++) {
         const ph = (ft * (0.9 + 0.3 * S().hash(c.i, k, 1)) + S().hash(c.i, k, 2)) % 1, life = 1 - ph;
         let x, y, z, size;
@@ -196,7 +248,7 @@
           y = c.h + h0 + ph * 3.2; size = 3.0 * (0.45 + 0.75 * life);
         } else {
           x = c.x + (S().hash(c.i, k, 3) - 0.5) * 2.4 + P.wind * 0.12 * ph; z = c.z + (S().hash(c.i, k, 4) - 0.5) * 2.4;
-          y = c.h + (ember ? 0.15 : 0.35 + ph * 2.0); size = ember ? 0.6 : 1.7 * (0.45 + 0.75 * life);
+          y = c.h + (ember ? 0.15 : 0.35 + ph * 2.0); size = ember ? 0.6 : (c.tree ? 2.4 : 2.1) * (0.45 + 0.75 * life);
         }
         fp.position.setXYZ(nf, x, y, z);
         fp.size.setX(nf, size);
@@ -220,7 +272,7 @@
     const bins = new Map();
     burning.forEach((c) => {
       const k = Math.floor(c.x / 8.5) + "," + Math.floor(c.z / 8.5);
-      const w = c.state === 2 ? 0.25 : c.tree && c.left >= 60 ? 3 : 1;
+      const w = c.state === 2 ? 0.25 : c.tree && c.crown ? 3 : c.damp ? 0.4 : 1;
       const b = bins.get(k) || { x: 0, y: 0, z: 0, w: 0 };
       b.x += c.x * w; b.y += (c.h + 2.5) * w; b.z += c.z * w; b.w += w; bins.set(k, b);
     });
@@ -233,7 +285,7 @@
       U.fireL.value[i].set(v.x, v.y, v.z, Math.min(9, 2.2 * Math.sqrt(b.w)) * flick);
     });
     U.fireN.value = list.length;
-    stat.textContent = `burning ${cells.filter((c) => c.state === 1).length} · burnt ${cells.filter((c) => c.state === 2).length} cells · fire time ${Math.round(simT)} s (x${SPEED})`;
+    stat.textContent = `burning ${cells.filter((c) => c.state === 1).length} / ${LIMIT.burning} · burnt ${litCount} / ${LIMIT.cells} cells · ${Math.round(simT)} s (x${SPEED})`;
   }
   function updateRain(dt) {
     rain.visible = P.rain > 0;
@@ -250,11 +302,18 @@
     rain.material.opacity = Math.min(0.55, 0.12 + P.rain * 0.08);
   }
 
-  // ---- the rule (wildfire design 5 and 7)
-  function ignite(c) {
+  // ---- the rule (wildfire design 5, 7 and 12)
+  function ignite(c, torch) {
     if (!c || !burnable(c) || c.state !== 0) return;
-    c.state = 1; c.left = c.tree ? 120 : 12; c.damp = P.danger < 0.35;
-    if (c.damp) c.left = 3;
+    if (c.dry < DRY_MIN) {
+      // too green: a torch makes a 3 s flame that saves nothing (design 6); a neighbour never lights it
+      if (!torch) return;
+      c.state = 1; c.left = 3; c.damp = true; paintCell(c); return;
+    }
+    c.state = 1; c.damp = false; litCount++;
+    const k = kindOf(c);
+    c.crown = k === "conifer" && c.dry >= 0.85 && P.wind >= 6;
+    c.left = BURN[k];
     paintCell(c); if (c.tree) setTree(c);
   }
   function tick() {
@@ -262,29 +321,55 @@
     const wind = P.wind, rain = P.rain;
     const lit = [];
     const burning = cells.filter((c) => c.state === 1);
+    const atLimit = litCount >= LIMIT.cells || burning.filter((c) => !c.damp).length >= LIMIT.burning;
     burning.forEach((c) => {
-      if (!c.damp && rain < 2 && P.danger >= 0.2) nbrs(c).forEach((n) => {
-        if (n.state !== 0 || !burnable(n)) return;
-        let lam = (n.tree ? (n.tree.kind === "conifer" ? 0.07 : 0.05) : 0.25) * P.danger;
+      if (!c.damp && !atLimit && rain < 1) nbrs(c).forEach((n) => {
+        if (n.state !== 0 || !burnable(n) || n.dry < DRY_MIN) return;
+        let lam = SPREAD[kindOf(n)] * burnOf(n.dry);
+        if (kindOf(n) === "conifer" && n.dry >= 0.85 && wind >= 6) lam *= 3;
         const dx = n.x - c.x, dz = n.z - c.z, cos = dx / Math.hypot(dx, dz);
-        lam *= Math.max(0.2, 1 + 0.25 * wind * Math.max(0, cos) - 0.15 * wind * Math.max(0, -cos));
-        lam *= n.h > c.h ? 1 + 0.15 * (n.h - c.h) : n.h < c.h ? 0.7 : 1;
+        lam *= Math.max(0.2, 1 + 0.15 * wind * Math.max(0, cos) - 0.1 * wind * Math.max(0, -cos));
+        lam *= n.h > c.h ? 1 + 0.1 * (n.h - c.h) : n.h < c.h ? 0.8 : 1;
         lam *= Math.exp(-rain / 0.5);
         if (rng() < 1 - Math.exp(-lam)) lit.push(n);
       });
+      const before = c.left;
       c.left -= 1 + rain * 0.5;
-      const was = c.left;
-      if (c.tree && was < 60 && was + 1 + rain * 0.5 >= 60) setTree(c);
-      if (c.left <= 0) { c.state = 2; c.burnt = simT; paintCell(c); if (c.tree) setTree(c); }
+      if (c.tree && c.crown && before >= BURN[c.tree.kind] - 30 && c.left < BURN[c.tree.kind] - 30) setTree(c);
+      if (c.left <= 0) {
+        if (c.damp) { c.state = 0; c.damp = false; paintCell(c); return; }
+        c.state = 2; c.burnt = simT; paintCell(c); if (c.tree) setTree(c);
+      }
     });
-    lit.forEach(ignite);
+    lit.forEach((n) => litCount < LIMIT.cells && ignite(n));
   }
-  function reset() {
-    rng = S().rng(20261126); simT = 0; acc = 0;
-    cells.forEach((c) => { c.state = 0; c.left = 0; c.burnt = 0; paintCell(c); if (c.tree) setTree(c); });
-    const start = cells.reduce((b, c) => (burnable(c) && Math.hypot(c.x + 34, c.z + 4) < Math.hypot(b.x + 34, b.z + 4) ? c : b), cells.find(burnable));
-    ignite(start); nbrs(start).forEach(ignite);
+  // the page opens on a fire that takes: the first seed whose torch carries (a third of dry-season
+  // torches fizzle on their own cell, decision 12); the rule is the same for every seed
+  let seed0 = 0;
+  function reset(trySeeds) {
+    if (trySeeds !== false && P.season === "dry" && !reset.busy) {
+      reset.busy = true;
+      for (let k = 0; k < 24; k++) { seed0 = k; reset(false); for (let i = 0; i < 60; i++) tick(); if (litCount >= 40) break; }
+      reset.busy = false;
+    }
+    rng = S().rng(20261126 + seed0 * 7919); simT = 0; acc = 0; litCount = 0;
+    setDryness();
+    cells.forEach((c) => { c.state = 0; c.left = 0; c.burnt = 0; c.crown = false; c.damp = false; paintCell(c); if (c.tree) setTree(c); });
+    // the torch: the driest grass cell west of the dug break, upwind
+    const near = cells.filter((c) => c.fuel === "grass" && !c.tree && c.x < -16 && c.x > -34 && Math.abs(c.z) < 12 && !c.grazed);
+    const start = near.reduce((b, c) => (c.dry > b.dry ? c : b), near[0]);
+    ignite(start, true);
+    reset.start = { dry: start.dry, x: start.x, z: start.z, nb: nbrs(start).map((n) => [kindOf(n), +n.dry.toFixed(2), n.state]) };
     for (let i = 0; i < 15; i++) tick();
+  }
+  function setSeason(k) {
+    P.season = k;
+    document.querySelectorAll("[data-fseason]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.fseason === k)));
+    if (built) reset();
+  }
+  function setOverlay(o) {
+    overlay = o; $("fDry").setAttribute("aria-pressed", String(o));
+    if (built) { cells.forEach(paintCell); }
   }
 
   function setNight(n) {
@@ -293,7 +378,7 @@
     if (!built) return;
     scene.background = new THREE.Color(n ? 0x050a14 : 0x9cc4e4);
     scene.fog = new THREE.Fog(n ? 0x050a14 : 0x9cc4e4, 70, 190);
-    moon.intensity = n ? 0.16 : 0; hemi.intensity = n ? 0.16 : 0.55; sun.intensity = n ? 0 : 0.95;
+    moon.intensity = n ? 0.07 : 0; hemi.intensity = n ? 0.05 : 0.55; sun.intensity = n ? 0 : 0.95;
     hemi.color.set(n ? 0x6070a0 : 0xd8e8ff); hemi.groundColor.set(n ? 0x101418 : 0x6a5a40);
     S().fireUniforms.fireC.value.setRGB(n ? 1.0 : 0.6, n ? 0.55 : 0.33, n ? 0.22 : 0.13);
   }
@@ -323,7 +408,7 @@
       if (!hit) return;
       let best = null, bd = 1e9;
       cells.forEach((c) => { const d = Math.hypot(c.x - hit.point.x, c.z - hit.point.z); if (d < bd) { bd = d; best = c; } });
-      ignite(best);
+      ignite(best, true);
     };
     applyOrbit = S().orbit(cam, renderer.domElement, orbitSt);
     built = true;
@@ -354,8 +439,9 @@
   }
   // controls
   const $ = (id) => document.getElementById(id);
-  const sync = () => { $("vDanger").textContent = P.danger.toFixed(2); $("vWind").textContent = P.wind + " m/s"; $("vRain").textContent = P.rain + " mm/h"; };
-  $("fDanger").addEventListener("input", (e) => { P.danger = +e.target.value; sync(); if (built) cells.forEach((c) => c.state === 0 && paintCell(c)); });
+  const sync = () => { $("vWind").textContent = P.wind + " m/s"; $("vRain").textContent = P.rain + " mm/h"; };
+  document.querySelectorAll("[data-fseason]").forEach((b) => b.addEventListener("click", () => setSeason(b.dataset.fseason)));
+  $("fDry").addEventListener("click", () => setOverlay(!overlay));
   $("fWind").addEventListener("input", (e) => { P.wind = +e.target.value; sync(); });
   $("fRain").addEventListener("input", (e) => { P.rain = +e.target.value; sync(); });
   $("fPlay").addEventListener("click", () => { playing = !playing; $("fPlay").textContent = playing ? "Pause" : "Play"; $("fPlay").setAttribute("aria-pressed", String(playing)); });
@@ -374,11 +460,13 @@
     // for the stills: run the fire on to a time, set the sliders, the view and the hour
     still(o) {
       running = false; cancelAnimationFrame(raf);
-      if (o.danger !== undefined) { P.danger = o.danger; $("fDanger").value = o.danger; }
+      if (o.season !== undefined) { P.season = o.season; document.querySelectorAll("[data-fseason]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.fseason === o.season))); }
+      if (o.overlay !== undefined) setOverlay(o.overlay);
       if (o.wind !== undefined) { P.wind = o.wind; $("fWind").value = o.wind; }
       if (o.rain !== undefined) { P.rain = o.rain; $("fRain").value = o.rain; }
       sync();
       if (o.reset) reset();
+      if (o.torch) { const c = cells.filter((c) => c.fuel === "grass" && !c.tree).reduce((b, c) => (Math.hypot(c.x - o.torch[0], c.z - o.torch[1]) < Math.hypot(b.x - o.torch[0], b.z - o.torch[1]) ? c : b)); ignite(c, true); }
       for (let i = 0; i < (o.ticks || 0); i++) tick();
       if (o.night !== undefined) setNight(o.night);
       if (o.view) { Object.assign(orbitSt, o.view); if (o.view.t) orbitSt.t = new THREE.Vector3(...o.view.t); applyOrbit(); }
@@ -386,7 +474,9 @@
       if (o.rainY) updateRain(0.5);
       playing = false; $("fPlay").textContent = "Play";
       cam.updateMatrixWorld(); updateParticles(); renderer.render(scene, cam);
-      return { burning: cells.filter((c) => c.state === 1).length, burnt: cells.filter((c) => c.state === 2).length, t: simT };
+      const g = cells.filter((c) => c.fuel === "grass" && !c.tree).map((c) => c.dry);
+      return { burning: cells.filter((c) => c.state === 1).length, burnt: cells.filter((c) => c.state === 2).length, lit: litCount, t: simT,
+        season: P.season, start: reset.start, grassDryMax: +Math.max(...g).toFixed(2), grassCatch: +(g.filter((d) => d >= DRY_MIN).length / g.length).toFixed(2) };
     },
   };
 })();

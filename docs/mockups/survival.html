@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Survival Mode</title>
-<meta name="description" content="Pale Blue Dot's Survival mode: the survival HUD by day and at night beside Explorer, the stamina and food curve on sliders, a forest fire at night in the dry season, and the hunting weapons at true scale.">
+<meta name="description" content="Pale Blue Dot's Survival mode: the survival HUD by day and at night beside Explorer, the stamina and food curve on sliders, a small grass fire at night in the dry season, burning by each plant's dryness, and the hunting weapons at true scale.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
 <style>
@@ -182,8 +182,9 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
       <button class="btn" id="fPlay" aria-pressed="true">Pause</button>
       <button class="btn" id="fReset">Reset</button>
       <span class="lbl">TIME</span><button class="btn" data-ftime="night">Night</button><button class="btn" data-ftime="day">Day after</button>
-      <label class="sl" style="width:150px">Fire danger <b id="vDanger"></b><input type="range" id="fDanger" min="0" max="1" step="0.05" value="0.8"></label>
-      <label class="sl" style="width:150px">Wind <b id="vWind"></b><input type="range" id="fWind" min="0" max="10" step="0.5" value="4"></label>
+      <span class="lbl">SEASON</span><button class="btn" data-fseason="spring" aria-pressed="false">Spring</button><button class="btn" data-fseason="summer" aria-pressed="false">Summer</button><button class="btn" data-fseason="dry" aria-pressed="true">Dry season</button>
+      <button class="btn" id="fDry" aria-pressed="false">Dryness</button>
+      <label class="sl" style="width:150px">Wind <b id="vWind"></b><input type="range" id="fWind" min="0" max="10" step="0.5" value="3"></label>
       <label class="sl" style="width:150px">Rain <b id="vRain"></b><input type="range" id="fRain" min="0" max="8" step="0.25" value="0"></label>
       <span class="lbl">CLICK A CELL TO LIGHT IT</span>
     </div>
@@ -258,14 +259,17 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
       <p>A normal day eats a little over one full bar of food: three or four meals (roast meat fills 35, grilled fish 25).</p>
     </section>
     <section data-for="fire">
-      <h3>A forest fire at night in the dry season</h3>
-      <p>The owner: <em>"Survival: you can start foresr fires during dry seasons. Torches can light up stuff or can be out out by rain."</em> This tab runs <code>wildfire</code> design 3, 5 and 7 on a patch of hex cells (2.83 m, 1 m layers): grass, shrubs and broadleaf and conifer trees, a stream, a dug break of bare soil, and a player's tilled field.</p>
+      <h3>A small grass fire at night in the dry season</h3>
+      <p>The owner: <em>"Survival: you can start foresr fires during dry seasons. Torches can light up stuff or can be out out by rain."</em> And on the first draft, 2026-11-26: <em>"Let's not spread fire too much for now , consider lots of factors like dryness of plants"</em> (<code>wildfire</code> decision 12, with Our World in Data's <em>Wildfires</em> page as ideas: grassland burns far more than forest, each hemisphere burns in its own summer, farmed and grazed land breaks the fuel up). This tab runs <code>wildfire</code> design 2, 3, 5 and 7 on a patch of hex cells (2.83 m, 1 m layers): grass, shrubs, broadleaf and conifer trees, a stream, a dug break of bare soil, a pen's grazed pasture and a player's tilled field.</p>
       <ul>
-        <li><b>The rule</b>: every second each burning cell tries each of its six neighbours with fuel, at a hazard of the fuel's spread x the fire danger x the wind (faster downwind, slower up it) x the slope x the rain. Grass burns 12 s, a tree 120 s (its crown, then embers).</li>
-        <li><b>It stops</b> at water, the dug break and the player's field (a change the world makes never touches the player's), and in rain: slide Rain up and the front slows, then goes out.</li>
-        <li><b>It leaves</b> ash and charred snags. "Day after" shows the scar by daylight; the game grows it back over 60 world days.</li>
+        <li><b>Every plant has a dryness</b>, 0 to 1, from its kind (grass cures to straw, a shrub less, a tree much less, a cactus never), the season, how long since rain, the air's humidity and warmth, shade under trees, water nearby (the stream's banks stay green), hollows and rises, the soil's own patches, and grazing (round the pen). <b>Dryness</b> shows it: green is wetter, yellow to orange will burn.</li>
+        <li><b>Green plants do not burn</b>: below 0.5 nothing catches, and above it the chance grows as the square of the margin. <b>Spring</b>: nothing catches anywhere, a torch makes a 3 s flame. <b>Summer</b>: still too green. <b>Dry season</b> (late summer after two dry weeks): the open grass burns, the banks, the wood's floor and the pasture do not.</li>
+        <li><b>The rule</b>: every second each burning cell tries each of its six neighbours that is dry enough, at a hazard of the fuel's spread x its dryness x the wind (faster downwind, slower up it) x the slope x the rain. Grass burns 15 s, a shrub 40 s, a tree 90 s at its foot; only a very dry conifer in a wind of 6 m/s or more burns in its crown. No embers are thrown.</li>
+        <li><b>It stays small</b>: a front runs about 0.2 m/s, goes out where it meets green or wetter ground, and is held to 300 cells (about 50 m across) and 40 burning at once.</li>
+        <li><b>It stops</b> at water, the dug break, green ground and the player's field (a change the world makes never touches the player's), and in rain: slide Rain up and the front slows, then goes out.</li>
+        <li><b>It leaves</b> ash, scorched trees and, after a crown fire, charred snags. "Day after" shows the scar by daylight; the game grows it back over 60 world days.</li>
         <li><b>Lit by its own fire</b>: every burning cell lights the ground and trees near it (grouped into up to 48 lights), under a dim moon. Flames, smoke and embers are particles.</li>
-        <li>The fire spreads because the world spreads it; Pause stops it. Click a cell to light it with a torch.</li>
+        <li>Shown at six seconds of fire a real second; Pause stops it. Click a cell to light it with a torch.</li>
         <li>Trees here are this page's stand-ins for the game's tree draw, shaped and textured, not the game's own models.</li>
       </ul>
     </section>

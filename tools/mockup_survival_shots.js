@@ -30,13 +30,23 @@ const want = (k) => !only || only.includes(k);
   // Fire
   if (want("fire")) {
   await p.evaluate(() => window.survivalPage.show("fire")); await p.waitForTimeout(3000);
-  console.log(await p.evaluate(() => JSON.stringify(window.fireTab.still({ reset: true, ticks: 12, night: true, ft: 3.2 }))));
+  const F = async (o) => console.log(await p.evaluate((o) => JSON.stringify(window.fireTab.still(o)), o));
+  // the dry season (wildfire decision 12): a small grass fire at its front, lit by its own flames
+  await F({ season: "dry", wind: 3, rain: 0, overlay: false, reset: true, ticks: 40, night: true, view: { t: [-22, 0, 0], r: 50, pol: 0.95, az: 3.7 }, ft: 3.2 });
   await shot("fire-night-front");
-  console.log(await p.evaluate(() => JSON.stringify(window.fireTab.still({ ticks: 30, view: { t: [-6, 2, 2], r: 34, pol: 1.05, az: 0.9 }, ft: 4.1 }))));
+  await F({ view: { t: [-20, 1, -6], r: 26, pol: 1.05, az: 3.4 }, ft: 4.1 });
   await shot("fire-night-close");
-  console.log(await p.evaluate(() => JSON.stringify(window.fireTab.still({ rain: 4, ticks: 6, view: { t: [-4, 0, 0], r: 92, pol: 0.95, az: 0.55 }, ft: 5, rainY: true }))));
+  await F({ rain: 4, ticks: 4, view: { t: [-22, 0, 0], r: 50, pol: 0.95, az: 3.7 }, ft: 5, rainY: true });
   await shot("fire-night-rain");
-  console.log(await p.evaluate(() => JSON.stringify(window.fireTab.still({ rain: 0, reset: true, ticks: 160, ft: 6 }))));
+  // the plants' dryness as an overlay, the same fire: green is wetter (banks, wood floor, pasture)
+  await F({ rain: 0, reset: true, ticks: 40, overlay: true, night: false, view: { t: [-6, 0, 0], r: 88, pol: 0.9, az: 3.9 }, ft: 3 });
+  await shot("fire-dryness");
+  // spring: the same torch, nothing catches
+  await F({ season: "spring", overlay: false, reset: true, ticks: 0, night: true, view: { t: [-24, 0, -2], r: 40, pol: 1.0, az: 3.7 }, ft: 0.6 });
+  console.log(await p.evaluate(() => { for (let k = 0; k < 30; k++) window.fireTab.still({ ticks: 1 }); return JSON.stringify(window.fireTab.still({ torch: [-30, -2], ft: 0.6 })); }));
+  await shot("fire-spring-green");
+  // the dry season run to its end, then by day
+  await F({ season: "dry", reset: true, ticks: 160, night: true, view: { t: [-10, 0, 0], r: 70, pol: 0.95, az: 3.8 }, ft: 6 });
   await shot("fire-night-late");
   console.log(await p.evaluate(() => { let k = 0; while (k++ < 600 && window.fireTab.still({ ticks: 10 }).burning) {} return JSON.stringify(window.fireTab.still({ night: false })); }));
   await shot("fire-day-after");
