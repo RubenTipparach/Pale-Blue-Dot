@@ -1770,9 +1770,16 @@ fn initialize_pipelines(
 impl SpecializedRenderPipeline for PlanetPipeline {
     /// MSAA samples, HDR, and whether L8's traces go to the half-size pass
     /// (`lighting-perf` 2.8): then the fragment writes the request and what a
-    /// hit replaces beside the colour.
-    type Key = (u32, bool, bool);
-    fn specialize(&self, (samples, hdr, split): Self::Key) -> RenderPipelineDescriptor {
+    /// hit replaces beside the colour. Last, the depth pass (`memory-leak`
+    /// cut 6): [`TerrainPass::Depth`] writes depth and no colour,
+    /// [`TerrainPass::AfterDepth`] shades only what it left nearest.
+    type Key = (u32, bool, bool, TerrainPass);
+    fn specialize(&self, (samples, hdr, split, pass): Self::Key) -> RenderPipelineDescriptor {
+        let write_mask = if pass == TerrainPass::Depth {
+            ColorWrites::empty()
+        } else {
+            ColorWrites::ALL
+        };
         let color = Some(ColorTargetState {
             format: if hdr {
                 ViewTarget::TEXTURE_FORMAT_HDR
@@ -1780,7 +1787,7 @@ impl SpecializedRenderPipeline for PlanetPipeline {
                 TextureFormat::bevy_default()
             },
             blend: None,
-            write_mask: ColorWrites::ALL,
+            write_mask,
         });
         let targets = if split {
             vec![
@@ -1788,12 +1795,12 @@ impl SpecializedRenderPipeline for PlanetPipeline {
                 Some(ColorTargetState {
                     format: reflect::REQUEST_FORMAT,
                     blend: None,
-                    write_mask: ColorWrites::ALL,
+                    write_mask,
                 }),
                 Some(ColorTargetState {
                     format: reflect::REPLACED_FORMAT,
                     blend: None,
-                    write_mask: ColorWrites::ALL,
+                    write_mask,
                 }),
             ]
         } else {
@@ -1813,7 +1820,9 @@ impl SpecializedRenderPipeline for PlanetPipeline {
             },
             fragment: Some(FragmentState {
                 shader: self.shader.clone(),
-                entry_point: Some(Cow::Borrowed(if split {
+                entry_point: Some(Cow::Borrowed(if pass == TerrainPass::Depth {
+                    "shadow_fragment"
+                } else if split {
                     "fragment_split"
                 } else {
                     "fragment"
@@ -1827,7 +1836,9 @@ impl SpecializedRenderPipeline for PlanetPipeline {
             },
             depth_stencil: Some(DepthStencilState {
                 format: CORE_3D_DEPTH_FORMAT,
-                depth_write_enabled: true,
+                // After the depth pass every pixel's depth is already the
+                // nearest: the colour pass only tests against it.
+                depth_write_enabled: pass != TerrainPass::AfterDepth,
                 depth_compare: CompareFunction::GreaterEqual,
                 stencil: default(),
                 bias: default(),
@@ -2379,7 +2390,32 @@ fn prepare_views(
 #[derive(Component)]
 struct PlanetDraw {
     pipeline: CachedRenderPipelineId,
+    /// The depth-only pass drawn first (`memory-leak` cut 6), when on.
+    depth: Option<CachedRenderPipelineId>,
     split: bool,
+}
+
+/// Which of the terrain's passes a pipeline draws (`memory-leak` cut 6).
+/// The terrain shades each pixel about four times over in one pass: the
+/// ground, the trees and the clutter overlap, and a fragment is shaded
+/// before what is in front of it has written its depth. Drawn once first
+/// for depth alone, then for colour with depth writes off, the GPU's early
+/// depth test leaves every hidden fragment unshaded. The same nearest
+/// surface wins each pixel. `PBD_TERRAIN_DEPTH_OFF` draws it in one pass
+/// as before, for an A/B.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub(crate) enum TerrainPass {
+    /// One pass, depth and colour together.
+    Single,
+    /// Depth only, no colour.
+    Depth,
+    /// Colour, tested against the depth pass's depth, writing none.
+    AfterDepth,
+}
+
+fn depth_pass_on() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("PBD_TERRAIN_DEPTH_OFF").is_none())
 }
 
 /// The terrain draws in a pass of its own (`lighting-perf` 2.8,
@@ -2414,13 +2450,32 @@ fn queue_planet(
         // The other entry too, so a REFLECTIONS level switched in play finds
         // its pipeline compiled behind the loading screen
         // (`reflection-quality` 4); after the first frame a cache lookup.
+        let colour = if depth_pass_on() {
+            TerrainPass::AfterDepth
+        } else {
+            TerrainPass::Single
+        };
         if split_possible && fits {
-            specialized.specialize(&cache, &pipeline, (msaa.samples(), view.hdr, !split));
+            specialized.specialize(
+                &cache,
+                &pipeline,
+                (msaa.samples(), view.hdr, !split, colour),
+            );
         }
-        let pipeline = specialized.specialize(&cache, &pipeline, (msaa.samples(), view.hdr, split));
-        commands
-            .entity(entity)
-            .insert(PlanetDraw { pipeline, split });
+        let depth = depth_pass_on().then(|| {
+            specialized.specialize(
+                &cache,
+                &pipeline,
+                (msaa.samples(), view.hdr, split, TerrainPass::Depth),
+            )
+        });
+        let pipeline =
+            specialized.specialize(&cache, &pipeline, (msaa.samples(), view.hdr, split, colour));
+        commands.entity(entity).insert(PlanetDraw {
+            pipeline,
+            depth,
+            split,
+        });
     }
 }
 

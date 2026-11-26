@@ -282,3 +282,44 @@ and each opens whole, the same as with `PBD_UI_PARK_OFF` (the bot's `Tap`
 now knows O, M, Tab and Escape). What is left under 40 fps is the first
 minute: while the near terrain's fine tier builds in (versions 1 to 8,
 25 to 60 s), the GPU's terrain pass is 12 to 16 ms and its shadow 8 to 12.
+
+**Cut 6: the terrain shaded once a pixel (owner, 2026-11-26: "Get me as
+close to 100% ... 60 fps ... over the course of 30 minutes").** Measured on
+`turn-check` (standing in Holbrook, a full turn in twelve steps, 150 s,
+cut 5 in): p50 11.8, p90 16.5, p99 31.5 ms; 91% of frames at 60 fps or
+better, 98.6% at 40. The frames over 16.7 ms are mostly the GPU's: its
+terrain pass is 4 ms facing the town at the start and 7.7 ms facing the
+same way at the end, with the same triangles (3.3 million vertices, 1.1
+million triangles) and 40% more fragments. With the wet film compiled out
+(`PBD_TERRAIN_OFF=wet`) it stays near 4.5 ms: the ground soaking in a
+light rain (`weather.x` over 0.001) turns on the wet film's work on every
+terrain fragment. That is the picture (the ground does go dark and glossy),
+so the work stays; what it is spent on is the cut.
+
+The terrain pass shades about 5 million fragments for a 1440 x 900 window
+(1.3 million pixels): each pixel about four times. The ground, the trees,
+the near trees, the clutter and the columns draw in that order in one pass,
+in the compute pass's order within each, and the shader can discard (the
+plants' cut-outs, the dither of a fade), so a fragment is shaded before
+anything in front of it has written its depth. The cut: the same draws once
+first with a depth-only fragment (`shadow_fragment`, the same cut-out and
+dither test the shadow pass uses), writing depth and no colour; then the
+colour pass with depth writes off, so the GPU's early depth test leaves
+every hidden fragment unshaded. The vertex shader's position is
+`@invariant`, so both passes put a pixel at the same depth. Nothing drawn
+changes: the same nearest surface wins each pixel. The vertex work is done
+twice; the flat price (`PBD_TERRAIN_OFF=flat`) says what that costs.
+
+Measured on `turn-check`, the same sitting, after the first 30 s
+(`PBD_TERRAIN_DEPTH_OFF` for the one-pass row):
+
+| Build | p50 | p80 | p90 | p99 | at 60 fps | at 40 fps | terrain pass, start / soaked |
+|---|---|---|---|---|---|---|---|
+| One pass | 12.1 | 15.1 | 16.5 | 20.6 | 91% | 99.9% | 4.0 / 7.7 ms |
+| Depth pass first | 10.6 | 12.6 | 13.9 | 18.9 | 98% | 99.5% | 2.6 / 4.9 ms |
+
+The terrain pass's time includes both its draws. Stills from where the bot
+stands, both ways round, differ only where the grass sways, a townsperson
+walks and the clouds move (`still-check`). The one frame of 288 ms in the
+second run is the main thread: traced, the spikes left standing in town are
+`fish::places::tiles` (27 to 45 ms when it runs long), the next cut.
