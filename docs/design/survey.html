@@ -303,15 +303,6 @@ const PHASES = [
         images: [
           { src: 'img/s4-hud-day-stroke.png', alt: 'Heat stroke', caption: 'Heat stroke: the view fading out.' },
         ] },
-      { id: 'G9', q: 'A dry-season forest fire runs about 1 m/s through grass with no wind (2.5 m/s in a 5 m/s wind), slower through shrubs and trees. Rain, water, roads and bare ground stop it; it leaves ash and charred snags that regrow over days. Your own buildings and crops never burn.',
-        options: ['As drawn', 'Half as fast', 'Twice as fast'], rec: 0,
-        why: 'Fast enough to fear, slow enough to outrun on foot, and rain ends it.',
-        change: 'wildfire', asked: '2026-11-26',
-        images: [
-          { src: 'img/s4-fire-night-front.png', alt: 'A fire front at night', caption: 'A fire front at night, lit by its own flames.' },
-          { src: 'img/s4-fire-night-rain.png', alt: 'Rain putting it out', caption: 'Rain putting it out.' },
-          { src: 'img/s4-fire-day-after.png', alt: 'The day after', caption: 'The day after: ash and snags.' },
-        ] },
       { id: 'G10', q: 'The weapons: a stone spear (2.0 m), a bow (1.5 m) with 0.75 m arrows, a bronze hunting axe (0.6 m) and a bronze sword (0.9 m), at true size beside a 1.8 m figure.',
         options: ['Approve the looks for the animation step', 'Change a look (say which)'], rec: 0,
         why: 'Then the held models and their swings go through the animation work.',
@@ -340,6 +331,7 @@ const PHASES = [
 
 // The "Already decided" list, newest first. Rows to 2026-10-02 are the first survey's (the Claude Doc), copied as they stood.
 const DECIDED = [
+  {"date": "2026-11-26", "phase": "4", "id": "G9", "text": "\"Let's not spread fire too much for now, consider lots of factors like dryness of plants\": fires stay small and slow, green plants do not burn, and each cell burns by how dry its plants are (kind, season, rain, humidity, shade, water nearby). Being written into the design, with the mockup's Fire tab redone to show it.", "where": "wildfire"},
   {"date": "2026-11-24", "phase": "3", "id": "P1", "text": "Trading stays in baskets (YOU TAKE, YOU GIVE, DEAL), as built. And \"One thing id improve is framing. Move the camera so the merchant is on left, and the trade UI is on the right\": the talk and trade panels sit on the right, and the view turns so the townsperson stands in the left of the frame. Being built.", "where": "townsfolk design 37a, task 11.3"},
   {"date": "2026-11-24", "phase": "3", "id": "P2", "text": "The road planner's ghost is stronger, 55%. And \"Can we something like a slightly aerial view? Let's say something like 10-20 m off the ground?\": while the planner is open the camera lifts to about 15 m above you, looking down the way you face, and comes back down when it closes. Being built.", "where": "townsfolk design 42"},
   {"date": "2026-11-24", "phase": "3", "id": "P3", "text": "\"The night is too faint, please make it glow a bit more at night\": the building site's ghost glows more after dark (ghost_night raised from 0.05). Being built.", "where": "building-planner design"},
