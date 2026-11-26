@@ -717,3 +717,57 @@ the code does not say. Neither is proved yet.
    plain launch, the next step is the owner's `--audio-log` line
    `AUDIO volumes master=...` from that run, which says whether the slider
    reached the mixer.
+
+## Eating munches (owner, 2026-11-26)
+
+**The ask.** "eating sounds should have munching sounds".
+
+**What eats today (read, 2026-11-26).** One rule eats, `desktop::kitchen::eat_held`:
+the held stack loses one dish, the effect runs, one saved line. Two callers
+reach it, and both raise `kitchen::Ate` on the frame the save took it:
+- the right button with a dish in the selected slot (`kitchen::eat`): every
+  campfire dish, the steamed mussels and kelp crisps, and the glowing
+  mushroom, which is eaten raw (`cooking.ron`'s `dishes`);
+- the scripted `--eat` of a capture (`kitchen::scripted`).
+
+Nothing else eats. A tree's fruit is picked into the pack and is no dish, so
+it cannot be eaten yet; when it becomes one it is eaten through the same rule
+and sounds the same way. Animals eat in two ways and neither raises an event:
+a kept animal hand-fed (`husbandry`, a note and hearts, no message) and the
+graze drawn by `critters::motion::Eat` (drawn only). So no animal munches in
+this step; a fed animal is a quieter placed `eat_crisp` once a feed raises an
+event, not before.
+
+Today `Ate` plays `breath`, the gasp of surfacing from a long dive, which is
+the wrong sound.
+
+**The cues.** Two, each in four takes so a run of meals never repeats one:
+- `eat_crisp`: a bite and its crunch, then a chew or two, about 1.1 to 1.25 s.
+  Cut from recordings of an apple and a raw carrot being eaten.
+- `eat_soft`: two or three closed-mouth chews, about 1.2 s. Cut from
+  recordings of a mouthful being chewed.
+
+Which a dish plays is data: `mix.ron`'s `crisp_foods` lists the goods that
+crunch (the glowing mushroom and the kelp crisps today; fruit and raw veg
+when they become dishes). Every other dish is cooked and plays `eat_soft`.
+`MixConfig::problems` refuses a code that is no good. The one rule is
+`pbd_core::audio::eat_cue`.
+
+**Where it plays.** At the eye, `Where::At(listener.eye)`, as `breath` does:
+the player's own mouth, so it is not panned and is heard at full level. On
+the Effects bus (the cue's default), so the Effects and Master sliders scale
+it. One at a time (`cap: 1`): two meals in one frame are one munch.
+
+**How it is made.** Recorded CC0 only, through `tools/audio/fetch_cc0.py`
+(each sound's Freesound page read for its CC0 link) and `cc0_cues.json`: a
+window of each recording, a high pass at 90 Hz for handling rumble, faded
+out, peak -3 dBFS, mono. No synthesis: the recordings already have the bite,
+the crunch and the wet chew a synthesised munch would lack. Judged by
+`inspect_sfx.py check` and the contact sheet (a munch is two or three
+separate bursts, not one smear, and ends at nothing); only the owner's ears
+approve it.
+
+**Verify.** A test raises `Ate` for a cooked dish and for the mushroom and
+reads the asks `Sfx` holds: `eat_soft` and `eat_crisp`, at the eye. The
+cue-book tests hold both cues to `cues.ron` and every take's file to an Ogg
+that exists and is mono, and a test decodes each take.
