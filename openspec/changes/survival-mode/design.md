@@ -592,6 +592,28 @@ starter missions to handle survival."
 | `relight` | Relight a torch | `cook-meat` (`torch`) | relight a torch the rain put out (`wildfire`; **new** kind `relight`) | - |
 | `put-out` | Put out a fire | `relight` | put out 3 burning cells with water (`wildfire`; **new** kind `douse`) | - |
 
+- **Fishing and farming sit under the Survival branch in a Survival world**
+  (owner, 2026-11-26: "can you move farming and fishing under the survival
+  tree too?", then "it seems more logical to make it a follow up after making
+  a fire", "so the player has all basic tools first"). Their missions are the
+  starter tree's own (no copies, the same ids and records); a Survival world's
+  Missions screen draws the two branches as `8 · SURVIVAL · FISHING` and
+  `8 · SURVIVAL · FARMING`, under the Survival branch, and an Explorer world
+  keeps them as `1 · FISHING` and `2 · FARMING`. Their parents:
+
+  | id | Mission | Parent (after), Survival world | Why |
+  | --- | --- | --- | --- |
+  | `rod` | Make a fishing rod (Fishing's first) | `fire` | a follow-up to making a fire |
+  | `find-seeds` | Find seeds (Farming's first) | `fire` | a follow-up to making a fire |
+
+  "Make a fire" (`fire`) waits on "Stone tools" (`stone-tools`), which waits
+  on the workbench, planks and rope and the axe, so by the time it is done
+  the stone axe, pickaxe and shovel are all made: no extra hidden `after`
+  gate is needed for "all basic tools first", and none is added (the rule
+  holds by the trunk's order; a test pins that `fire`'s ancestors include
+  every basic tool mission). The bot plays the two branches right after the
+  Survival trunk's "The first night", before the rest of the Survival
+  branch. Mocked up on M33's Survival tab, version 10.
 - **Rewards** are unlocks, as the rest of the starter tree's are: the branch
   opens the survival recipes in the order the player needs them. The
   `bedroll` (by hand: 2 hide, 1 wool) is the branch's own payoff: laid on the

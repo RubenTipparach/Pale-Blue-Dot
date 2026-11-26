@@ -35,3 +35,21 @@ Explorer world SHALL NOT show or count any of them.
 - **WHEN** a Survival player finishes "The first night"
 - **THEN** the bedroll recipe is unlocked, and a laid bedroll sets where they
   wake
+
+### Requirement: Fishing and farming follow the fire under the Survival branch
+In a Survival world the Missions screen SHALL draw the starter tree's
+Fishing and Farming branches under the Survival branch, each a child of
+"Make a fire", whose own ancestors SHALL include every basic tool mission
+(the stone axe, the stone pickaxe and the stone shovel), so that the player
+holds all basic tools before either branch opens. The missions SHALL be the
+starter tree's own, with the same ids and records; an Explorer world SHALL
+draw them as before.
+
+#### Scenario: Fishing opens after the fire
+- **WHEN** a Survival player finishes "Make a fire"
+- **THEN** "Make a fishing rod" and "Find seeds" open, and the stone axe,
+  pickaxe and shovel have all been made
+
+#### Scenario: The same missions in Explorer
+- **WHEN** an Explorer player opens the Missions screen
+- **THEN** Fishing and Farming are drawn as their own branches, as before
