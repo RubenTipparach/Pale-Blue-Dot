@@ -1691,6 +1691,7 @@ mod tests {
         let ease = light::BAKE_EASE_S;
         let mut corners = Corners {
             raw: [Vec3::ZERO; 8],
+            ground: [(Vec3::NAN, 0.0); 8],
             points: [Vec3::ZERO; 8],
             key: (0, 0, false),
             sky: [Vec4::ONE; 2],

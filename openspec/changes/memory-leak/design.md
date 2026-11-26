@@ -193,3 +193,27 @@ because they **moved** (none because the field changed), 9 to 14 ms. That
 is 1,400 to 1,700 field reads at 6 to 8 µs each; the read's cost is the
 finest-cell lookup (`PlanetContact::finest_cell`). The next cut is that
 lookup, or fewer moving rows (a townsperson's parts lit as one).
+
+**Cuts made (2026-11-25), each measured on the same 4.5 minutes of
+`town-route` (frame p50 / p99 ms, main thread ms):**
+
+| Build | p50 | p99 | main | over 16.7 ms |
+|---|---|---|---|---|
+| Before | 31.6 | 196.5 | 33.1 | 100% |
+| Corners' ground asked once per 25 cm (`GROUND_REASK_M`) | 25.8 | 42.2 | 24.1 | 100% |
+| Town bake's ground asked once per vertex (`BakedField::ground`) | 22.3 | 37.3 | 21.2 | 96% |
+| The ground check asks the pieces near the body (`Meets::near`) | 17.7 | 24.4 | 16.4 | 78% |
+
+The first two: a moving townsperson's corners, and a town's outside on each
+set that lands, asked the generator (`column::surface_m`, noise and the
+towns' ground) for the ground every time, about 1,600 times a frame. The
+third: every probe of every sweep of the walker walked every loaded town's,
+build's and road's pieces. A check run beside it (3 minutes, every `stand`
+and `holds` asked both ways) found no answer the near pieces gave unlike all
+of them: walking is unchanged. Picture unchanged in all three.
+
+The bot's walk to the other town stalls near Holbrook with the third cut in
+(two runs), where at 22 ms it arrived: its planner, not the walker (the
+check above), at the faster frame. The last row is the bot standing near the
+town more than walking; the route's legs are measured again once the bot's
+stall is fixed.
