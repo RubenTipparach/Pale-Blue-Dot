@@ -48,7 +48,8 @@ impl Plugin for MemoryTracePlugin {
         app.insert_resource(MemoryTrace { file, next_s: 0.0 })
             .insert_resource(render_entities.clone())
             .add_systems(Last, trace)
-            .add_systems(Last, ui_roots);
+            .add_systems(Last, ui_roots)
+            .add_systems(PostUpdate, ui_changes.before(bevy::ui::UiSystems::Prepare));
         if let Some(render) = app.get_sub_app_mut(RenderApp) {
             render
                 .insert_resource(render_entities)
@@ -198,4 +199,82 @@ fn ui_roots(world: &mut World, mut next: Local<f32>) {
         rows.len(),
         top.join(" | ")
     );
+}
+
+/// MEASUREMENT (`memory-leak`, towns at 60 fps): the UI nodes changed each
+/// frame (their `Node`, `Text` or `Visibility`), by the first words of the
+/// node itself or its nearest labelled ancestor, summed over ten seconds: a
+/// changed node lays the UI out again.
+#[allow(clippy::type_complexity)]
+fn ui_changes(
+    time: Res<Time<Real>>,
+    mut tally: Local<(f32, u64, std::collections::HashMap<String, u64>)>,
+    changed: Query<
+        (
+            Entity,
+            Ref<Node>,
+            Option<Ref<Text>>,
+            Option<Ref<Visibility>>,
+        ),
+        Or<(Changed<Node>, Changed<Text>, Changed<Visibility>)>,
+    >,
+    parents: Query<&ChildOf>,
+    texts: Query<&Text>,
+    children: Query<&Children>,
+) {
+    let (next, frames, by) = &mut *tally;
+    *frames += 1;
+    for (e, node, text, vis) in &changed {
+        if node.is_added() {
+            continue;
+        }
+        let what = if node.is_changed() {
+            "node"
+        } else if text.is_some_and(|t| t.is_changed()) {
+            "text"
+        } else if vis.is_some_and(|v| v.is_changed()) {
+            "vis"
+        } else {
+            "?"
+        };
+        // The nearest words: its own, a child's, or an ancestor's.
+        let mut label = None;
+        let mut at = Some(e);
+        while let Some(x) = at {
+            if let Ok(t) = texts.get(x) {
+                label = Some(t.0.chars().take(20).collect::<String>());
+                break;
+            }
+            if let Some(t) = children
+                .get(x)
+                .ok()
+                .and_then(|c| c.iter().find_map(|c| texts.get(c).ok()))
+            {
+                label = Some(t.0.chars().take(20).collect::<String>());
+                break;
+            }
+            at = parents.get(x).ok().map(ChildOf::parent);
+        }
+        *by.entry(format!(
+            "{what} {}",
+            label.unwrap_or_default().replace('\n', " ")
+        ))
+        .or_default() += 1;
+    }
+    let now = time.elapsed_secs();
+    if now >= *next {
+        if *frames > 0 && !by.is_empty() {
+            let mut rows: Vec<(&String, &u64)> = by.iter().collect();
+            rows.sort_by(|a, b| b.1.cmp(a.1));
+            let top: Vec<String> = rows
+                .iter()
+                .take(10)
+                .map(|(k, n)| format!("{:.1}/f {k}", **n as f32 / *frames as f32))
+                .collect();
+            info!("UI_CHANGES {}", top.join(" | "));
+        }
+        *next = now + 10.0;
+        *frames = 0;
+        by.clear();
+    }
 }

@@ -233,3 +233,21 @@ the map 688, four more of 425 to 950. Bevy stacks, clips and hit-tests every
 node each frame, shown or not. Cut 4: a big screen is built when it opens
 and despawned when it shuts, its first build prewarmed on the loading screen
 so opening it never hitches. The picture is the same.
+
+**Cut 4 as built: the UI laid out every frame.** `UI_CHANGES` (the nodes
+whose `Node`, `Text` or `Visibility` changed, each frame) found the F3
+graph's 240 bars resized every frame (about 200 nodes a frame) and the
+compass bar's 48 marks written every frame, changed or not. Either marks the
+UI changed, and Bevy lays it all out again. The graph's bars are drawn into
+one image (`FrameGraphBars`), the compass bar writes a mark only when it
+moves (`put_display`, `put_left`): 250 changed nodes a frame to 8. Measured
+on the route (the bot stalled in the second run, so it stood more):
+
+| Build | p50 | p90 | p99 | main | over 16.7 ms |
+|---|---|---|---|---|---|
+| The three cuts | 18.3 | 21.8 | 28.3 | 17.2 | 82% |
+| + the graph as an image | 18.0 | 21.5 | 28.3 | 16.8 | 71% |
+| + the compass bar's guarded writes | 16.5 | 19.3 | 23.4 | 15.4 | 45% |
+
+The bot's stall near Holbrook comes and goes (a different cell each run),
+so further A/Bs use a fixed scene that does not walk.

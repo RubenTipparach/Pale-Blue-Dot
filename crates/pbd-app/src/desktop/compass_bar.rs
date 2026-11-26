@@ -318,21 +318,21 @@ pub fn update(
             .iter()
             .find(|m| !matches!(m.kind, MarkKind::Place(_)) && m.index == mark.0)
         else {
-            node.display = Display::None;
+            put_display(&mut node, Display::None);
             continue;
         };
-        node.display = Display::Flex;
+        put_display(&mut node, Display::Flex);
         let fade = m.fade * alpha;
         match m.kind {
             MarkKind::Tick => {
-                node.left = x(m.offset, 1.0);
+                put_left(&mut node, x(m.offset, 1.0));
                 if let Some(mut background) = background {
                     background.0 = ui_kit::CUT.with_alpha(fade);
                 }
             }
             kind => {
                 let label = compass::direction_label(mark.0);
-                node.left = x(m.offset, kit.font.width(&label) as f32);
+                put_left(&mut node, x(m.offset, kit.font.width(&label) as f32));
                 let ink = if kind == MarkKind::Cardinal && mark.0 == 0 {
                     ui_kit::NORTH
                 } else {
@@ -354,11 +354,11 @@ pub fn update(
     for (slot, mut node, mut image) in &mut studs {
         match shown.get(slot.0) {
             Some(m) => {
-                node.display = Display::Flex;
-                node.left = x(m.offset, STUD);
+                put_display(&mut node, Display::Flex);
+                put_left(&mut node, x(m.offset, STUD));
                 image.color = Color::WHITE.with_alpha(m.fade * alpha);
             }
-            None => node.display = Display::None,
+            None => put_display(&mut node, Display::None),
         }
     }
     // The player's waypoints, read again only when their record changes.
@@ -399,11 +399,11 @@ pub fn update(
     for (slot, mut node, mut image) in &mut pins {
         match on_bar.get(slot.0) {
             Some(m) => {
-                node.display = Display::Flex;
-                node.left = x(m.offset, PIN[0].len() as f32);
+                put_display(&mut node, Display::Flex);
+                put_left(&mut node, x(m.offset, PIN[0].len() as f32));
                 image.color = Color::WHITE.with_alpha(m.fade * alpha);
             }
-            None => node.display = Display::None,
+            None => put_display(&mut node, Display::None),
         }
     }
     if let Ok(mut text) = name.single_mut() {
@@ -429,5 +429,21 @@ pub fn update(
         if text.text != line {
             text.text = line;
         }
+    }
+}
+
+/// A node's display, written only when it changes: a write marks the node
+/// changed and lays the whole UI out again (`memory-leak`, towns at 60 fps:
+/// the bar's 48 marks were rewritten every frame).
+fn put_display(node: &mut Mut<Node>, display: Display) {
+    if node.display != display {
+        node.display = display;
+    }
+}
+
+/// A node's left edge, written only when it changes (see [`put_display`]).
+fn put_left(node: &mut Mut<Node>, left: Val) {
+    if node.left != left {
+        node.left = left;
     }
 }
