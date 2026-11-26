@@ -2,15 +2,17 @@
 // "Missions are a tree that unlocks the tech" and "The full tree") and, on the Town tab, the town
 // tree (openspec/changes/town-missions-tree/design.md, decision 2), each drawn as the game's
 // Missions screen; on the Survival tab, the starter tree as a Survival world shows it, with its
-// SURVIVAL branch (openspec/changes/survival-mode/design.md, decision 18). The open tree is the
-// page's #anchor (#starter, #town, #survival). Nothing moves until the
+// SURVIVAL branch (openspec/changes/survival-mode/design.md, decision 18); on the Power tab, the
+// POWER tree (openspec/changes/early-power/design.md, decision 2). The open tree is the
+// page's #anchor (#starter, #town, #survival, #power). Nothing moves until the
 // viewer drags, zooms, steps or presses Play.
 (function () {
   "use strict";
   const IMG = "mission-tree/items/";
   const UI = "mission-tree/ui/";
   const HASH = location.hash.slice(1);
-  const TREE = HASH === "town" || HASH === "survival" ? HASH : "starter";
+  const TREES = ["town", "survival", "power"];
+  const TREE = TREES.includes(HASH) ? HASH : "starter";
 
   // ---- what a mission can unlock: recipes and stations (a code the recipe list shows), or a skill
   // or branch (no recipe). new = a recipe the game does not have yet.
@@ -347,7 +349,13 @@
     "straw-hat": { name: "Straw hat", icon: "straw-hat", kind: "recipe", new: true },
     "wool-cloak": { name: "Wool cloak", icon: "wool-cloak", kind: "recipe", new: true },
   });
-  const SV_BRANCHES = [S_BRANCHES[0], { key: "survival", name: "8 · SURVIVAL" }].concat(S_BRANCHES.slice(1));
+  // Fishing and farming sit under the Survival branch in a Survival world (owner, 2026-11-26: "can you
+  // move farming and fishing under the survival tree too?", "it seems more logical to make it a follow
+  // up after making a fire", "so the player has all basic tools first"): their parent stays "Make a
+  // fire", whose own parent is "Stone tools", so the axe, pickaxe and shovel are all made by then.
+  const SV_BRANCHES = [S_BRANCHES[0], { key: "survival", name: "8 · SURVIVAL" },
+    { key: "fishing", name: "8 · SURVIVAL · FISHING" }, { key: "farming", name: "8 · SURVIVAL · FARMING" }]
+    .concat(S_BRANCHES.slice(3));
   const SV_ONLY = [
     { id: "drink", b: "survival", icon: "water-drop", title: "Drink water", needs: [["pack"]],
       obj: [o("drink", 3, "drink 3 sips of fresh water", true)], unl: ["straw"], help: "Crouch at a river or lake and hold use." },
@@ -409,9 +417,94 @@
     copy.find((m) => m.id === "axe").needs = [["pack"]];
     return copy.concat(SV_ONLY);
   })() : [];
-  const U = TREE === "town" ? T_U : TREE === "survival" ? SV_U : S_U;
-  const BRANCHES = TREE === "town" ? T_BRANCHES : TREE === "survival" ? SV_BRANCHES : S_BRANCHES;
-  const M = TREE === "town" ? T_M : TREE === "survival" ? SV_M : S_M;
+
+  // ---- the Power tab (early-power design 2 and 3): a tree of its own, opened by the starter tree's
+  // "The iron age". Windmills grind food, the water mill makes power, lines carry it, and there is no
+  // battery: an appliance runs only while the wheel turns. rec = the recipe: station and inputs.
+  // Icons are stand-ins (tools/art/early_power_icons.py).
+  const r = (at, ins, out) => ({ at, ins, out });
+  const P_U = {
+    millstone: { name: "Millstone", icon: "millstone", kind: "recipe", new: true, rec: r("workbench", "2 stone blocks, 4 stone", "1 millstone") },
+    "copper-wire": { name: "Copper wire", icon: "copper-wire", kind: "recipe", new: true, rec: r("workbench", "1 copper ingot", "4 copper wire") },
+    dynamo: { name: "Dynamo", icon: "dynamo", kind: "recipe", new: true, rec: r("workbench", "8 copper wire, 2 iron ingot, 1 axle", "1 dynamo") },
+    windmill: { name: "Windmill", icon: "windmill", kind: "station", new: true, rec: r("workbench", "24 planks, 6 log, 4 rope, 4 wooden gear, 1 axle, 2 millstone, 6 fibre", "1 windmill") },
+    flour: { name: "Flour", icon: "flour", kind: "recipe", new: true, rec: r("windmill", "3 wheat", "2 flour") },
+    loaf: { name: "Loaf", icon: "loaf", kind: "recipe", new: true, rec: r("campfire", "2 flour", "1 loaf") },
+    "feed-mash": { name: "Feed mash", icon: "feed-mash", kind: "recipe", new: true, rec: r("windmill", "1 wheat, 1 turnip", "2 feed mash") },
+    "water-mill": { name: "Water mill", icon: "water-mill", kind: "station", new: true, rec: r("workbench", "20 planks, 4 log, 2 wooden gear, 1 axle, 1 dynamo, 8 stone blocks", "1 water mill") },
+    "power-pole": { name: "Power pole", icon: "power-pole", kind: "recipe", new: true, rec: r("workbench", "1 log, 2 copper wire", "1 power pole") },
+    "electric-lamp": { name: "Electric lamp", icon: "electric-lamp", kind: "recipe", new: true, rec: r("workbench", "1 iron ingot, 1 copper wire", "2 electric lamp") },
+    motor: { name: "Motor", icon: "motor", kind: "recipe", new: true, rec: r("workbench", "6 copper wire, 2 iron ingot", "1 motor") },
+    bellows: { name: "Bellows", icon: "bellows", kind: "recipe", new: true, rec: r("workbench", "2 leather, 3 planks, 1 motor", "1 bellows") },
+  };
+  // The two recipes the tree opens with: unlocked when it opens, listed with its first mission.
+  const P_OPEN = {
+    "wooden-gear": { name: "Wooden gear", icon: "wooden-gear", rec: r("workbench", "3 planks", "1 wooden gear") },
+    axle: { name: "Axle", icon: "axle", rec: r("workbench", "1 log, 1 iron ingot", "1 axle") },
+  };
+  const P_BRANCHES = [
+    { key: "mill", name: "0 · MILLWRIGHT" },
+    { key: "wind", name: "1 · WIND" },
+    { key: "water", name: "2 · WATER" },
+    { key: "lines", name: "3 · LINES" },
+    { key: "appl", name: "4 · APPLIANCES" },
+  ];
+  const P_M = [
+    // 0. Millwright: opens with the starter tree's "The iron age"
+    { id: "gears", b: "mill", icon: "wooden-gear", title: "Cut gears", needs: [],
+      obj: [o("craft wooden gears", 4, "craft 4 wooden gears at the workbench", true), o("craft an axle", 1, "craft 1 axle at the workbench", true)],
+      unl: ["millstone", "copper-wire", "dynamo"], help: "A gear takes planks; an axle takes a log and an iron ingot." },
+    { id: "millstones", b: "mill", icon: "millstone", title: "Dress millstones", needs: [["gears"]],
+      obj: [o("craft millstones", 2, "craft 2 millstones at the workbench", true)], unl: ["windmill"], help: "Dress stone blocks into millstones at the workbench." },
+    // 1. Wind: the windmill grinds food, and turns a grinder on its floor
+    { id: "windmill", b: "wind", icon: "windmill", title: "Raise a windmill", needs: [["millstones"]],
+      obj: [o("craft a windmill", 1, "craft a windmill", true), o("set it on a rise", 1, "set it on a rise", true)], unl: ["flour"],
+      help: "Set the windmill on a rise. It needs the wind." },
+    { id: "grind", b: "wind", icon: "flour", title: "Grind grain", needs: [["windmill"]],
+      obj: [o("grind wheat", 12, "grind 12 wheat at the windmill", true)], unl: ["loaf"], help: "Put wheat in the windmill (F). No wind, no flour." },
+    { id: "loaf", b: "wind", icon: "loaf", title: "Bake a loaf", needs: [["grind"]],
+      obj: [o("cook loaves", 2, "cook 2 loaves at the campfire")], unl: ["feed-mash"], help: "Put flour on the campfire." },
+    { id: "mash", b: "wind", icon: "feed-mash", title: "Mash for the herd", needs: [["loaf"]],
+      obj: [o("grind feed mash", 6, "grind 6 feed mash at the windmill", true), o("feed the herd", 3, "feed mash to the herd 3 times")], unl: [],
+      help: "Grind wheat and turnip together. Fed mash, the herd gives sooner." },
+    { id: "wind-grinder", b: "wind", icon: "grinder", title: "Stone by the wind", needs: [["windmill"]],
+      obj: [o("set a grinder in the mill", 1, "set a grinder on the windmill's floor", true), o("crush stone", 9, "crush 9 stone with it")], unl: [],
+      help: "A grinder on the mill floor runs on the wind. The grinder comes from the town tree." },
+    // 2. Water: the water mill makes power
+    { id: "dynamo", b: "water", icon: "dynamo", title: "Wind a dynamo", needs: [["gears"]],
+      obj: [o("craft copper wire", 8, "craft 8 copper wire"), o("craft a dynamo", 1, "craft a dynamo", true)], unl: ["water-mill"],
+      help: "Draw copper ingots into wire, then wind it on an axle." },
+    { id: "water-mill", b: "water", icon: "water-mill", title: "Build a water mill", needs: [["dynamo"]],
+      obj: [o("craft a water mill", 1, "craft a water mill", true), o("set it on moving water", 1, "set it on a flowing river", true)], unl: ["power-pole"],
+      help: "Set it on a river that flows. Still water will not turn it." },
+    { id: "turn", b: "water", icon: "bolt", title: "Turn the wheel", needs: [["water-mill"]],
+      obj: [o("make power (kWh)", 6, "make 6 kWh at the water mill", true)], unl: [], help: "Open the sluice (F). Faster water, more power." },
+    // 3. Lines: poles carry it; no battery holds it
+    { id: "poles", b: "lines", icon: "power-pole", title: "Set poles", needs: [["turn"]],
+      obj: [o("craft poles", 4, "craft 4 power poles", true), o("set poles", 4, "set 4 poles in a run from the mill", true)], unl: ["electric-lamp"],
+      help: "Poles join within 4 cells of each other." },
+    { id: "line", b: "lines", icon: "copper-wire", title: "String a line", needs: [["poles"]],
+      obj: [o("join the mill (cells)", 12, "join the mill to a pole 12 cells away", true)], unl: ["motor", "bellows"],
+      help: "Run poles out from the mill. Anything within a cell of a pole is on the line." },
+    { id: "lamps", b: "lines", icon: "electric-lamp", title: "Lamps on the line", needs: [["line"]],
+      obj: [o("light lamps at night", 3, "light 3 electric lamps from the line at night")], unl: [], help: "Set lamps by a pole. They light while the wheel turns." },
+    { id: "sluice", b: "lines", icon: "sluice", title: "When the wheel stops", needs: [["lamps"]],
+      obj: [o("shut the sluice at night", 1, "shut the sluice at night", true), o("see the lamps go out", 1, "see the lamps on the line go out")], unl: [],
+      help: "Nothing stores power. When the wheel stops, the line stops." },
+    // 4. Appliances: stations that run faster on the line
+    { id: "motor-grinder", b: "appl", icon: "motor", title: "A grinder on the line", needs: [["line"]],
+      obj: [o("fit a motor", 1, "fit a motor to a grinder", true), o("crush stone on the line", 20, "crush 20 stone on the line")], unl: [],
+      help: "A grinder with a motor works twice as fast while the wheel turns." },
+    { id: "bellows", b: "appl", icon: "bellows", title: "Bellows at the forge", needs: [["motor-grinder"]],
+      obj: [o("fit bellows", 1, "fit bellows to a forge", true), o("smelt on the line", 4, "smelt 4 ingots on the line")], unl: [],
+      help: "Bellows on the line make the forge faster." },
+    { id: "motor-mixer", b: "appl", icon: "mixer", title: "A mixer on the line", needs: [["bellows"]],
+      obj: [o("fit a motor", 1, "fit a motor to a mixer", true), o("mix gravel on the line", 16, "mix 16 gravel on the line")], unl: [],
+      help: "Too much on one line and everything slows. Build a second mill." },
+  ];
+  const U = TREE === "town" ? T_U : TREE === "survival" ? SV_U : TREE === "power" ? P_U : S_U;
+  const BRANCHES = TREE === "town" ? T_BRANCHES : TREE === "survival" ? SV_BRANCHES : TREE === "power" ? P_BRANCHES : S_BRANCHES;
+  const M = TREE === "town" ? T_M : TREE === "survival" ? SV_M : TREE === "power" ? P_M : S_M;
 
   const byId = Object.fromEntries(M.map((m) => [m.id, m]));
   const byIdRaw = byId;
@@ -425,6 +518,10 @@
     const first = ["drink", "forage"];
     order = order.filter((x) => !first.includes(x));
     order.splice(order.indexOf("pack") + 1, 0, ...first);
+    // after the survival trunk (to "The first night"), fishing and farming: the follow-up to the fire
+    const fol = order.filter((x) => byId[x].b === "fishing" || byId[x].b === "farming");
+    order = order.filter((x) => !fol.includes(x));
+    order.splice(order.indexOf("first-night") + 1, 0, ...fol);
     const placed = new Set(), out = [];
     while (out.length < order.length) {
       const id = order.find((x) => !placed.has(x) && byId[x].needs.flat().concat(byId[x].after || []).every((y) => placed.has(y)));
@@ -519,7 +616,8 @@
     // the same branch's child first, so a branch reads as one straight line
     Object.entries(kids).forEach(([pid, list]) => {
       const pb = byIdRaw[pid].b;
-      list.sort((a, b) => (b.b === pb) - (a.b === pb) || rank(a) - rank(b));
+      const sv = (m) => (TREE === "survival" && m.b === "survival" ? 1 : 0);
+      list.sort((a, b) => sv(b) - sv(a) || (b.b === pb) - (a.b === pb) || rank(a) - rank(b));
     });
     let next = 0;
     const place = (m, depth) => {
@@ -734,6 +832,7 @@
         .map((ob, i) => `<li>${check(c[i] >= ob.n)}<span>${esc(ob.t)}${ob.nw ? '<span class="nw">NEW</span>' : ""}</span><em>${c[i]}/${ob.n}</em><span class="pb"><i style="width:${Math.round((100 * c[i]) / ob.n)}%"></i></span></li>`)
         .join("")}</ul>` +
       `<h3>HELP</h3><p class="help">${esc(m.help)}</p>` +
+      (TREE === "power" && !m.needs.length ? `<h3>OPENS WITH THE IRON AGE</h3><div class="ulist">${Object.values(P_OPEN).map((d) => `<div><span class="slot sm on">${icon(d.icon)}</span><span>${esc(d.name)}<span class="nw">NEW</span>${recLine(d)}</span></div>`).join("")}</div>` : "") +
       (m.coins ? `<h3>REWARD</h3><div class="ulist"><div><span class="slot sm ${s === "done" ? "on" : "off"}">${icon("coin")}</span><span>${m.coins} coins<small>${s === "done" ? "paid" : "paid when this is done"}</small></span></div></div>` : "") +
       `<h3>UNLOCKS</h3>` +
       (m.unl.length
@@ -741,7 +840,7 @@
             .map((u) => {
               const d = U[u];
               const lit = s === "done";
-              return `<div>${d.icon ? `<span class="slot sm ${lit ? "on" : "off"}">${icon(d.icon, lit ? "" : "sil")}</span>` : `<span class="slot sm ${lit ? "on" : "off"}"></span>`}<span>${esc(d.name)}${d.new ? '<span class="nw">NEW</span>' : ""}<small>${lit ? "unlocked" : "locked until this is done"}</small></span></div>`;
+              return `<div>${d.icon ? `<span class="slot sm ${lit ? "on" : "off"}">${icon(d.icon, lit ? "" : "sil")}</span>` : `<span class="slot sm ${lit ? "on" : "off"}"></span>`}<span>${esc(d.name)}${d.new ? '<span class="nw">NEW</span>' : ""}<small>${lit ? "unlocked" : "locked until this is done"}</small>${recLine(d)}</span></div>`;
             })
             .join("")}</div>`
         : `<p class="help">Nothing: this one is for the play.</p>`) +
@@ -751,9 +850,13 @@
       (next.length ? `<h3>OPENS NEXT</h3><div class="mlinks">${next.map((x) => `<button data-go="${x.id}">${esc(x.title)}</button>`).join("")}</div>` : "");
   }
 
+  // A recipe's station and inputs, where the tree gives them (the Power tab).
+  const recLine = (d) => d.rec ? `<small class="rec">${esc(d.rec.at)}: ${esc(d.rec.ins)} → ${esc(d.rec.out)}</small>` : "";
   function recipesHtml() {
+    const opens = TREE === "power" ? `<div class="rgroup">WHEN THE TREE OPENS</div>` + Object.values(P_OPEN)
+      .map((d) => `<div class="rrow"><span class="slot sm on">${icon(d.icon)}</span><span>${esc(d.name)}<span class="nw">NEW</span><small>with The iron age</small>${recLine(d)}</span></div>`).join("") : "";
     const groups = [["recipe", "RECIPES"], ["station", "STATIONS"], ["skill", "SKILLS"], ["branch", "BRANCHES"]];
-    return groups
+    return opens + groups
       .map(([k, label]) => {
         const rows = Object.keys(U).filter((u) => U[u].kind === k && unlockedBy[u]);
         if (!rows.length) return "";
@@ -762,7 +865,7 @@
             const d = U[u];
             const by = byId[unlockedBy[u]];
             const lit = st.done.has(by.id);
-            return `<button class="rrow ${lit ? "" : "locked"}" data-go="${by.id}"><span class="slot sm ${lit ? "on" : "off"}">${d.icon ? icon(d.icon, lit ? "" : "sil") : ""}</span><span>${esc(d.name)}${d.new ? '<span class="nw">NEW</span>' : ""}<small>${lit ? "unlocked" : esc(by.title)}</small></span></button>`;
+            return `<button class="rrow ${lit ? "" : "locked"}" data-go="${by.id}"><span class="slot sm ${lit ? "on" : "off"}">${d.icon ? icon(d.icon, lit ? "" : "sil") : ""}</span><span>${esc(d.name)}${d.new ? '<span class="nw">NEW</span>' : ""}<small>${lit ? "unlocked" : esc(by.title)}</small>${recLine(d)}</span></button>`;
           })
           .join("");
       })
@@ -980,7 +1083,7 @@
 
   // ---- a world partway through: the bot in the middle of "Go fishing" (cast, one fish of three), or on
   // the Town tab in the middle of "Mark a road" (both stakes driven, four cells of eight marked)
-  const SAMPLE = TREE === "town" ? { m: "mark", i: 1 } : TREE === "survival" ? { m: "hunt", i: 0 } : { m: "go-fishing", i: 1 };
+  const SAMPLE = TREE === "town" ? { m: "mark", i: 1 } : TREE === "survival" ? { m: "hunt", i: 0 } : TREE === "power" ? { m: "line", i: 0 } : { m: "go-fishing", i: 1 };
   const sample = steps.findIndex((s) => s.t === "obj" && s.m === SAMPLE.m && s.i === SAMPLE.i) + 1;
   // centre a mission at a level (used by the stills; the page never calls it on its own)
   function focus(id, level) {
@@ -1002,11 +1105,12 @@
     b.setAttribute("aria-selected", String(b.dataset.tree === TREE));
   });
   // #crew is the CREW tab (crew.js), drawn over this tree: it keeps its anchor.
-  if (location.hash.slice(1) !== TREE && location.hash.slice(1) !== "crew") history.replaceState(null, "", "#" + TREE);
+  const OVER = ["crew", "mills"]; // tabs drawn over this tree (crew.js, mills.js) keep their anchor
+  if (location.hash.slice(1) !== TREE && !OVER.includes(location.hash.slice(1))) history.replaceState(null, "", "#" + TREE);
   window.addEventListener("hashchange", () => {
-    if (location.hash.slice(1) === "crew") return;
+    if (OVER.includes(location.hash.slice(1))) return;
     const h = location.hash.slice(1);
-    const want = h === "town" || h === "survival" ? h : "starter";
+    const want = TREES.includes(h) ? h : "starter";
     if (want !== TREE) location.reload();
   });
 })();

@@ -361,9 +361,9 @@ const MOCKUPS = [
   { id: 'M32', batch: 'new', title: 'Rain Splashes', change: 'weather-rain', page: 'docs/mockups/rain-splashes.html',
     url: 'https://claude.ai/artifact/QCeBF7hGuyBncS7tHSzbHV', published: '2026-11-15', version: 1,
     summary: 'Where rain lands: crowns on puddles and spray on wet ground, GPU particles beside today\'s rain, by day and lit at night.' },
-  { id: 'M33', batch: 'new', title: 'Mission Tree', change: 'starter-missions, town-missions-tree, coop-missions', recorded: 'impl', recordedNote: 'The starter tree approved for the game (owner, 2026-11-15, version 3: "that tree is better, I approve", "implement in game"). The Town tab (version 5, the town tree) approved in chat (owner, 2026-11-22, after opening it: "Ok approved"); built on claude/phase-2-1, its Roads and Carts reading not yet until they are built.', page: 'docs/mockups/mission-tree.html',
-    url: 'https://claude.ai/artifact/NLofSxEDYd19HBseiwQgev', published: '2026-11-26', version: 9,
-    summary: 'The missions as a tree that unlocks the tech: a trunk and seven branches, 42 missions, and a bot run that plays them. Version 5 (2026-11-22, drafted): a Town tab (#town), phase 3\'s town tree of its own (town-missions-tree): a trunk and five branches (trade, jobs, roads, carts, houses and logs), 25 missions paying 525 coins, opened on first reaching a town; the starter tree on its own tab (#starter). Version 6 (2026-11-23, drafted): the Town tab\'s Carpentry branch (furniture design 12), nine missions paying 115 coins: the carpenter\'s bench, a chair, take a seat, a table, a bed, lie in a bed, a chest, furnish a room, look in a town chest, with the game\'s own furniture icons. Version 7 (2026-11-23, drafted): a Crew tab (#crew), crew missions for multiplayer (coop-missions): a house raised by three players, each player\'s share shown.' },
+  { id: 'M33', batch: 'new', title: 'Mission Tree', change: 'starter-missions, town-missions-tree, coop-missions, survival-mode, early-power', recorded: 'impl', recordedNote: 'The starter tree approved for the game (owner, 2026-11-15, version 3: "that tree is better, I approve", "implement in game"). The Town tab (version 5, the town tree) approved in chat (owner, 2026-11-22, after opening it: "Ok approved"); built on claude/phase-2-1, its Roads and Carts reading not yet until they are built.', page: 'docs/mockups/mission-tree.html',
+    url: 'https://claude.ai/artifact/NLofSxEDYd19HBseiwQgev', published: '2026-11-26', version: 10,
+    summary: 'The missions as a tree that unlocks the tech: a trunk and seven branches, 42 missions, and a bot run that plays them. Version 5 (2026-11-22, drafted): a Town tab (#town), phase 3\'s town tree of its own (town-missions-tree): a trunk and five branches (trade, jobs, roads, carts, houses and logs), 25 missions paying 525 coins, opened on first reaching a town; the starter tree on its own tab (#starter). Version 6 (2026-11-23, drafted): the Town tab\'s Carpentry branch (furniture design 12), nine missions paying 115 coins: the carpenter\'s bench, a chair, take a seat, a table, a bed, lie in a bed, a chest, furnish a room, look in a town chest, with the game\'s own furniture icons. Version 7 (2026-11-23, drafted): a Crew tab (#crew), crew missions for multiplayer (coop-missions): a house raised by three players, each player\'s share shown. Version 10 (2026-11-26, drafted): a Power tab (#power), the early power tree (early-power): millwright, wind, water, lines and appliances, 17 missions, each unlock with its recipe; and a Mills tab (#mills), a windmill on a rise and a water mill on a river joined by a pole line, lit at night by its lamps, still until Turn, dark when the sluice shuts (no batteries). On the Survival tab, fishing and farming now sit under the Survival branch, after Make a fire.' },
   { id: 'M34', batch: 'new', title: 'River Craft', change: 'river-craft', recorded: 'impl', recordedNote: 'Approved for the game (owner, 2026-11-19, at version 6), and asked to be built (owner, 2026-11-20, in chat: "approve sand and mountains, and rivers"). Built on claude/phase-2-1 (PR 133 merged, captures in PR 135): rowing with two oars, the one anchor, the boat\'s menu (C), the raft\'s lantern at night and the tube rider. The tug, logs and nets wait. Open: in first person the oar grips sit at the frame\'s edges with the 60-degree view.', page: 'docs/mockups/river-craft.html',
     url: 'https://claude.ai/artifact/GZTZJ4Vg1bSbg4SH2rYY97', published: '2026-11-16', version: 6,
     summary: 'A playable river: a raft and an inner tube on the flow, a tug towing barges, a log drive with a boom, a net boat and anchoring. Version 3: the Rowing tab, today\'s raft stroke beside proposed oars (five stages on one beat, splash and swirls, first-person hands) and the raft\'s own lantern lit at night. Version 4: oars only (no pole, on the Raft tab too), the stroke smoothed with no clipping, first-person hands only in first person; the tube rider sits back and paddles with no lantern; a set anchor holds the boat. Version 5: the anchor\'s rope stops paying out at the bed. Version 6: the boat\'s menu (Boat, C) on the Anchor, Raft and Rowing tabs, with the hold beside the pack, the anchor\'s drop or weigh and rope length, and the lantern; one anchor per boat.' },
@@ -691,17 +691,19 @@ const ROADMAP = [
     { key: 'together', title: 'Playing together', status: 'planned', change: 'multiplayer', refs: [], text: 'Host and join, other players in the world, trades and chat.' },
     { key: 'launcher', title: 'Launcher', status: 'planned', change: 'game-launcher', refs: [], text: 'One small download per OS that keeps the game current from itch.', issues: 'phase-3b-launcher', nIssues: 2 },
   ] },
-  { title: 'Town building, civil engineering and survival', when: 'next', note: 'Survival started 2026-11-26: written up and mocked up (M39), the game code waits on your look at it.', steps: [
+  { title: 'Infrastructure', num: '4a', when: 'next', note: 'Phase 4 is two parts worked on in parallel (owner, 2026-11-26: "phase 4 is two parts that can be worked on in parallel: infrastructure and survival"). This part: town building, civil works and early power. Early power is written up and mocked up (M33), the game code waits on your look at it.', steps: [
     { key: 'town-building', title: 'Town building', status: 'later', change: 'tenebris-towns', refs: ['M15', 'M22'], text: 'Building and growing towns on the hex grid.' },
     { key: 'civil', title: 'Civil engineering', status: 'later', change: '', refs: [], text: 'Bridges, cuttings, walls and the other works between buildings.' },
-    { key: 'power', title: 'Power generation', status: 'later', change: '', refs: ['M20'], text: 'Water wheels and windmills.' },
+    { key: 'power', title: 'Power generation', status: 'planned', change: 'early-power', refs: ['M33', 'M20'], text: 'Windmills that grind food, water mills that make power for the first appliances, and pole lines to carry it; no batteries yet. Mocked up as M33\'s Power and Mills tabs.' },
+  ] },
+  { title: 'Survival', num: '4b', when: 'next', note: 'Runs in parallel with 4a. Started 2026-11-26: written up and mocked up (M39, and M33\'s Survival tab), the game code waits on your look at it.', steps: [
     { key: 'survival', title: 'Survival mode', status: 'planned', change: 'survival-mode', refs: ['M39'], text: 'A Survival mode per world beside Explorer: health, death and a dropped pack.', issues: 'phase-4', nIssues: 0 },
     { key: 'falls', title: 'Falls, hunger and air', status: 'planned', change: 'survival-mode', refs: ['M39'], text: 'Fall damage, hunger, breath under water and suit air.' },
     { key: 'stamina', title: 'Stamina on food', status: 'planned', change: 'survival-mode', refs: ['M39'], text: 'Stamina that refills from food; sprinting, swimming and climbing cost more.' },
     { key: 'heat', title: 'Heat, cold and water', status: 'planned', change: 'survival-mode', refs: ['M39'], text: 'Body heat from the weather, thirst, heat stroke, and a straw for cactus juice.' },
     { key: 'hunting', title: 'Hunting and weapons', status: 'planned', change: 'survival-mode', refs: ['M39'], text: 'Spears, a bow and arrows, a hunting axe and swords; meat, hide and bone.' },
     { key: 'wildfire', title: 'Forest fires', status: 'planned', change: 'wildfire', refs: ['M39'], text: 'Fires that start in the dry season and spread through flora; torches put out by rain.' },
-    { key: 'survival-missions', title: 'Survival missions', status: 'planned', change: 'survival-mode', refs: ['M33'], text: 'A Survival branch of the starter missions, in Survival worlds only.' },
+    { key: 'survival-missions', title: 'Survival missions', status: 'planned', change: 'survival-mode', refs: ['M33'], text: 'A Survival branch of the starter missions, in Survival worlds only, with fishing and farming under it after the fire.' },
     { key: 'predators', title: 'Predators', status: 'planned', change: 'survival-mode', refs: ['M7', 'M26'], text: 'Predators that stalk, warn, attack and flee.' },
     { key: 'wear', title: 'Tool wear', status: 'planned', change: 'survival-mode', refs: [], text: 'Tools wear and break, and are mended at the workbench or a smith.' },
     { key: 'fighting', title: 'Fighting townsfolk', status: 'planned', change: 'survival-mode', refs: ['M5'], text: 'Strike a villager and the guards come.' },
@@ -748,8 +750,8 @@ const ROADMAP = [
 ];
 const STATUS = { built: 'Built', building: 'Building', planned: 'Planned', later: 'Not started', optional: 'Optional' };
 const WHEN = { done: 'Done', now: 'Now', next: 'Next', later: 'Later' };
-// Phase numbers: 1, 2, 3, then a phase with its own `num` (3b) between, then 4 onward.
-ROADMAP.reduce((pn, ph) => { ph.n = ph.num || String(pn + 1); return ph.num ? pn : pn + 1; }, 0);
+// Phase numbers: 1, 2, 3, then phases with their own `num` (3b, 4a, 4b), then on from the highest number used.
+ROADMAP.reduce((pn, ph) => { ph.n = ph.num || String(pn + 1); return ph.num ? Math.max(pn, parseInt(ph.num, 10)) : pn + 1; }, 0);
 
 function roadmap() {
   const root = document.getElementById('roadmap-list');
@@ -855,7 +857,10 @@ function scrollToHash() {
   if (!id) { showSection(document.getElementById('roadmap')); return; }
   if (/^phase-/.test(id)) id = 'roadmap-' + id;
   // Steps that moved keep their old links: phase 5's carts went to phase 3 (owner, 2026-11-22).
-  const MOVED = { 'roadmap-phase-5-carts': 'roadmap-phase-3-carts' };
+  // Phase 4 split into 4a (infrastructure) and 4b (survival) on 2026-11-26: its old step links follow.
+  const MOVED = { 'roadmap-phase-5-carts': 'roadmap-phase-3-carts', 'roadmap-phase-4': 'roadmap-phase-4a' };
+  for (const k of ['town-building', 'civil', 'power']) MOVED['roadmap-phase-4-' + k] = 'roadmap-phase-4a-' + k;
+  for (const k of ['survival', 'falls', 'stamina', 'heat', 'hunting', 'wildfire', 'survival-missions', 'predators', 'wear', 'fighting']) MOVED['roadmap-phase-4-' + k] = 'roadmap-phase-4b-' + k;
   if (MOVED[id]) id = MOVED[id];
   const t = document.getElementById(id);
   if (!t) { showSection(document.getElementById('roadmap')); return; }

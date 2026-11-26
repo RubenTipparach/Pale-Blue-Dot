@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mission Tree</title>
-<meta name="description" content="Pale Blue Dot's Missions screen as trees: the starter tree that unlocks the tech, the town tree of phase 3, the starter tree with its Survival branch, each with a bot run, and the CREW tab of crew missions with each player's share.">
+<meta name="description" content="Pale Blue Dot's Missions screen as trees: the starter tree that unlocks the tech, the town tree of phase 3, the starter tree with its Survival branch, the early power tree, each with a bot run, the CREW tab of crew missions with each player's share, and the MILLS tab's windmill and water mill.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
 <style>
@@ -255,6 +255,15 @@ body.crew #crew { display: flex; }
 @media (max-width: 640px) { .chain .link { display: none; } .chain { gap: 18px; }
   #crew.popen .crewboard { padding-right: 16px; padding-bottom: 64vh; } #crew .hud { display: none; } }
 
+/* ---- the MILLS tab: one 3D view, made when the tab first opens (early-power design 12) ---- */
+body.mills .bar, body.mills .stage.tree, body.mills .legend { display: none; }
+#mills { display: none; position: relative; flex: 1; min-height: 300px; overflow: hidden; flex-direction: column; }
+body.mills #mills { display: flex; }
+.millview { position: relative; flex: 1; min-height: 240px; background: #0a1424; }
+.millview canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+.millview canvas:focus-visible { outline: 2px solid var(--rune); outline-offset: -2px; }
+.rrow small.rec, .ulist small.rec { color: var(--text-dim); }
+
 /* ---- the info modal ---- */
 dialog.infomodal { max-width: min(760px, 94vw); max-height: 86vh; max-height: 86dvh; padding: 0; border: 4px solid var(--stone-2); outline: 2px solid var(--ink); background: var(--page-2); color: var(--page-text); }
 dialog.infomodal::backdrop { background: rgba(1, 14, 26, .72); }
@@ -293,6 +302,8 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
   <a class="ttab" role="tab" href="#town" data-tree="town" aria-selected="false">TOWN</a>
   <a class="ttab" role="tab" href="#survival" data-tree="survival" aria-selected="false">SURVIVAL</a>
   <a class="ttab" role="tab" href="#crew" data-tree="crew" aria-selected="false">CREW</a>
+  <a class="ttab" role="tab" href="#power" data-tree="power" aria-selected="false">POWER</a>
+  <a class="ttab" role="tab" href="#mills" data-tree="mills" aria-selected="false">MILLS</a>
 </nav>
 <div class="bar">
   <div class="grp"><button class="btn" id="fitBtn">Fit</button><button class="btn" id="zoomOut" aria-label="Zoom out">−</button><button class="btn" id="zoomIn" aria-label="Zoom in">+</button></div>
@@ -324,11 +335,30 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
 </div>
 
 <section id="crew" aria-label="Crew missions"></section>
+<section id="mills" aria-label="The mills"></section>
 
 <dialog class="infomodal" id="info">
   <div class="mhead"><b>The mission tree</b><button id="infoClose" aria-label="Close">✕</button></div>
   <div class="mbody">
-    <p>Four tabs: a tree each on <b>Starter</b> (<code>#starter</code>) and <b>Town</b> (<code>#town</code>), as the game's Missions screen will have them; <b>Survival</b> (<code>#survival</code>), the starter tree as a Survival world shows it; and <b>Crew</b> (<code>#crew</code>), the crew missions of multiplayer.</p>
+    <p>Six tabs: a tree each on <b>Starter</b> (<code>#starter</code>), <b>Town</b> (<code>#town</code>) and <b>Power</b> (<code>#power</code>), as the game's Missions screen will have them; <b>Survival</b> (<code>#survival</code>), the starter tree as a Survival world shows it; <b>Crew</b> (<code>#crew</code>), the crew missions of multiplayer; and <b>Mills</b> (<code>#mills</code>), the power tree's windmill and water mill in 3D.</p>
+    <h3>The POWER tab (version 10) <span class="nw">NEW</span></h3>
+    <p>The owner, 2026-11-26: <em>"draft up a reasearch tree mockup (addon to current research tree mockups) for power generation: windmills - for processing food; water mills for generating hydro power - this can power some appliances once they are built; power lines to carry electricity, no battery storage for awhile"</em>. The tab draws <code>early-power</code> design 2 and 3, phase 4's infrastructure part. Written up, not built.</p>
+    <ul>
+      <li><b>A tree of its own</b>, like the town tree: its own file and saved record. It opens when the starter tree's "The iron age" is done, because the first mission needs an iron axle; opening it unlocks the wooden gear and the axle.</li>
+      <li><b>The trunk, Millwright</b>: cut gears and an axle, dress millstones. Then four branches.</li>
+      <li><b>Wind</b>: raise a windmill on a rise, grind grain to flour, bake a loaf, grind feed mash for the herd, and set the town tree's grinder on the mill floor to crush stone by the wind. The windmill is mechanical: it grinds, it makes no electricity. It needs wind at the mill: the sails stand below 3 m/s, run faster up to 8 m/s, and are furled above 20 m/s. A rise is M20's turbine rule: the cell stands 2 layers above every cell within 3.</li>
+      <li><b>Water</b>: draw copper wire and wind a dynamo, set a water mill on a flowing river, make 6 kWh. A mill makes up to 6 kW, by the river's flow (full at 1.2 m/s); a frozen river or a shut sluice makes none.</li>
+      <li><b>Lines</b>: wood poles at most 4 cells apart (M20's poles), copper wire, lamps on the line, and the lesson: <b>When the wheel stops</b>, shut the sluice at night and the lamps go out at once. There is no battery in this tier: power is used as it is made.</li>
+      <li><b>Appliances</b> (proposals): a motor on the grinder (2 kW, twice as fast), bellows on the forge (1.5 kW), a motor on the mixer (2.5 kW). With more on the line than the wheel makes, everything on it slows by the same share and the lamps dim.</li>
+      <li><b>Recipes</b>: the RECIPES side tab gives each unlock's station and inputs, all from goods the game has (planks, logs, rope, fibre, stone, iron and copper ingots, wheat, turnip, leather).</li>
+      <li><b>It leads into M20</b>: M20's tier II wind turbines (150 kW) and hydro dam (500 kW) come later with heavier wire on the same poles; nothing here changes their numbers.</li>
+      <li>The tab opens with the bot partway through "String a line". The cross-tree needs (the grinder and the mixer from the town tree) are hidden gates, named in the help lines.</li>
+      <li><b>Icons</b> for the new goods are stand-ins from <code>tools/art/early_power_icons.py</code>.</li>
+    </ul>
+    <h3>The MILLS tab (version 10) <span class="nw">NEW</span></h3>
+    <p>A windmill on its rise and a water mill on the river, joined by a pole line, as <code>early-power</code> design 12 draws them. One 3D view, made when the tab first opens. Built of the game's settlement textures (plank, timber, fieldstone, thatch, iron, poles, grass, dirt, stone), sampled nearest; the sails, the wheel's boards, the river and the wire are new 32 px textures from <code>tools/art/early_power_art.py</code>. At night the line's lamps, the mill's windows and an oil lantern at the windmill's door light what is near them; the moon stays dim. Nothing turns until <b>Turn</b> is pressed. <b>Shut sluice</b> lifts the wheel out of the race: the line's lamps go dark at once, since nothing stores power; the windmill's lantern, not on the line, stays lit. Drag to turn, wheel or pinch to zoom, arrow keys and + and - from the keyboard.</p>
+    <h3>The SURVIVAL tab, version 10: fishing and farming under Survival <span class="nw">NEW</span></h3>
+    <p>The owner, 2026-11-26: <em>"can you move farming and fishing under the survival tree too?"</em>, <em>"it seems more logical to make it a follow up after making a fire"</em>, <em>"so the player has all basic tools first"</em>. In a Survival world the Fishing and Farming branches are drawn under the Survival branch as <b>8 · SURVIVAL · FISHING</b> and <b>8 · SURVIVAL · FARMING</b>, each a follow-up to <b>Make a fire</b>. "Make a fire" comes after "Stone tools", so the axe, pickaxe and shovel are all made by then: no extra gate is needed. The bot plays them right after "The first night". The Starter tab (Explorer worlds) is unchanged.</p>
     <h3>The SURVIVAL tab (version 8) <span class="nw">NEW</span></h3>
     <p>The owner, 2026-11-26: <em>"start working on phase 4, we're gonna work on survival mode which will add new branch to starter missions to handle survival"</em>. The tab draws <code>survival-mode</code> design 18: the starter tree with one more branch, <b>8 · SURVIVAL</b>, shown only in Survival worlds. Written up, not built.</p>
     <ul>
@@ -407,6 +437,8 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
       <li><b>Version 6</b> (2026-11-23): the Town tab's Carpentry branch (<code>furniture</code>), with the game's own furniture icons.</li>
       <li><b>Version 7</b> (2026-11-23): the Crew tab, crew missions for multiplayer (<code>coop-missions</code>).</li>
       <li><b>Version 8</b> (2026-11-26): the Survival tab, the starter tree's Survival branch (<code>survival-mode</code> design 18).</li>
+      <li><b>Version 9</b> (2026-11-26): the Survival tab's bot goes to "Drink water" and "Something to eat" right after "Open the pack" (survey G11).</li>
+      <li><b>Version 10</b> (2026-11-26): the Power and Mills tabs (<code>early-power</code>); on the Survival tab, fishing and farming under the Survival branch, after "Make a fire".</li>
     </ul>
     <h3>Art</h3>
     <p>Panels, plaques, slots, checks and bars are the game's own stone-and-carved-wood kit (<code>assets/ui/stone</code>, <code>assets/ui/oak</code>); item icons are the game's (<code>assets/items</code>), kept with their 1 px UI outline. The yard hen is the husbandry mockup's sprite and the map glyph the UI mockup's, since the game has no item icon for either. Where a mission has no icon of its own (a rowboat, a town), it borrows the nearest good. Help lines for missions that exist today are the game's (<code>missions.ron</code>); the others are drafted for this mockup.</p>
@@ -415,20 +447,25 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
 
 <script src="mission-tree/tree.js"></script>
 <script src="mission-tree/crew.js"></script>
+<script src="mission-tree/mills.js"></script>
 <script>
-// The tab in the link: a bare #crew shows the CREW tab over the tree tree.js drew (CLAUDE.md, tabs).
+// The tab in the link: a bare #crew or #mills shows that tab over the tree tree.js drew (CLAUDE.md, tabs).
 (function () {
   let hidden = false;
+  const OVER = ["crew", "mills"];
   function show(v) {
-    const crew = v === "crew";
-    document.body.classList.toggle("crew", crew);
-    const on = crew ? "crew" : (window.missionTree ? window.missionTree.tree : "starter");
+    const over = OVER.includes(v) ? v : null;
+    OVER.forEach((k) => document.body.classList.toggle(k, over === k));
+    const on = over || (window.missionTree ? window.missionTree.tree : "starter");
     document.querySelectorAll("[data-tree]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tree === on)));
-    if (!crew && window.crewTab) window.crewTab.stop();
-    if (crew && window.crewTab) window.crewTab.relink();
+    if (over !== "crew" && window.crewTab) window.crewTab.stop();
+    if (over === "crew" && window.crewTab) window.crewTab.relink();
+    // the one 3D view: made the first time its tab opens, stopped when it closes
+    if (over === "mills" && window.millsTab) window.millsTab.show();
+    if (over !== "mills" && window.millsTab) window.millsTab.hide();
     // The tree laid out while hidden has no size: fit it when it is shown.
-    if (!crew && hidden && window.missionTree) window.missionTree.fit();
-    hidden = crew;
+    if (!over && hidden && window.missionTree) window.missionTree.fit();
+    hidden = !!over;
   }
   window.addEventListener("hashchange", () => show(location.hash.slice(1)));
   show(location.hash.slice(1));

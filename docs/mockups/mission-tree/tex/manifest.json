@@ -1,0 +1,54 @@
+{
+ "plank": {
+  "repeat_m": 2.0,
+  "from": "assets/textures/settlement/plank.png"
+ },
+ "timber": {
+  "repeat_m": 1.0,
+  "from": "assets/textures/settlement/timber.png"
+ },
+ "fieldstone": {
+  "repeat_m": 2.0,
+  "from": "assets/textures/settlement/fieldstone.png"
+ },
+ "thatch": {
+  "repeat_m": 2.0,
+  "from": "assets/textures/settlement/thatch.png"
+ },
+ "iron": {
+  "repeat_m": 1.0,
+  "from": "assets/textures/settlement/iron.png"
+ },
+ "poles": {
+  "repeat_m": 2.0,
+  "from": "assets/textures/settlement/poles.png"
+ },
+ "grass": {
+  "repeat_m": 2.0,
+  "from": "assets/textures/settlement/grass.png"
+ },
+ "dirt": {
+  "repeat_m": 2.0,
+  "from": "assets/textures/settlement/dirt.png"
+ },
+ "stone": {
+  "repeat_m": 2.0,
+  "from": "assets/textures/settlement/stone.png"
+ },
+ "sailcloth": {
+  "repeat_m": 2.0,
+  "from": "tools/art/early_power_art.py"
+ },
+ "millwheel": {
+  "repeat_m": 1.0,
+  "from": "tools/art/early_power_art.py"
+ },
+ "riverwater": {
+  "repeat_m": 4.0,
+  "from": "tools/art/early_power_art.py"
+ },
+ "copperwire": {
+  "repeat_m": 0.25,
+  "from": "tools/art/early_power_art.py"
+ }
+}
