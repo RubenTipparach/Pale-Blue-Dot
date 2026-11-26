@@ -1,3 +1,5 @@
+//! locale: dev
+//!
 //! MEASUREMENT (`memory-leak`): `PBD_MEMORY_TRACE=<path.csv>` writes one row
 //! every two seconds of how much the game is holding: entities in the main and
 //! render worlds, and the count and size of each kind of asset (meshes,
@@ -45,7 +47,8 @@ impl Plugin for MemoryTracePlugin {
         let render_entities = RenderEntities::default();
         app.insert_resource(MemoryTrace { file, next_s: 0.0 })
             .insert_resource(render_entities.clone())
-            .add_systems(Last, trace);
+            .add_systems(Last, trace)
+            .add_systems(Last, ui_roots);
         if let Some(render) = app.get_sub_app_mut(RenderApp) {
             render
                 .insert_resource(render_entities)
@@ -131,4 +134,68 @@ fn trace(
         color.map_or(0, |a| a.len()),
     );
     let _ = out.file.flush();
+}
+
+/// MEASUREMENT (`memory-leak`, towns at 60 fps): the UI's nodes, by root,
+/// once every ten seconds: the trees laid out, stacked and hit-tested each
+/// frame, shown or not. A root is named by its components.
+fn ui_roots(world: &mut World, mut next: Local<f32>) {
+    let now = world.resource::<Time<Real>>().elapsed_secs();
+    if now < *next {
+        return;
+    }
+    *next = now + 10.0;
+    let roots: Vec<Entity> = world
+        .query_filtered::<Entity, (With<Node>, Without<ChildOf>)>()
+        .iter(world)
+        .collect();
+    let mut rows: Vec<(usize, String)> = Vec::new();
+    for root in roots {
+        let mut n = 0usize;
+        let mut stack = vec![root];
+        while let Some(e) = stack.pop() {
+            n += 1;
+            if let Some(c) = world.get::<Children>(e) {
+                stack.extend(c.iter());
+            }
+        }
+        let shown = world
+            .get::<Node>(root)
+            .is_some_and(|node| node.display != Display::None);
+        // Its first words, which say which screen it is.
+        let mut first = String::new();
+        let mut stack = vec![root];
+        while let Some(e) = stack.pop() {
+            if let Some(t) = world.get::<Text>(e)
+                && !t.0.trim().is_empty()
+            {
+                first = t.0.chars().take(24).collect();
+                break;
+            }
+            if let Some(c) = world.get::<Children>(e) {
+                stack.extend(c.iter().rev());
+            }
+        }
+        let names = [first];
+        rows.push((
+            n,
+            format!(
+                "[{}] {}",
+                names.join(" "),
+                if shown { "shown" } else { "none" }
+            ),
+        ));
+    }
+    rows.sort_by(|a, b| b.0.cmp(&a.0));
+    let total: usize = rows.iter().map(|r| r.0).sum();
+    let top: Vec<String> = rows
+        .iter()
+        .take(9)
+        .map(|(n, w)| format!("{n} {w}"))
+        .collect();
+    info!(
+        "UI_NODES {total} in {} roots; {}",
+        rows.len(),
+        top.join(" | ")
+    );
 }

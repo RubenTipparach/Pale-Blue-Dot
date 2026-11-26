@@ -217,3 +217,19 @@ The bot's walk to the other town stalls near Holbrook with the third cut in
 check above), at the faster frame. The last row is the bot standing near the
 town more than walking; the route's legs are measured again once the bot's
 stall is fixed.
+
+`push_normal` asks every piece again (the near pieces alone stalled the
+bot's walk out of Holbrook in two runs; with every piece, and with
+`PBD_NEAR_OFF`, it walked). With it, on a quiet machine: p50 18.3, p90 21.8,
+p99 28.3 ms, main 17.2 ms, 82% over 16.7 ms, one hitch over 100 ms (105
+before). A run started seconds after an 8-minute build showed 400 ms to 12 s
+stalls in every system at once: the machine, not the game; not counted.
+
+**Next: the UI.** Traced, the UI's layout, clipping, stack and focus are
+10 ms a frame, the most of anything. `PBD_MEMORY_TRACE` now logs the UI's
+nodes by root (`UI_NODES`): 8,452, of which about 6,500 are in screens that
+are shut (`Display::None`): the settings menu 1,816, the mission tree 1,702,
+the map 688, four more of 425 to 950. Bevy stacks, clips and hit-tests every
+node each frame, shown or not. Cut 4: a big screen is built when it opens
+and despawned when it shuts, its first build prewarmed on the loading screen
+so opening it never hitches. The picture is the same.
