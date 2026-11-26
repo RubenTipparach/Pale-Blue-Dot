@@ -2301,6 +2301,99 @@ spot the lifted eye (42n) looks down on forest canopy over the road.
   A rail of posts and a top bar is the alternative; it is a look change
   for the owner, with this screenshot.
 
+**42p. The owner's answers on bridges (survey P6 and P7, 2026-11-26;
+written before the code).**
+
+*P6, a deck awash.* The owner picked "Raise it about 0.25 m over full
+rivers" and wrote: "River surface seems to be right on the surface of top
+of terrain hex. You could offset water surface a bit to account for that
+instead of raising bridge". So no road version and no raised deck: the
+river is drawn lower.
+- **Measured.** The water mesher (`water_flow::cell_pieces`, Luanti's
+  corner rule) draws a top's corner at the full layer wherever a source
+  (`Water`) is one of the three cells round it (`corner_level`), so a
+  bank-full river's surface is drawn at its layer's top, `layer_altitude +
+  1.0`, which is exactly the bank cell's ground top: an offset of 0.00 m.
+  The deck stands at the bank's height plus `LIFT_M` (0.02 m) and is
+  `DECK_M` (0.2 m) thick, so its underside is 0.18 m under the water and
+  the ripples are drawn through the planks.
+- **The change.** A drawn top's corner level is scaled by `1 - STILL_DROP`,
+  `STILL_DROP` 0.2 of a layer (0.2 m): a full corner is drawn 0.2 m under
+  its bank, at the deck's underside, so the planks stand 0.22 m over the
+  water, and a riffle's lower corners come down in proportion, so no reach
+  draws higher than the still water upstream of it. A side's top edge
+  follows its corners, so the sides meet the top.
+- **What it leaves alone.** Every corner that touches a fall is drawn as
+  it is today, so a fall keeps its lip, its sheet and its foot exactly (the
+  waterfall rule): a corner is left whole where any of its three cells has
+  falling water in that layer, falling water on it (a fall's foot), or is
+  open with falling water under it (a lip). Water standing in a stack (the
+  layers under a top) is never scaled. The sea is not touched: its sheet
+  draws its top, and water at the sea's own layer is left whole so a river
+  meets the sea level. Two cells sharing a corner work it out from the same
+  three cells, so the top stays one surface with no crack.
+- **What reads it.** It is a draw-time rule: the column, the rule's levels,
+  the tick, the save, swimming and buoyancy are unchanged. The readers of
+  the drawn top follow it through `water_flow::drawn_top_m`, which applies
+  the same scaling: whether the eye is under the water, the rain's
+  ripples, the eye's path. A raft floats on the drawn top
+  (`PlanetContact::drawn_water`), which no longer stops at the column's
+  level but at most `STILL_DROP` under it, so a raft sits on the water it
+  is drawn on. The walker swims to the rule's surface, as before: a
+  swimmer's float line is up to 0.2 m over the drawn water in a full river.
+- **Caches.** The river band's cached pieces (`river_band`, a file beside
+  the worlds) were meshed at the old height; its file's magic moves to
+  `PBDBAND2`, so an old file is read as none and the band is meshed again.
+  Derived data only: no save changes.
+- **Tests.** App tests: a full river's drawn top is `STILL_DROP` under its
+  bank's top, and `drawn_top_m` says the same; a fall's lip and foot
+  corners are where they were.
+- **Captures.** `road-bridge-after.jpg` from `road-bridge.jpg`'s spot, and
+  a river bank close up before and after.
+
+*P7, the rails.* The owner picked "Keep the solid panels" and wrote: "You
+should use a texture with alpha cutout instead of adding geom (single
+sided, hand rails and posts and the land parts)". So the panels' look
+stays (a timber rail along each open side), drawn as flat cards in a
+cut-out texture instead of modelled boxes.
+- **The cards.** A bridge cell's railed side gets two:
+  - **the rail**, from the deck's top to `RAIL_M` (1 m) over it, along
+    the side, in `bridgerail`: a post at each end, a hand rail on top, a
+    mid rail and the bottom rail, the gaps clear;
+  - **the trestle** (the land part: the bridge's legs, standing on the
+    bed or the bank), from the deck's underside down to the cell's bed, in
+    `bridgetrestle`: a leg at each end and cross braces, one repeat a
+    metre, the gaps clear.
+  Each is mapped once across the side (its posts or legs land on the
+  side's corners, where the next side's begin), nearest sampled.
+- **Single sided, read from both sides.** Each card is two single-sided
+  quads back to back on the same plane, one facing out over the water and
+  one facing in over the deck, each culled from behind, so from the deck
+  and from the bank the card is seen from its front, lit by its own
+  normal, and the two never fight for a pixel (only one faces the eye).
+  One double-sided quad would be lit by one normal on both faces, dark on
+  the side away from the sun; two thin boxes are the geometry the owner
+  asked to do without.
+- **The texture.** `tools/art/bridge_cards.py` draws both, 64 x 32, in the
+  timber's and the plank's own palette (each pixel snapped to theirs), the
+  grain and the pegs painted in, no outline, the clear texels at alpha 0;
+  rows in the settlement manifest with `cut: true`. The world's roads draw
+  a texture the manifest cuts in the masked town material (`AlphaMode::Mask`),
+  as the net is.
+- **What stays.** The deck, its timber sides and its underside are as
+  they were. The rail's solid (what stops the walker) is as it was, so
+  walking and the paving rule are unchanged; the cut is the same
+  `roads::piece::cut` for the paved road and the planner's ghost.
+- **The ghost.** The ghost draws the cards in its own tint and opacity in
+  each card's texture, blended, so the holes are clear in the ghost too:
+  the ghost's meshes are split by texture (`planner::ghost_cards`), the
+  cells' in the gravel as before.
+- **Tests.** Core: a bridge cell railed on four sides cuts four rail cards
+  and four trestle cards, each two quads (four triangles), in the two card
+  textures; no timber box faces stand over the deck; every card's quads
+  face opposite ways. App: the ghost carries the cards in their textures.
+- **Captures.** The bridge close up by day and at night.
+
 **46. Jobs on the roads: a rockfall and a trader to walk with (task 8.5,
 2026-11-24; written before the code).** Two new kinds on a town's board,
 through the board, the taken jobs, the counting and the hand-in every town

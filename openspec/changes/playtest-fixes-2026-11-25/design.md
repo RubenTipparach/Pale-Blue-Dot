@@ -176,6 +176,55 @@ to layout 2, nothing else changed):
 - `docs/design/img/blacksmith-layout3.jpg`: layout 3, the forge, the anvil
   and the shed round the smith.
 
+**Owner's answer (survey P5, 2026-11-26): "Give old towns their forge,
+only where it touches nothing you built"** (the recommendation). Written
+here before the code; as built below once it is.
+
+- **The layout ladder.** Layout 3 differs from layout 2 only by its
+  smithies, but layout 2 differs from layout 1 by how its ground finds a
+  direction's cell (the chord, `CHORD_LAYOUT`), so a raised layout-1 town
+  must keep layout 1's lookup or its ground would move. So two new
+  layouts, each read by the rules it names, never by `>=` alone:
+  - **4**: a town laid at layout 2 and given its smithies later (the
+    chord, the smithies);
+  - **5**: a town laid at layout 1 and given its smithies later (the dot
+    lookup, the smithies).
+  `record::finds_by_chord(layout)` and `record::stands_smithies(layout)`
+  are the two questions every reader asks. A new world's towns are still
+  laid at layout 3, which already has its forge.
+- **When.** The first time a build that knows layouts 4 and 5 reads an old
+  town from its save to stand it (`towns::ensure`), and only a town whose
+  template has smithies (the village and the walled town).
+- **What is checked.** Every exact cell key the template's smithies stand
+  on (each smithy's cells and its forge's cell) against everything a
+  player made: a cell with any edit in the save (a dug or placed block,
+  the player's or not: anything that changed the cell since the town was
+  laid), a cell in the save's yield set, a cell any of the player's built
+  pieces stands on (`piece` records), and a cell any construction site's
+  plan stands on (`building-site` records). One such cell anywhere under
+  the town's smithies and the town stays at its old layout, with no
+  smithy, and is asked again on the next opening (the player may have dug
+  the block back out). A smithy cell off the town's stored footprint is
+  not the town's to stand on, and also leaves it as it is.
+- **How it is written.** Only the settlement record changes, its `layout`
+  field: proposed by the world (`Author::World`, process `towns`, kind
+  `settlement`, the site's id) through `WorldSave::propose`, the durable
+  path with its yield check. Its buildings, cells, terrace and levels are
+  untouched, so the town's ground, houses and terrace stand exactly where
+  they stood (a test holds the ground cell for cell). A save whose writer
+  has failed writes nothing and the town is stood at its old layout.
+- **Old saves otherwise.** A town at layout 3, a town at layout 1 or 2
+  whose template has no smithy (the harbour, the desert, the tundra, the
+  jungle) and an unsettled site are read and stood as before, and nothing
+  is written for them.
+- **Tests (core):** the ladder's two questions for layouts 1 to 5; a
+  layout-2 town raised to 4 and a layout-1 town to 5 with every other
+  field equal; a smithy cell touched refuses it. **(app):** an old-layout
+  village saved and reopened gains its smithy (its record at 4, the smithy
+  stood); one with a block of the player's on a smithy cell does not, and
+  its record is unchanged; the raised town's ground is the old town's
+  ground, cell for cell; a layout-3 town writes nothing.
+
 ## 7. A parcel's pick-up and drop-off
 
 The design is `townsfolk` design 47.

@@ -37,6 +37,30 @@ SHALL be drawn red, and only that cell, with the first clash's reason shown.
 - **THEN** the ghost shows a plank bridge over them at the bank's height, and
   the bill adds the bridge's planks and logs
 
+### Requirement: A full river is drawn under its banks
+
+A river's water standing level with its bank SHALL be drawn a fifth of a
+layer (0.2 m) under the bank's top, so a bridge's deck stands clear of it,
+and SHALL leave every fall, the sea and the rule's water levels as they are.
+
+#### Scenario: A bridge over a full river
+
+- **WHEN** the player stands on a plank bridge over a river running full to
+  its banks
+- **THEN** the water is drawn under the planks, not through them
+
+### Requirement: A bridge's rails and legs are cut-out cards
+
+A bridge's hand rails and the legs under its deck SHALL be drawn as flat
+cards in a cut-out pixel texture, two single-sided faces back to back, and
+SHALL stop the walker where the rails did.
+
+#### Scenario: Looking through the rail
+
+- **WHEN** the player looks across a bridge's rail at the river
+- **THEN** the water shows between the rail's timbers, from the deck and
+  from the bank
+
 ### Requirement: The planner's menu and bill
 
 The width (1, 2 or 3), the surface (dirt or gravel) and lamps on or off SHALL

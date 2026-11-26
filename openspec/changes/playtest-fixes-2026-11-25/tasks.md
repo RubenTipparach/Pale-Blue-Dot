@@ -6,6 +6,7 @@
 - [x] 4 The placed torch as the held torch. Verify: a capture of a placed torch beside the held one.
 - [x] 5 A sleeper's eyes are shut. Verify: `a_sleeping_face_keeps_its_eyes_closed`.
 - [x] 6 The blacksmith's station: the finding and the recommendation in design 6, with captures of an old-layout town and a layout-3 town for the survey. Whether old towns gain a smithy is the owner's (survey); nothing changes until then.
+- [ ] 6a Old towns gain their forge (owner, survey P5, 2026-11-26; design 6, "Owner's answer"): layouts 4 and 5, raised in place by the world through the durable path, skipped where a smithy cell meets anything the player made. Verify: core tests of the ladder and the raise, app tests that an old-layout town gains its forge, that one with a player's block in the way does not, and that its ground is unchanged; a capture of a raised old town's smithy.
 - [ ] 7 Frame time that degrades over a session: count assets and entities over a long run on the desktop; see the handoff, item 3.
 
 - [x] 8 A delivery's pick-up and drop-off places, marked on the compass and the map (`townsfolk` design 47). Verify: core and app tests, a save from before keeps its parcel and gains the marker; captures of the marker and the tracker.
