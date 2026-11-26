@@ -231,7 +231,11 @@ impl<'a> Meets<'a> {
     /// The way out of the solid that holds a body at `centre`, along the
     /// ground: the face a refused move slides along.
     fn push_normal(&self, centre: DVec3) -> Option<Vec3> {
-        self.pieces()
+        // Every piece, in their order, never the near ones: it is asked only
+        // when a move is refused, and the first piece that answers is the
+        // face slid along (with the near pieces alone the bot's walk out of
+        // Holbrook stalled, `memory-leak`).
+        self.all_pieces()
             .find_map(|(_, b, frame, local)| {
                 b.push_normal_in(
                     self.in_frame(&frame, local, centre),
@@ -1877,6 +1881,12 @@ fn sweep(
 /// step, its slides, the turned tries and the probes round the body reach.
 const NEAR_PIECES_M: f64 = 12.0;
 
+/// `PBD_NEAR_OFF` set: the ground check asks every piece (a measurement).
+fn near_off() -> bool {
+    static OFF: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *OFF.get_or_init(|| std::env::var_os("PBD_NEAR_OFF").is_some())
+}
+
 /// Swept support with a small capsule footprint, the towns' floors and
 /// stairs in it. A refused move slides: the part of it along the face is
 /// swept again, twice at most, for a corner (`tenebris-towns` section 4).
@@ -1928,8 +1938,10 @@ fn resolve_ground(
             here,
             NEAR_PIECES_M + f64::from(ground.previous.distance(position.0)),
         );
+        // MEASUREMENT (`memory-leak`): `PBD_NEAR_OFF` asks every piece, for
+        // an A/B of the near pieces in one exe.
         let meets = Meets {
-            near: Some(&near),
+            near: (!near_off()).then_some(&near[..]),
             ..every
         };
         if let Some(mut climb) = state.climb {
