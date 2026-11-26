@@ -237,6 +237,14 @@ const PHASES = [
       { id: 'phase-2-checks.5', text: 'Videos of phase 2 (the batch), then your playtest.' } ] },
   ] },
   { id: 'phase-3', num: '3', name: 'Townsfolk', qs: [
+    { id: 'P8', q: 'Your P6 answer is in: a full river is now drawn 0.2 m under its bank, and the near half of this bridge is dry. On the far half, the settled river runs a thin sheet up to 54.31 m, so even 0.2 m lower (54.11 m) it is still above the deck at 54.02 m, and water shows over the planks.',
+      options: ['Draw a full river 0.35 m under its bank instead of 0.2 m', 'Set a new bridge\'s deck from the settled river, not the generated one (existing bridges keep theirs)', 'Both', 'Leave it as it is'], rec: 1,
+      why: 'The deck then always clears the water it actually crosses, and other river banks keep the 0.2 m look you asked for.',
+      change: 'townsfolk (design 42p)',
+      images: [
+        { src: 'img/p8-bridge-after.jpg', alt: 'Bridge over a river, water over the far half of the deck', caption: 'After the 0.2 m drop: near half dry, far half still under the sheet' },
+        { src: 'img/p8-bank-before.jpg', alt: 'River level with its bank before', caption: 'Before: the river level with its bank' },
+        { src: 'img/p8-bank-after.jpg', alt: 'River under its bank after', caption: 'After: 0.2 m under the bank' } ] },
     ], issues: [
   ], tests: [
     { id: 'phase-3-test-npcs', step: 'NPCs', items: [
