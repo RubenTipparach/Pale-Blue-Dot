@@ -1196,6 +1196,11 @@ pub struct BakedField {
     /// it blends from the one before it (its vertex colour) from then
     /// (`baked-light-ease` 7.4). None before its first.
     swapped_s: Option<f32>,
+    /// Where its bake read the field, and a digest of what the field held
+    /// there (`memory-leak` cut 9): a set that lands with the same digest
+    /// leaves the bake as it is.
+    probes: Vec<(Vec3, u16)>,
+    digest: Option<u64>,
 }
 
 impl BakedField {
@@ -1221,6 +1226,26 @@ pub enum BakeSource {
 struct PendingBake {
     source: BakeSource,
     done: Vec<[f32; 2]>,
+    /// Each finest cell and lower layer the bake has read, by the cell's
+    /// key: one direction into it.
+    probes: std::collections::HashMap<(u32, u16), Vec3>,
+}
+
+/// The lower of the two layers `light::sample` reads between at `point`.
+fn probe_layer(point: Vec3) -> u16 {
+    let layer = point.length() - PLANET_RADIUS - pbd_core::column::BASE_M as f32;
+    (layer - 0.5)
+        .floor()
+        .clamp(0.0, (pbd_core::column::LAYERS - 1) as f32) as u16
+}
+
+/// The digest of what the field holds at a town's probes under this set.
+fn probes_digest(fine: &PlanetFine, contact: &PlanetContact, probes: &[(Vec3, u16)]) -> u64 {
+    let at: Vec<(Option<usize>, u16)> = probes
+        .iter()
+        .map(|&(dir, lo)| (contact.finest_cell(dir), lo))
+        .collect();
+    fine.set.columns.light_digest(&at)
 }
 
 /// What a town's outside reads before it is baked: the shader takes the
@@ -1346,6 +1371,7 @@ fn bake_town_outsides(
     let config = crate::planet::terrain_config();
     let started = std::time::Instant::now();
     let mut baked_vertices = 0usize;
+    let mut kept = 0usize;
     for (mesh, mut state) in &mut outsides {
         let state = &mut *state;
         // What this town's light comes from under this set.
@@ -1375,6 +1401,18 @@ fn bake_town_outsides(
         };
         if state.baked == Some(want) {
             state.pending = None;
+            continue;
+        }
+        // The light where it reads unchanged under this set: the bake it
+        // carries is what a new one would be.
+        if let (BakeSource::Field(..), Some(digest)) = (want, state.digest)
+            && matches!(state.baked, Some(BakeSource::Field(..)))
+            && !state.probes.is_empty()
+            && probes_digest(&fine, &contact, &state.probes) == digest
+        {
+            state.baked = Some(want);
+            state.pending = None;
+            kept += 1;
             continue;
         }
         // Read, not written, until a bake is swapped in (`memory-leak` cut
@@ -1412,6 +1450,7 @@ fn bake_town_outsides(
             state.pending = Some(PendingBake {
                 source: want,
                 done: Vec::with_capacity(count),
+                probes: Default::default(),
             });
         }
         let Some(pending) = state.pending.as_mut() else {
@@ -1441,11 +1480,33 @@ fn bake_town_outsides(
                 };
                 let (sky, block) = field_at(&fine, &contact, at);
                 pending.done.push([sky, block]);
+                if let Some(dir) = at.try_normalize()
+                    && let Some(record) = contact.finest_cell(dir)
+                    && let Some(cell) = fine.set.finest_records().get(record)
+                {
+                    pending
+                        .probes
+                        .entry((cell.key(), probe_layer(at)))
+                        .or_insert(dir);
+                }
             }
             baked_vertices += to - from;
         }
         if pending.done.len() == count {
             let done = std::mem::take(&mut pending.done);
+            let mut probes: Vec<(Vec3, u16)> = pending
+                .probes
+                .drain()
+                .map(|((_, lo), dir)| (dir, lo))
+                .collect();
+            // In a fixed order, so the same probes give the same digest.
+            probes.sort_by(|a, b| {
+                (a.1, a.0.x, a.0.y, a.0.z)
+                    .partial_cmp(&(b.1, b.0.x, b.0.y, b.0.z))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            state.digest = Some(probes_digest(&fine, &contact, &probes));
+            state.probes = probes;
             state.pending = None;
             log_bake_change(frame, false, uv_1(m), &done);
             if let Some(m) = meshes.get_mut(&mesh.0) {
@@ -1456,6 +1517,9 @@ fn bake_town_outsides(
     }
     if baked_vertices > 0 {
         crate::planet::lod::spent(&format!("town bake: {baked_vertices} vertices"), started);
+    }
+    if kept > 0 {
+        crate::planet::lod::spent(&format!("town bake kept: {kept} towns"), started);
     }
 }
 

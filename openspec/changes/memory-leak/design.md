@@ -378,3 +378,39 @@ on `town-soak`'s first 4.5 minutes with both: p50 11.5, p99 18.4, max 30 ms;
 97% of frames at 60 fps, 99.9% at 40, main 8.6 ms. The stalls of the run
 before it did not come back: it started seconds after a 17 GB file was
 deleted, and is not counted.
+
+**Cut 9: a town keeps its bake while its light is unchanged (owner,
+2026-11-26: "Could you cache town lighting so we don't end up with
+rebuilding?").** A town's outside carries the field's light baked into its
+vertices (36,000 for Holbrook), tagged with the fine set it was read from.
+Walking, a new fine set lands every few seconds, and each one counts as new
+light: every town in reach is baked again, all of its vertices, a 2 ms
+slice a frame, though nothing about its light has moved. The cut: each bake
+also keeps where its vertices read the field (each finest cell a vertex
+samples, with the two layers it reads between) and a digest of what the
+field holds there: the light of those cells and their neighbours at those
+layers, whether each is solid, and whether each neighbour is in the
+region, which is everything `light::sample` reads. A new set first takes
+the digest (a few thousand reads, not 36,000 samples); when it matches, the
+town keeps its bake and is tagged with the new set. A dig, a placed lamp,
+dusk and dawn change those values and bake it again, as now. The picture
+cannot change: a matching digest is the same inputs to the same sample.
+
+Measured on `town-soak`'s first 3 to 4.5 minutes: the town baked again at
+two moments in a 3-minute run (every probe on the tier both times: the
+bot digs beside the town, and the light there does change), and kept its
+bake on the other sets that landed; 96% of frames at 60 fps, 99.9% at 40,
+max 42 ms. A digest of Holbrook's 1,161 probes is 4 to 5 ms for eleven
+towns' pieces at once, against 2 ms a frame for some 20 frames to bake
+them.
+
+**The shadow pass draws nearest the sun first** (cut 8, part). Priced at
+18:30 in Holbrook with `PBD_SHADOW_PRICE`: the casters' cut-out test is
+nearly all of the pass (6.3 ms with it, 1.45 ms with an empty fragment,
+whose casters the GPU rejects by depth before shading). Drawn towns, crowns,
+then ground, the crowns' discards no longer hide the ground under them
+from the early depth test: 7% fewer fragments shaded, 6.07 to 5.90 ms
+(`PBD_SHADOW_ORDER_OLD` for the A/B). The maps are the same: the nearest
+depth wins each texel in any order. The rest of it is the crowns' own
+overdraw under a low sun; the leaf cut-out's share is priced next
+(`PBD_SHADOW_PRICE=no_leaf,no_part`).
