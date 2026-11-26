@@ -5732,6 +5732,14 @@ fn capture(
             if let Some(place) = pbd_app::place::of_world(world) {
                 info!("PLACE capture {named} {}", place.line());
             }
+            // The water under and round the walker (`townsfolk` design 42p's
+            // measure): its rule's top and its drawn top.
+            if let Some(feet) = pbd_app::walking::walker_feet(world)
+                && let Some(contact) = world.get_resource::<pbd_app::planet::PlanetContact>()
+            {
+                let (feet, round) = contact.water_probe(feet, 3.0);
+                info!("WATER_PROBE feet {feet:.2} (rule, drawn) {round:?}");
+            }
         });
     }
     if launch.capture.is_some() && state.saved && state.frame >= state.finish_frame {

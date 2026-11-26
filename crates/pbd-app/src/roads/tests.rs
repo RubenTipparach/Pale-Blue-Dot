@@ -1087,10 +1087,10 @@ fn measure_the_river_at_the_bridge_capture() {
         let (lat, lon) = crate::place::at_flag(roads::centre(k).unwrap());
         println!("cell {k}: --at {lat:.5} {lon:.5}");
     }
-    for (name, d) in [("spot", d)]
-        .into_iter()
-        .chain(road.iter().map(|&k| ("road end", roads::centre(k).unwrap())))
-    {
+    for (name, d) in [("spot", d)].into_iter().chain(
+        road.iter()
+            .map(|&k| ("road end", roads::centre(k).unwrap())),
+    ) {
         let ground = crate::planet::surface_height(d);
         let column = pbd_core::column::generate_solid(cfg, d);
         let top = column.surface().unwrap();

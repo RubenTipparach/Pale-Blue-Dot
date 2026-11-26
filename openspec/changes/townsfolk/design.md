@@ -2317,25 +2317,32 @@ river is drawn lower.
   The deck stands at the bank's height plus `LIFT_M` (0.02 m) and is
   `DECK_M` (0.2 m) thick, so its underside is 0.18 m under the water and
   the ripples are drawn through the planks.
-- **The change.** A drawn top's corner level is scaled by `1 - STILL_DROP`,
-  `STILL_DROP` 0.2 of a layer (0.2 m): a full corner is drawn 0.2 m under
-  its bank, at the deck's underside, so the planks stand 0.22 m over the
-  water, and a riffle's lower corners come down in proportion, so no reach
-  draws higher than the still water upstream of it. A side's top edge
-  follows its corners, so the sides meet the top.
+- **The change.** Every corner of a drawn top is drawn `STILL_DROP` (0.2 m)
+  under its rule level (`water_flow::drawn_corner`), into the water under
+  it where there is water under it, and never under its floor where there
+  is not: a full corner is drawn 0.2 m under its bank, at the deck's
+  underside, so the planks stand 0.22 m over the water. One drop for every
+  corner keeps every top's shape and every step between tops, so no reach
+  draws higher than another than it did. A side's top edge follows its
+  corners (and is never under its own foot), so the sides meet the top.
+  First written as a scale of the corner level by `1 - STILL_DROP`; the
+  measure below (a thin sheet riding over the bank's layer, which a scale
+  barely moves) made it one drop for all.
 - **What it leaves alone.** Every corner that touches a fall is drawn as
   it is today, so a fall keeps its lip, its sheet and its foot exactly (the
   waterfall rule): a corner is left whole where any of its three cells has
   falling water in that layer, falling water on it (a fall's foot), or is
   open with falling water under it (a lip). Water standing in a stack (the
   layers under a top) is never scaled. The sea is not touched: its sheet
-  draws its top, and water at the sea's own layer is left whole so a river
-  meets the sea level. Two cells sharing a corner work it out from the same
+  draws its top, and water within a layer of the sea's level is left whole,
+  so a river's mouth meets the sea's sheet and the eye there still knows
+  the river's water from the sea's
+  (`water_junction_tests::where_waters_meet_the_surfaces_join_and_the_eye_follows_them`). Two cells sharing a corner work it out from the same
   three cells, so the top stays one surface with no crack.
 - **What reads it.** It is a draw-time rule: the column, the rule's levels,
   the tick, the save, swimming and buoyancy are unchanged. The readers of
   the drawn top follow it through `water_flow::drawn_top_m`, which applies
-  the same scaling: whether the eye is under the water, the rain's
+  the same drop: whether the eye is under the water, the rain's
   ripples, the eye's path. A raft floats on the drawn top
   (`PlanetContact::drawn_water`), which no longer stops at the column's
   level but at most `STILL_DROP` under it, so a raft sits on the water it
@@ -2350,6 +2357,38 @@ river is drawn lower.
   corners are where they were.
 - **Captures.** `road-bridge-after.jpg` from `road-bridge.jpg`'s spot, and
   a river bank close up before and after.
+- **Measured at the bridge (2026-11-26, a measuring instrument: a capture
+  logs `WATER_PROBE`, the rule's and the drawn water top under and round
+  the walker, `PlanetContact::water_probe`; and the ignored test
+  `roads::tests::measure_the_river_at_the_bridge_capture`).** The paved
+  road's cells: bank 54 m, the river's cells' bed 52 m with two layers of
+  water in the generated column, so the planner's river surface is 54 m
+  and the deck `deck_m` 54 (top 54.02). The live, settled river is higher
+  over the deck's cells: a thin flowing sheet in the bank's own layer,
+  its rule top 54.06 to 54.31 m, drawn (with the drop) 53.87 to 54.11 m.
+  So where the river runs full the deck clears it; where the settled
+  river rides up to 0.31 m over the generated bank, a 0.2 m drop leaves
+  its water up to 0.09 m over the planks. The far river sheet is not
+  what is drawn there (hiding it changed nothing); hiding the game's own
+  water clears the deck. Clearing that case too would need a larger drop
+  (0.35 m) or the deck set from the settled water rather than the
+  generated column: a look change and a road change, for the owner.
+
+**42p (P6), as built (2026-11-26).** As written above, the drop one
+`STILL_DROP` (0.2 m) for every corner not touching a fall or within a layer
+of the sea (`water_flow::drawn_corner`), `drawn_top_m` in step, the raft's
+floor `STILL_DROP` under the column's level, the river band's file
+`PBDBAND2`. Tests: `water_flow::tests::a_full_river_is_drawn_under_its_bank_and_a_fall_is_not_moved`
+(a full pool 0.2 m under its bank, a thin sheet over full water 0.2 m under
+its level, a lip's corners and a fall's top as they were), and the
+existing fall, foot and junction tests unchanged. Captures (lavapipe, no
+frame times) from `road-bridge.jpg`'s spot: `road-bridge-after.jpg` and
+the bank close up `river-bank-before.jpg` (the build before) and
+`river-bank-after.jpg`: the near half of the deck, where the river runs
+full to its bank, is clear of the water; its far half, where the settled
+river rides up to 0.31 m over the bank (the measure above), still has
+water over the planks. For the owner: a larger drop, or decks set from the
+settled water.
 
 *P7, the rails.* The owner picked "Keep the solid panels" and wrote: "You
 should use a texture with alpha cutout instead of adding geom (single

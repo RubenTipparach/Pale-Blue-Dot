@@ -401,8 +401,8 @@ impl PlanetContact {
 
     /// [`Self::column_water`], at the surface the water is DRAWN at: a
     /// flowing top is drawn through its corners, up to a layer's share over
-    /// the cell's own level (`water_flow::drawn_top_m`), and a craft floats on
-    /// what is seen (`craft-lighting`: a raft rode with its deck under the
+    /// the cell's own level (`water_flow::drawn_top_m`), or under it in a
+    /// full river (design 42p), and a craft floats on what is seen (`craft-lighting`: a raft rode with its deck under the
     /// drawn river, 20 cm over the column's level).
     pub fn drawn_water(&self, point: Vec3) -> Option<Option<f32>> {
         let direction = point.try_normalize()?;
@@ -415,7 +415,43 @@ impl PlanetContact {
         let drawn = pbd_core::column::layer_at(surface - 1e-3)
             .zip(fine.set.columns.slot(id))
             .and_then(|(top, slot)| crate::water_flow::drawn_top_m(&fine.set.columns, slot, top));
-        Some(Some(drawn.unwrap_or(surface).max(surface)))
+        // A full river is drawn up to `STILL_DROP` under its level
+        // (`townsfolk` design 42p): a craft rides that drawn top.
+        let floor = surface - crate::water_flow::STILL_DROP;
+        Some(Some(drawn.unwrap_or(surface).max(floor)))
+    }
+
+    /// A capture's measure of the water round `feet` (body-local; `townsfolk`
+    /// design 42p, a measuring instrument): the feet's altitude, and at the
+    /// feet and six points `reach_m` round them the rule's water top and the
+    /// drawn top under the feet (from a metre over them down to five under),
+    /// metres over the radius, `None` where there is none.
+    pub fn water_probe(&self, feet: Vec3, reach_m: f32) -> (f32, Vec<Option<(f32, f32)>>) {
+        let up = feet.normalize_or(Vec3::Y);
+        let alt = feet.length() - PLANET_RADIUS;
+        let east = Vec3::Y.cross(up).normalize_or(Vec3::X);
+        let north = up.cross(east);
+        let mut out = Vec::new();
+        for k in 0..7 {
+            let d = if k == 0 {
+                up
+            } else {
+                let a = (60.0 * (k - 1) as f32).to_radians();
+                (up * PLANET_RADIUS + (east * a.cos() + north * a.sin()) * reach_m).normalize()
+            };
+            let mut h = alt + 1.0;
+            let mut found = None;
+            while h > alt - 5.0 {
+                if let Some(Some(top)) = self.column_water(d * (PLANET_RADIUS + h)) {
+                    let drawn = self.drawn_water(d * (PLANET_RADIUS + h)).flatten();
+                    found = Some((top, drawn.unwrap_or(f32::NAN)));
+                    break;
+                }
+                h -= 0.1;
+            }
+            out.push(found);
+        }
+        (alt, out)
     }
 
     /// Whether `point` (body-local) is over a column of the tier: what the
