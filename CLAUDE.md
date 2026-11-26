@@ -668,7 +668,23 @@ which wait for a request.
   breath, or in space"): a Survival mode per world beside today's calm
   Explorer, with health, fall damage, hunger, breath and suit air, hunting
   predators, townsfolk who fight back, tool wear, and a dropped pack on
-  death (`survival-mode`). No mockup yet.
+  death (`survival-mode`).
+  Started on the owner's word, 2026-11-26 ("start working on phase 4,
+  we're gonna work on survival mode which will add new branch to starter
+  missions to handle survival"), survival first. With it:
+  - forest fires that can start in the dry season, and torches that light
+    things and are put out by rain;
+  - hunger and hunting, with spears, arrows, a hunting axe and swords;
+  - stamina whose regen draws on food: regen below half costs less food,
+    and pushing past the bar drains it slowly, eats food as it goes and
+    costs more food to refill;
+  - swimming costs stamina, and jumping and climbing cost a little;
+  - breath under water, falls that hurt;
+  - heat and cold as stress: heat needs more water, and heat stroke hurts
+    and makes the player pass out; a straw drinks juice from a cactus;
+  - a Survival branch of the starter missions.
+  Being written up with a mockup (`survival-mode`); the game code waits
+  on the write-up.
 - **Then mass transportation** ("then after civil engineering, we'll get
   into mass transportation"): airships (M24), sea ships, sailing and
   navigation (M23, `steer-and-sail`), ridden horses and wagons, cars, and
