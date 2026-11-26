@@ -2394,6 +2394,27 @@ cut-out texture instead of modelled boxes.
   face opposite ways. App: the ghost carries the cards in their textures.
 - **Captures.** The bridge close up by day and at night.
 
+**42p (P7), as built (2026-11-26).** As written above.
+- Core: `roads::piece::RAIL_CARD`, `TRESTLE_CARD` and `card`; test
+  `roads::piece::tests::a_bridge_has_a_deck_and_rail_and_leg_cards_where_the_road_does_not_go`
+  (a cell railed on four sides: four rail and four leg cards, two quads
+  each, back to back, no timber over the deck, the hand rail at 1 m and the
+  legs down to the bed).
+- App: the world's roads draw a manifest-cut texture masked
+  (`roads::spawn_chunk`); the ghost draws the cards in their textures
+  (`planner::ghost_cards`, `GhostLooks::cards`); tests
+  `roads::tests::the_ghost_carries_a_bridge_s_deck_and_rail_and_leg_cards_and_its_lamp_posts`
+  (renamed from `..._deck_posts_and_rails_...`) and
+  `roads::tests::the_bridge_cards_are_drawn_in_the_timber_s_palette`.
+- Art: `tools/art/bridge_cards.py` (`--check` holds the files), the two
+  manifest rows.
+- Captures (lavapipe, no frame times) from `road-bridge.jpg`'s spot:
+  `road-bridge-after.jpg` (11:00), `river-bank-after.jpg` (11:00, looking
+  down at the deck and the rails close) and `bridge-cards-2230.jpg`
+  (22:30; no lamp stands on this bridge, so it is lit by the moon and the
+  sky alone, as the bank is). The legs stand in the river and are seen
+  only through the water.
+
 **46. Jobs on the roads: a rockfall and a trader to walk with (task 8.5,
 2026-11-24; written before the code).** Two new kinds on a town's board,
 through the board, the taken jobs, the counting and the hand-in every town

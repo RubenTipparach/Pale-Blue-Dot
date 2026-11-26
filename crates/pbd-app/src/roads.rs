@@ -583,12 +583,21 @@ fn spawn_chunk(world: &mut World, meshes: &Meshes) -> Entity {
     let centre = world
         .get_resource::<PlanetRenderFrame>()
         .map_or(Vec3::ZERO, |f| f.center.as_vec3());
-    let parts: Vec<(Mesh, Handle<Image>)> = {
+    // A bridge's rail and leg cards are cut out where their texture is
+    // clear (design 42p), as the manifest says.
+    let cut = crate::towns::cut_textures();
+    let parts: Vec<(Mesh, Handle<Image>, bool)> = {
         let assets = world.resource::<AssetServer>();
         meshes
             .iter()
             .filter(|(_, b)| !b.positions.is_empty())
-            .map(|(name, buf)| (to_mesh(buf), crate::towns::texture(assets, name)))
+            .map(|(name, buf)| {
+                (
+                    to_mesh(buf),
+                    crate::towns::texture(assets, name),
+                    cut.contains(name),
+                )
+            })
             .collect()
     };
     let root = world
@@ -602,9 +611,9 @@ fn spawn_chunk(world: &mut World, meshes: &Meshes) -> Entity {
             Visibility::default(),
         ))
         .id();
-    for (mesh, image) in parts {
+    for (mesh, image, cut) in parts {
         let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
-        let material = crate::towns::town_material(world, Some(image), false);
+        let material = crate::towns::town_material(world, Some(image), cut);
         let child = world
             .spawn((
                 Mesh3d(mesh),

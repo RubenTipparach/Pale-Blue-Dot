@@ -105,5 +105,10 @@
     (name: "forgefire", width: 32, height: 64, repeat_m: 0.0, cut: true),
     (name: "anvil", width: 32, height: 32, repeat_m: 0.6),
     (name: "anvilface", width: 32, height: 32, repeat_m: 0.6),
+    // `townsfolk` design 42p: a bridge's rail and leg cards, cut out, drawn
+    // by tools/art/bridge_cards.py in the timber's palette. The rail is
+    // mapped once across a cell's side; the legs repeat a metre down.
+    (name: "bridgerail", width: 64, height: 32, repeat_m: 0.0, cut: true),
+    (name: "bridgetrestle", width: 64, height: 32, repeat_m: 1.0, cut: true),
   ],
 )
