@@ -237,28 +237,6 @@ const PHASES = [
       { id: 'phase-2-checks.5', text: 'Videos of phase 2 (the batch), then your playtest.' } ] },
   ] },
   { id: 'phase-3', num: '3', name: 'Townsfolk', qs: [
-      { id: 'P5', q: 'A town saved before forges were added (layout 2 or older) has a blacksmith but no forge: they hammer on bare ground. A new town has its forge, anvil and shed. Should old towns get their forge?',
-        options: ['Leave old towns as they are', 'Give old towns their forge, only where it touches nothing you built'], rec: 1,
-        why: 'It fixes the smith you reported without touching anything you made: a new town layout version adds the forge, and is skipped wherever its cells meet your own building.',
-        change: 'playtest-fixes (design 6)', asked: '2026-11-25',
-        images: [
-          { src: 'img/blacksmith-old-layout.jpg', alt: 'The blacksmith hammering on bare ground in an old town', caption: 'Old town (layout 2): the smith on bare ground.' },
-          { src: 'img/blacksmith-layout3.jpg', alt: 'The same spot with forge, anvil and shed', caption: 'The same spot at layout 3: forge, anvil, shed.' },
-        ] },
-      { id: 'P6', q: 'Where a river runs full to its banks, a road bridge deck sits right at the water surface, and the river draws its ripples over the planks. Raise the deck?',
-        options: ['Leave it at the water', 'Raise it about 0.25 m over full rivers, with ramped ends (new worlds and new bridges)'], rec: 1,
-        why: 'A bridge should stand clear of the water. A new road version keeps every bridge already in a save as it is.',
-        change: 'townsfolk (design 42o)', asked: '2026-11-25',
-        images: [
-          { src: 'img/p6-road-bridge.jpg', alt: 'A plank bridge seen on foot from its first cell', caption: 'Water ripples drawn across the deck.' },
-        ] },
-      { id: 'P7', q: 'The bridge rails are solid timber panels, as in the approved roads mockup. Close up they box the deck in like a trough (same picture as P6). Keep them or open them up?',
-        options: ['Keep the solid panels', 'Posts with a top rail, open between'], rec: 1,
-        why: 'Open rails let you see the river from the deck and read as a bridge rather than a channel.',
-        change: 'townsfolk (design 42o)', asked: '2026-11-25',
-        images: [
-          { src: 'img/p6-road-bridge.jpg', alt: 'The bridge rails as solid panels', caption: 'Solid panel rails either side.' },
-        ] },
     ], issues: [
   ], tests: [
     { id: 'phase-3-test-npcs', step: 'NPCs', items: [
@@ -279,46 +257,6 @@ const PHASES = [
       { id: 'phase-3b-launcher.2', blocking: true, text: 'How a free game downloads from itch is not documented. A spike comes first.' } ] },
   ] },
   { id: 'phase-4', num: '4', name: 'Town building, civil engineering and survival', qs: [
-      { id: 'G6', q: 'Stamina and food in Survival: sprinting costs about 4 times the food of walking (a minute of sprinting eats 6.3 food, walking 1.6), a 200 m swim eats 4.8, and normal play needs 3 or 4 meals a world day. The Stamina tab of the Survival mockup has every number on a slider.',
-        options: ['As drawn', 'Gentler (the effort costs half the food)', 'Harsher'], rec: 0,
-        why: 'Exertion is felt in the food bar without making meals a chore.',
-        change: 'survival-mode (design 12)', asked: '2026-11-26',
-        images: [
-          { src: 'img/s4-stamina-sprint.png', alt: 'A minute of sprinting', caption: 'A minute of sprinting: stamina and food over time.' },
-          { src: 'img/s4-stamina-day.png', alt: 'A world day of normal play', caption: 'A world day of normal play.' },
-        ] },
-      { id: 'G7', q: "The survival HUD: four short bars (health, stamina, food, water) and a thermometer above the hotbar; breath shows only under water. Explorer keeps today's plain hotbar.",
-        options: ['As drawn', 'A vertical stack at the left edge', 'Bars only when not full'], rec: 0,
-        why: 'One glance beside the hotbar, and Explorer is unchanged.',
-        change: 'survival-mode (design 9)', asked: '2026-11-26',
-        images: [
-          { src: 'img/s4-hud-night-fine.png', alt: 'The HUD at night beside Explorer', caption: 'Explorer (left) and Survival (right) at night.' },
-          { src: 'img/s4-hud-day-hot.png', alt: 'The HUD on a hot day', caption: 'A hot day: water low, the thermometer rising.' },
-          { src: 'img/s4-hud-night-winded.png', alt: 'Winded', caption: 'Winded after a sprint.' },
-        ] },
-      { id: 'G8', q: 'Heat stroke at 40 °C body temperature: the screen edge warms from 38 °C as a warning, then 10 health is lost and the view fades out for 30 s. A hit or a revive wakes you, and you are dazed for 60 s.',
-        options: ['As drawn', 'No passing out, health loss only'], rec: 0,
-        why: 'You asked for passing out, and it is warned well before.',
-        change: 'survival-mode (design 14)', asked: '2026-11-26',
-        images: [
-          { src: 'img/s4-hud-day-stroke.png', alt: 'Heat stroke', caption: 'Heat stroke: the view fading out.' },
-        ] },
-      { id: 'G10', q: 'The weapons: a stone spear (2.0 m), a bow (1.5 m) with 0.75 m arrows, a bronze hunting axe (0.6 m) and a bronze sword (0.9 m), at true size beside a 1.8 m figure.',
-        options: ['Approve the looks for the animation step', 'Change a look (say which)'], rec: 0,
-        why: 'Then the held models and their swings go through the animation work.',
-        change: 'survival-mode (design 16)', asked: '2026-11-26',
-        images: [
-          { src: 'img/s4-weapons-day-all.png', alt: 'The four weapons by day', caption: 'The weapons beside a 1.8 m figure.' },
-          { src: 'img/s4-weapons-night-all.png', alt: 'The weapons by a campfire', caption: 'By a campfire at night.' },
-        ] },
-      { id: 'G11', q: 'The Survival branch of the starter missions (23 missions, Survival worlds only): drink water, eat, make a spear, hunt, cook meat, the first night, then hunting and weapons, heat and cold (with the cactus straw), the body in water, and fire. Where does it hang?',
-        options: ['Off "Open the pack"', 'Off "Make a fire"'], rec: 0,
-        why: 'Water runs out first, so drinking is taught first.',
-        change: 'survival-mode (design 18)', asked: '2026-11-26',
-        images: [
-          { src: 'img/s4-m33-survival-fit.png', alt: 'The Survival branch', caption: 'The whole Survival branch in the mission tree.' },
-          { src: 'img/s4-m33-survival-hunting.png', alt: 'The hunting branch', caption: 'Hunting and weapons.' },
-        ] },
     ], issues: [] },
   { id: 'phase-5', num: '5', name: 'Mass transportation', qs: [], issues: [] },
   { id: 'phase-6', num: '6', name: 'Age of flight and industry', qs: [], issues: [] },
@@ -331,6 +269,14 @@ const PHASES = [
 
 // The "Already decided" list, newest first. Rows to 2026-10-02 are the first survey's (the Claude Doc), copied as they stood.
 const DECIDED = [
+  {"date": "2026-11-26", "phase": "4", "id": "G11", "text": "\"Go right into survival after pack is opened (if survival mode is active)\": the Survival branch hangs off \"Open the pack\", and in a Survival world its first mission is the goal right after it.", "where": "survival-mode (design 18)"},
+  {"date": "2026-11-26", "phase": "4", "id": "G10", "text": "The weapons' looks approved as drawn (spear, bow and arrows, hunting axe, sword), for the animation step.", "where": "survival-mode (design 16)"},
+  {"date": "2026-11-26", "phase": "4", "id": "G8", "text": "Heat stroke as drawn (a warm edge from 38 C, then passing out for 30 s), and \"Just show stroke warning above hot bar. See G 7 for data\". Being written into the design and the mockup.", "where": "survival-mode (design 14)"},
+  {"date": "2026-11-26", "phase": "4", "id": "G7", "text": "The bars stack at the left edge, and \"Don't need to show food or water till it's 50% or lower. You can check in pack these stats at any time..if stats are full hide them.\" Being written into the design and the mockup.", "where": "survival-mode (design 9)"},
+  {"date": "2026-11-26", "phase": "4", "id": "G6", "text": "The stamina and food numbers stay as drawn, and \"Some sort of js animation would be nice to see this in action. Add an expand button to lazy load\": the Stamina tab gets an animation behind an Expand button.", "where": "survival-mode (design 12)"},
+  {"date": "2026-11-26", "phase": "3", "id": "P7", "text": "The bridge keeps its solid look, and \"You should use a texture with alpha cutout instead of adding geom (single sided, hand rails and posts and the land parts)\": rails, posts and the land ends become cut-out textured cards. Being built.", "where": "townsfolk (design 42o)"},
+  {"date": "2026-11-26", "phase": "3", "id": "P6", "text": "\"River surface seems to be right on the surface of top of terrain hex. You could offset water surface a bit to account for that instead of raising bridge\": a full river's surface is drawn a little below its bank instead of raising bridges. Being built.", "where": "townsfolk (design 42o)"},
+  {"date": "2026-11-26", "phase": "3", "id": "P5", "text": "Old towns get their forge, only where it touches nothing you built (a new town layout version). Being built.", "where": "playtest-fixes (design 6)"},
   {"date": "2026-11-26", "phase": "4", "id": "G9", "text": "\"Let's not spread fire too much for now, consider lots of factors like dryness of plants\": fires stay small and slow, green plants do not burn, and each cell burns by how dry its plants are (kind, season, rain, humidity, shade, water nearby). Being written into the design, with the mockup's Fire tab redone to show it.", "where": "wildfire"},
   {"date": "2026-11-24", "phase": "3", "id": "P1", "text": "Trading stays in baskets (YOU TAKE, YOU GIVE, DEAL), as built. And \"One thing id improve is framing. Move the camera so the merchant is on left, and the trade UI is on the right\": the talk and trade panels sit on the right, and the view turns so the townsperson stands in the left of the frame. Being built.", "where": "townsfolk design 37a, task 11.3"},
   {"date": "2026-11-24", "phase": "3", "id": "P2", "text": "The road planner's ghost is stronger, 55%. And \"Can we something like a slightly aerial view? Let's say something like 10-20 m off the ground?\": while the planner is open the camera lifts to about 15 m above you, looking down the way you face, and comes back down when it closes. Being built.", "where": "townsfolk design 42"},
