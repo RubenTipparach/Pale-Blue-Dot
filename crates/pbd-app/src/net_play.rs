@@ -492,6 +492,7 @@ pub fn receive(player: u32, message: ToClient, save: &mut WorldSave, applied: &m
         ToClient::Accepted { .. } => save.answered(),
         ToClient::Slots { slots } => save.take_remote_slots(slots),
         news @ (ToClient::Drop { .. } | ToClient::DropLeft { .. }) => save.take_drop_news(news),
+        ToClient::Record { record } => save.take_remote_record(record),
         ToClient::Clock { .. } => {}
         ToClient::Rejected { reason } => warn!("the host closed the game: {reason:?}"),
         other => debug!("player {player}: from the host, not used yet: {other:?}"),

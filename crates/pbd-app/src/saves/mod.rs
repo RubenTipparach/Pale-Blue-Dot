@@ -455,6 +455,19 @@ impl pbd_server::Store for SaveStore<'_> {
     fn commit_record(&mut self, author: &Author, record: StoredRecord) -> bool {
         self.save.store(author, vec![record]).is_some()
     }
+    fn record(&self, kind: &str, id: u64) -> Option<StoredRecord> {
+        self.save.records.get(kind, id).cloned()
+    }
+    fn commit_record_with_hands(
+        &mut self,
+        author: &Author,
+        record: StoredRecord,
+        carried: &Slots,
+    ) -> bool {
+        let own = self.own(author, carried);
+        let schema = record.schema;
+        self.save.store_with_hands(record, schema, &own)
+    }
     fn commit_toss(
         &mut self,
         author: &Author,
@@ -726,6 +739,43 @@ impl WorldSave {
         self.with_server(carried, None, |server, store| {
             server.toss(store, 0, 0, (slot, count), at, made_s, carried.clone())
         })
+    }
+
+    /// Decide this game's own sowing through the server (`multiplayer`
+    /// design 26): the seed in `slot` on the tilled soil at `cell`'s
+    /// `layer`, at `now_s`. The slots after, or why not.
+    pub fn decide_plant(
+        &mut self,
+        at: (u32, u16, usize),
+        now_s: f64,
+        carried: &Slots,
+    ) -> Result<Slots, pbd_core::net::protocol::Refusal> {
+        self.with_server(carried, None, |server, store| {
+            server.plant(store, 0, 0, at, now_s, carried.clone())
+        })
+    }
+
+    /// Decide this game's own harvest of `cell` through the server, with
+    /// `farm`'s tuning (design 26).
+    pub fn decide_harvest(
+        &mut self,
+        cell: u32,
+        now_s: f64,
+        farm: &pbd_core::farming::FarmSettings,
+        carried: &Slots,
+    ) -> Result<Slots, pbd_core::net::protocol::Refusal> {
+        self.with_server(carried, None, |server, store| {
+            server.set_farm(*farm);
+            server.harvest(store, 0, 0, cell, now_s, carried.clone())
+        })
+    }
+
+    /// A world record the server sent this joined game (design 26): held as
+    /// the host holds it, written nowhere.
+    pub fn take_remote_record(&mut self, record: StoredRecord) {
+        fold_glow_pick(&mut self.edits, &record);
+        let before = self.records.put(record.clone());
+        self.yields.touch_record(before.as_ref(), &record);
     }
 
     /// Run `decide` on single player's server with this save as its store.
@@ -1575,6 +1625,57 @@ mod tests {
         }
         let log = |slot: &Slot| std::fs::read(root.join(&slot.id).join(LOG)).unwrap();
         assert!(!log(&a).is_empty());
+        assert_eq!(log(&a), log(&b), "byte for byte");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// `multiplayer` design 26: the host's sowing through the server writes
+    /// the line `store_with_hands` always wrote for it, byte for byte; sowing
+    /// again while it grows is refused and writes nothing.
+    #[test]
+    fn a_sowing_through_the_server_writes_the_same_line() {
+        use pbd_core::farming::{Climate, Crop, PLOT_KIND, PLOT_SCHEMA, Plot};
+        let root = temporary("plant-same");
+        let (a, b) = (
+            create(&root, "Through the server", 11).unwrap(),
+            create(&root, "Straight", 11).unwrap(),
+        );
+        let terrain = crate::planet::terrain_config();
+        let (cell, top) = dry_tops(60)
+            .into_iter()
+            .find(|&(cell, top)| {
+                let d = pbd_core::cell_key::key_direction(cell).unwrap();
+                let h = pbd_core::column::layer_altitude(usize::from(top)) + 1.0;
+                Crop::WHEAT.grows_in(Climate::of(pbd_core::planet_gen::biome_at(terrain, d, h)))
+            })
+            .expect("wheat ground among the dry tops");
+        let till = Edit {
+            cell,
+            layer: top,
+            material: Material::Tilled,
+        };
+        let mut carried = Slots::new();
+        carried.give(Item::Good(Crop::WHEAT.row().seed), 3);
+        {
+            let mut through = WorldSave::open(root.clone(), a.clone());
+            let mut straight = WorldSave::open(root.clone(), b.clone());
+            assert!(through.accept(till, None, &carried));
+            assert!(straight.accept(till, None, &carried));
+            let after = through
+                .decide_plant((cell, top, 0), 12.5, &carried)
+                .expect("a seed on tilled soil in its climate is sown");
+            assert_eq!(after.get(0).map(|s| s.count), Some(2));
+            let plot = Plot::sown(top, Crop::WHEAT, 12.5);
+            let record = StoredRecord::of(PLOT_KIND, u64::from(cell), PLOT_SCHEMA, &plot);
+            assert!(straight.store_with_hands(record, PLOT_SCHEMA, &after));
+            assert_eq!(
+                through.decide_plant((cell, top, 0), 13.0, &after),
+                Err(pbd_core::net::protocol::Refusal::Growing)
+            );
+            through.drain();
+            straight.drain();
+        }
+        let log = |slot: &Slot| std::fs::read(root.join(&slot.id).join(LOG)).unwrap();
         assert_eq!(log(&a), log(&b), "byte for byte");
         let _ = std::fs::remove_dir_all(&root);
     }

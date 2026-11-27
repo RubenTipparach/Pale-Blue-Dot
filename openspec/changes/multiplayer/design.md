@@ -952,6 +952,63 @@ player's toss did nothing on the host and a host's toss was never seen.
 - the host's toss through the server writes the line `record_toss`
   always wrote.
 
+### 26. Crops through the server, and world records sent (task 2.2 and 8.2, crops; 2026-11-27)
+
+Sowing and harvesting were decided in the app (`farm.rs` `plant`,
+`harvest`), wrote a `plot` record with the slots, and nobody else ever saw
+the record. This moves both into the core and the server, and sends every
+record the server's store takes to every player.
+
+**The rules** (`pbd_core::farming::accept`):
+- `plant(ground, over, growing, climate, slots, layer, now_s)` takes one
+  seed from the selected slot and returns the sown plot and the slots
+  after. It is refused when:
+  - the ground is not tilled soil with air over it (`NotTilled`);
+  - a crop already grows there (`Growing`);
+  - the climate does not suit the crop (`Climate`);
+  - the slot holds no seed (`EmptySlot`).
+- `harvest(plot, farm, slots, now_s)` returns the bare plot, the slots
+  with the produce and seeds given, and how many of each. It is refused
+  when the crop is not ripe (`NotRipe`) or the pack has no room (`NoRoom`).
+  Nothing is given unless all of it fits, as today.
+
+The app keeps its notes ("Seeds need tilled soil", "Ripe in 6 h") and
+reads them from the refusal.
+
+**The server** decides `Request::Plant { cell, layer, slot }` and
+`Request::Harvest { cell }`:
+- the ground comes from its column (seed and edits), the climate from
+  `planet_gen::biome_at` at the cell's direction, as `climate_at` reads
+  it;
+- the plot comes from the store (`Store::record`);
+- the farm's tuning is set on the server like the crew chain
+  (`Server::set_farm`), and a harvest asked of a server with none is
+  refused.
+
+The store writes the record with the player's slots
+(`Store::commit_record_with_hands`; a guest's with the host's own, design
+22).
+
+**Records are sent.** Every record the server's store takes, whether a
+plot, a crew record or anything that comes this way later, is broadcast
+as `ToClient::Record { record }` (kind, id, schema and its RON body). A
+joined game puts it in its own records (`WorldSave::take_remote_record`),
+so its crops draw from it as the host's do. The refusals grow by the
+farming ones above, in the protocol's code table (protocol 2 is not yet
+released, so its number stays).
+
+**Not yet:** tilling stays an edit (it already goes through the server),
+fertiliser, wild plants and clutter picking, and the missions' `Planted`
+and `Gained` counts for a joined player (missions are a later writer).
+
+**Checks:**
+- each refusal of the rules, and a harvest that gives exactly what
+  `harvest` gave;
+- a guest's sowing through the server is broadcast as a `Record`, and a
+  harvest of it gives the guest the produce;
+- the host's sowing through the server writes the line `store_with_hands`
+  always wrote.
+
 ## Risks / Trade-offs
 
 - **Every stateful rule moves to the server path.** This is most of the work,

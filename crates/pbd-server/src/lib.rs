@@ -91,6 +91,16 @@ pub trait Store {
     /// Journal a world record `author`'s deed changed: the crew's progress
     /// (`coop-missions` design 1). `false` refuses it.
     fn commit_record(&mut self, author: &Author, record: Record) -> bool;
+    /// A world record as the store holds it now (design 26).
+    fn record(&self, kind: &str, id: u64) -> Option<Record>;
+    /// Journal a record a player's deed changed with their slots after it
+    /// (design 26). `false` refuses it.
+    fn commit_record_with_hands(
+        &mut self,
+        author: &Author,
+        record: Record,
+        carried: &Slots,
+    ) -> bool;
 }
 
 /// A pack or pickup a [`MemoryStore`] journaled: the author, the drop and
@@ -199,6 +209,22 @@ impl Store for MemoryStore {
         self.records.put(record);
         true
     }
+    fn record(&self, kind: &str, id: u64) -> Option<Record> {
+        self.records.get(kind, id).cloned()
+    }
+    fn commit_record_with_hands(
+        &mut self,
+        author: &Author,
+        record: Record,
+        carried: &Slots,
+    ) -> bool {
+        if self.failed {
+            return false;
+        }
+        self.records.put(record);
+        self.hands.push((author.clone(), None, carried.clone()));
+        true
+    }
     fn commit_toss(
         &mut self,
         author: &Author,
@@ -291,6 +317,8 @@ pub struct Server {
     outbox: Vec<(To, ToClient)>,
     /// The crew missions counted, when the world has them.
     crew: Option<Crew>,
+    /// Farming's tuning, for harvests (design 26).
+    farm: pbd_core::farming::FarmSettings,
 }
 
 impl Server {
@@ -305,7 +333,13 @@ impl Server {
             since_clock_s: 0.0,
             outbox: Vec::new(),
             crew: None,
+            farm: pbd_core::farming::FarmSettings::default(),
         }
+    }
+
+    /// Farming's tuning, as the world's config has it (design 26).
+    pub fn set_farm(&mut self, farm: pbd_core::farming::FarmSettings) {
+        self.farm = farm;
     }
 
     /// Count the crew chain `chain` from here on, from `progress` as the
@@ -578,6 +612,27 @@ impl Server {
                         slots,
                         floats: None,
                     });
+            }
+            Request::Plant { cell, layer, slot } => {
+                let slots = self.players[&player].slots.clone();
+                let made_s = self.clock_s;
+                return self
+                    .plant(
+                        store,
+                        player,
+                        id,
+                        (cell, layer, usize::from(slot)),
+                        made_s,
+                        slots,
+                    )
+                    .map(no_edit);
+            }
+            Request::Harvest { cell } => {
+                let slots = self.players[&player].slots.clone();
+                let made_s = self.clock_s;
+                return self
+                    .harvest(store, player, id, cell, made_s, slots)
+                    .map(no_edit);
             }
             Request::Toss { slot, count, at_mm } => {
                 let slots = self.players[&player].slots.clone();
@@ -852,6 +907,102 @@ impl Server {
         Ok((after, drop))
     }
 
+    /// Decide a sowing by `player` from `slots` (design 26): the seed in
+    /// slot `at.2` on the tilled soil at cell `at.0`'s layer `at.1`, sown at
+    /// `now_s`. The plot record is written with the slots and sent to all.
+    pub fn plant(
+        &mut self,
+        store: &mut impl Store,
+        player: u32,
+        id: u32,
+        at: (u32, u16, usize),
+        now_s: f64,
+        slots: Slots,
+    ) -> Result<Slots, Refusal> {
+        let (cell, layer, slot) = at;
+        if !self.players.contains_key(&player) {
+            return Err(Refusal::Cheat);
+        }
+        let Some(column) = self.column(store.edits(), cell) else {
+            return Err(self.refuse_hands(player, id, Refusal::OutOfWorld));
+        };
+        let l = usize::from(layer);
+        let (ground, over) = (column.material(l), column.material(l + 1));
+        let growing = plot_of(store, cell).is_some_and(|p| {
+            let pl = usize::from(p.layer);
+            p.crop().is_some()
+                && column.material(pl) == Material::Tilled
+                && column.material(pl + 1) == Material::Air
+        });
+        let climate = pbd_core::cell_key::key_direction(cell).and_then(|d| {
+            let height = column::layer_altitude(l) + 1.0;
+            pbd_core::farming::Climate::of(pbd_core::planet_gen::biome_at(
+                &self.world.terrain,
+                d,
+                height,
+            ))
+        });
+        let (plot, after, _) = match pbd_core::farming::accept::plant(
+            ground, over, growing, climate, &slots, slot, layer, now_s,
+        ) {
+            Ok(done) => done,
+            Err(refused) => return Err(self.refuse_hands(player, id, refused.into())),
+        };
+        self.commit_plot(store, player, id, cell, &plot, after)
+    }
+
+    /// Decide a harvest of `cell` by `player` from `slots` (design 26).
+    pub fn harvest(
+        &mut self,
+        store: &mut impl Store,
+        player: u32,
+        id: u32,
+        cell: u32,
+        now_s: f64,
+        slots: Slots,
+    ) -> Result<Slots, Refusal> {
+        if !self.players.contains_key(&player) {
+            return Err(Refusal::Cheat);
+        }
+        let Some(plot) = plot_of(store, cell) else {
+            return Err(self.refuse_hands(player, id, Refusal::NoCrop));
+        };
+        let (bare, after, ..) =
+            match pbd_core::farming::accept::harvest(&plot, &self.farm, &slots, now_s) {
+                Ok(done) => done,
+                Err(refused) => return Err(self.refuse_hands(player, id, refused.into())),
+            };
+        self.commit_plot(store, player, id, cell, &bare, after)
+    }
+
+    /// Write a plot with the slots after, answer, and send the record to all.
+    fn commit_plot(
+        &mut self,
+        store: &mut impl Store,
+        player: u32,
+        id: u32,
+        cell: u32,
+        plot: &pbd_core::farming::Plot,
+        after: Slots,
+    ) -> Result<Slots, Refusal> {
+        use pbd_core::farming::{PLOT_KIND, PLOT_SCHEMA};
+        let record = Record::of(PLOT_KIND, u64::from(cell), PLOT_SCHEMA, plot);
+        if !store.commit_record_with_hands(&Author::Player(player), record.clone(), &after) {
+            return Err(self.refuse_hands(player, id, Refusal::NotSaved));
+        }
+        self.players.get_mut(&player).expect("checked").slots = after.clone();
+        self.send(
+            To::Player(player),
+            ToClient::Accepted {
+                id,
+                region: 0,
+                seq: 0,
+            },
+        );
+        self.broadcast(ToClient::Record { record });
+        Ok(after)
+    }
+
     /// Refuse a request about the hands. The slots go back with the
     /// inventory's message (task 8.2); until then the client keeps its own.
     fn refuse_hands(&mut self, player: u32, id: u32, reason: Refusal) -> Refusal {
@@ -909,6 +1060,30 @@ impl Server {
         for player in players {
             self.send(To::Player(player), message.clone());
         }
+    }
+}
+
+/// A cell's plot record, read (design 26).
+fn plot_of(store: &impl Store, cell: u32) -> Option<pbd_core::farming::Plot> {
+    store
+        .record(pbd_core::farming::PLOT_KIND, u64::from(cell))?
+        .read()
+}
+
+/// A decision that changed the hands only, as a [`Decided`].
+fn no_edit(slots: Slots) -> Decided {
+    Decided {
+        sequenced: Sequenced {
+            region: pbd_core::net::ledger::NO_REGION,
+            seq: 0,
+            edit: Edit {
+                cell: 0,
+                layer: 0,
+                material: Material::Air,
+            },
+        },
+        slots,
+        floats: None,
     }
 }
 

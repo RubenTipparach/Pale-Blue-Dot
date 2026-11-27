@@ -120,45 +120,57 @@ pub fn plant(
     let Some(crop) = Crop::of_seed(seed) else {
         return false;
     };
-    let ground = digging::material_of(world.fine, world.save, (cell, layer));
-    let over = digging::material_of(world.fine, world.save, (cell, layer + 1));
-    if ground != Some(Material::Tilled) || over != Some(Material::Air) {
-        note.say(wall_s, tr("farm.seeds_need_tilled"));
-        return false;
+    let slot = world.slots.0.selected();
+    // A joined game asks the host: the plot comes back as its record and
+    // the slots as the server holds them (`multiplayer` design 26).
+    if world.save.joined() {
+        world
+            .save
+            .send_request(pbd_core::net::protocol::Request::Plant {
+                cell,
+                layer: layer as u16,
+                slot: slot as u8,
+            });
+        return true;
     }
-    if live_crop(world.fine, world.save, cell).is_some() {
-        note.say(wall_s, tr("farm.already_growing"));
-        return false;
-    }
-    let climate = climate_at(world.fine, cell, layer);
-    if !crop.grows_in(climate) {
-        note.say(
-            wall_s,
-            tr_with(
-                "farm.wrong_climate",
-                &[
-                    ("crop", &crop.row().name()),
-                    (
-                        "climate",
-                        &climate.map_or_else(|| tr("farming.climate.barren"), Climate::name),
+    use pbd_core::net::protocol::Refusal;
+    let moved =
+        match world
+            .save
+            .decide_plant((cell, layer as u16, slot), world.now_s, &world.slots.0)
+        {
+            Ok(moved) => moved,
+            Err(Refusal::NotTilled) => {
+                note.say(wall_s, tr("farm.seeds_need_tilled"));
+                return false;
+            }
+            Err(Refusal::Growing) => {
+                note.say(wall_s, tr("farm.already_growing"));
+                return false;
+            }
+            Err(Refusal::Climate) => {
+                let climate = climate_at(world.fine, cell, layer);
+                note.say(
+                    wall_s,
+                    tr_with(
+                        "farm.wrong_climate",
+                        &[
+                            ("crop", &crop.row().name()),
+                            (
+                                "climate",
+                                &climate
+                                    .map_or_else(|| tr("farming.climate.barren"), Climate::name),
+                            ),
+                        ],
                     ),
-                ],
-            ),
-        );
-        return false;
-    }
-    let mut moved = world.slots.0.clone();
-    if moved.take(moved.selected(), 1) != 1 {
-        return false;
-    }
-    let plot = Plot::sown(layer as u16, crop, world.now_s);
-    if !world
-        .save
-        .store_with_hands(plot_record(cell, &plot), PLOT_SCHEMA, &moved)
-    {
-        error!("plant BLOCKED: the save did not accept it");
-        return false;
-    }
+                );
+                return false;
+            }
+            Err(refusal) => {
+                error!("plant BLOCKED: {refusal:?}");
+                return false;
+            }
+        };
     world.slots.0 = moved;
     planted.write(Planted { crop });
     note.say(
@@ -1016,37 +1028,41 @@ fn harvest(
     gained: &mut MessageWriter<Gained>,
 ) {
     let row = crop.row();
-    if farm.0.stage(crop, plot.planted_s, now_s) != Stage::Ripe {
-        let left_h = farm.0.left_s(crop, plot.planted_s, now_s)
-            / f64::from(pbd_core::daylight::DAY_S)
-            * 24.0;
-        note.say(
-            wall_s,
-            tr_with(
-                "farm.ripe_in",
-                &[
-                    ("crop", &row.name()),
-                    ("hours", &format!("{:.0}", left_h.ceil())),
-                ],
-            ),
-        );
+    // A joined game asks the host (`multiplayer` design 26).
+    if save.joined() {
+        save.send_request(pbd_core::net::protocol::Request::Harvest { cell });
         return;
     }
     let tuning = farm.0.of(crop);
-    // One more from a fed plot (`sea-gathering` design 6).
     let produce = plot.produce(&farm.0, crop);
-    let mut moved = slots.0.clone();
-    let left = moved.give(Item::Good(row.produce), produce)
-        + moved.give(Item::Good(row.seed), tuning.seeds);
-    if left > 0 {
-        note.say(wall_s, tr("farm.no_room_harvest"));
-        return;
-    }
-    let bare = Plot::bare(plot.layer);
-    if !save.store_with_hands(plot_record(cell, &bare), PLOT_SCHEMA, &moved) {
-        error!("harvest BLOCKED: the save did not accept it");
-        return;
-    }
+    use pbd_core::net::protocol::Refusal;
+    let moved = match save.decide_harvest(cell, now_s, &farm.0, &slots.0) {
+        Ok(moved) => moved,
+        Err(Refusal::NotRipe) => {
+            let left_h = farm.0.left_s(crop, plot.planted_s, now_s)
+                / f64::from(pbd_core::daylight::DAY_S)
+                * 24.0;
+            note.say(
+                wall_s,
+                tr_with(
+                    "farm.ripe_in",
+                    &[
+                        ("crop", &row.name()),
+                        ("hours", &format!("{:.0}", left_h.ceil())),
+                    ],
+                ),
+            );
+            return;
+        }
+        Err(Refusal::NoRoom) => {
+            note.say(wall_s, tr("farm.no_room_harvest"));
+            return;
+        }
+        Err(refusal) => {
+            error!("harvest BLOCKED: {refusal:?}");
+            return;
+        }
+    };
     slots.0 = moved;
     gained.write(Gained {
         item: Item::Good(row.produce),

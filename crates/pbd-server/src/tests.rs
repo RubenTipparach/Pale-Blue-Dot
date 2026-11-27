@@ -549,6 +549,17 @@ impl Store for NoRecords {
     fn commit_record(&mut self, _: &Author, _: Record) -> bool {
         false
     }
+    fn record(&self, kind: &str, id: u64) -> Option<Record> {
+        self.0.record(kind, id)
+    }
+    fn commit_record_with_hands(
+        &mut self,
+        author: &Author,
+        record: Record,
+        carried: &Slots,
+    ) -> bool {
+        self.0.commit_record_with_hands(author, record, carried)
+    }
     fn commit_toss(
         &mut self,
         author: &Author,
@@ -988,4 +999,110 @@ fn a_guests_toss_makes_a_drop_everyone_sees() {
             .any(|(_, m)| matches!(m, ToClient::Refused { id: 6, .. }))
     );
     assert_eq!(st.drops.len(), 1);
+}
+
+/// Design 26: a guest sows on tilled soil through the server; the plot is
+/// sent to everyone as a record; sowing again is refused while it grows; a
+/// harvest before ripe is refused, and a ripe one gives the guest the crop.
+#[test]
+fn a_guests_crop_is_sown_sent_and_harvested_through_the_server() {
+    use pbd_core::farming::{Crop, PLOT_KIND, Plot};
+    use pbd_core::inventory::Stack;
+    let (mut s, mut st) = server();
+    // A cell of tilled soil in a climate wheat grows in.
+    let cells = dry_cells(&s, 40);
+    let found = cells.iter().copied().find(|&(cell, top)| {
+        let d = pbd_core::cell_key::key_direction(cell).unwrap();
+        let h = column::layer_altitude(usize::from(top)) + 1.0;
+        Crop::WHEAT.grows_in(pbd_core::farming::Climate::of(
+            pbd_core::planet_gen::biome_at(&s.world.terrain, d, h),
+        ))
+    });
+    let Some((cell, top)) = found else {
+        panic!("no wheat ground among the dry cells");
+    };
+    st.edits.set(Edit {
+        cell,
+        layer: top,
+        material: Material::Tilled,
+    });
+    let mut carried = Slots::default();
+    carried.set(0, Some(Stack::new(Item::Good(Crop::WHEAT.row().seed), 2)));
+    let players = joined(&mut s, &[1, 2], carried);
+    let sow = |s: &mut Server, st: &mut MemoryStore, id| {
+        s.handle(
+            st,
+            players[1],
+            ToServer::Request {
+                id,
+                request: Request::Plant {
+                    cell,
+                    layer: top,
+                    slot: 0,
+                },
+            },
+        );
+        s.drain()
+    };
+    let sent = sow(&mut s, &mut st, 1);
+    let records: Vec<&Record> = sent
+        .iter()
+        .filter_map(|(_, m)| match m {
+            ToClient::Record { record } => Some(record),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(records.len(), 2, "both players are told: {sent:?}");
+    let plot: Plot = records[0].read().unwrap();
+    assert_eq!(plot.crop(), Some(Crop::WHEAT));
+    assert_eq!(st.records.get(PLOT_KIND, u64::from(cell)), Some(records[0]));
+    assert_eq!(
+        s.player(players[1]).unwrap().slots.get(0).map(|s| s.count),
+        Some(1)
+    );
+    let again = sow(&mut s, &mut st, 2);
+    assert!(again.iter().any(|(_, m)| *m
+        == ToClient::Refused {
+            id: 2,
+            reason: Refusal::Growing
+        }));
+    let reap = |s: &mut Server, st: &mut MemoryStore, id| {
+        s.handle(
+            st,
+            players[1],
+            ToServer::Request {
+                id,
+                request: Request::Harvest { cell },
+            },
+        );
+        s.drain()
+    };
+    assert!(reap(&mut s, &mut st, 3).iter().any(|(_, m)| *m
+        == ToClient::Refused {
+            id: 3,
+            reason: Refusal::NotRipe
+        }));
+    s.clock_s = 1.0e9;
+    let got = reap(&mut s, &mut st, 4);
+    assert!(
+        got.iter()
+            .any(|(_, m)| matches!(m, ToClient::Accepted { id: 4, .. })),
+        "{got:?}"
+    );
+    let produce = Item::Good(Crop::WHEAT.row().produce);
+    assert!(
+        s.player(players[1])
+            .unwrap()
+            .slots
+            .iter()
+            .flatten()
+            .any(|stack| stack.item == produce)
+    );
+    let bare: Plot = st
+        .records
+        .get(PLOT_KIND, u64::from(cell))
+        .unwrap()
+        .read()
+        .unwrap();
+    assert_eq!(bare.crop(), None);
 }

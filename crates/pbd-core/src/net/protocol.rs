@@ -30,6 +30,8 @@ pub const MAX_TEXT: usize = 512;
 pub const MAX_LIST: usize = 1 << 16;
 /// The largest snapshot, in bytes.
 pub const MAX_SNAPSHOT: usize = 1 << 22;
+/// The longest record body, bytes (design 26).
+pub const MAX_RECORD: usize = 1 << 16;
 
 /// What a world and a build must agree on before anything else is sent
 /// (design 9).
@@ -79,6 +81,11 @@ pub enum Request {
         count: u16,
         at_mm: [i64; 3],
     },
+    /// Sow the seed in `slot` on the tilled soil at the cell's layer
+    /// (design 26).
+    Plant { cell: u32, layer: u16, slot: u8 },
+    /// Harvest the crop on the cell.
+    Harvest { cell: u32 },
 }
 
 /// Why a request was refused. No undo rides with it: the server re-sends
@@ -99,6 +106,33 @@ pub enum Refusal {
     NotSaved,
     /// The drop is not there: picked up already, or never was.
     Gone,
+    /// Farming (design 26): the ground is not tilled soil with air over it.
+    NotTilled,
+    /// A crop already grows there.
+    Growing,
+    /// The crop does not grow in this climate.
+    Climate,
+    /// Nothing growing there.
+    NoCrop,
+    /// Not ripe yet.
+    NotRipe,
+    /// No room in the pack for all of it.
+    NoRoom,
+}
+
+impl From<crate::farming::accept::Refused> for Refusal {
+    fn from(r: crate::farming::accept::Refused) -> Self {
+        use crate::farming::accept::Refused as F;
+        match r {
+            F::NotTilled => Refusal::NotTilled,
+            F::Growing => Refusal::Growing,
+            F::Climate => Refusal::Climate,
+            F::EmptySlot => Refusal::EmptySlot,
+            F::NoCrop => Refusal::NoCrop,
+            F::NotRipe => Refusal::NotRipe,
+            F::NoRoom => Refusal::NoRoom,
+        }
+    }
 }
 
 /// A change to a region's state, in the server's order.
@@ -274,6 +308,10 @@ pub enum ToClient {
     /// A player left the world (design 24).
     Gone {
         player: u32,
+    },
+    /// A world record the server's store took (design 26).
+    Record {
+        record: crate::records::Record,
     },
 }
 
@@ -503,7 +541,7 @@ const JOIN_REFUSALS: [JoinRefusal; 6] = [
     JoinRefusal::Banned,
     JoinRefusal::WrongPassword,
 ];
-const REFUSALS: [Refusal; 7] = [
+const REFUSALS: [Refusal; 13] = [
     Refusal::OutOfWorld,
     Refusal::Unchanged,
     Refusal::EmptySlot,
@@ -511,6 +549,12 @@ const REFUSALS: [Refusal; 7] = [
     Refusal::Cheat,
     Refusal::NotSaved,
     Refusal::Gone,
+    Refusal::NotTilled,
+    Refusal::Growing,
+    Refusal::Climate,
+    Refusal::NoCrop,
+    Refusal::NotRipe,
+    Refusal::NoRoom,
 ];
 
 fn code_of<T: PartialEq>(table: &[T], v: &T) -> u8 {
@@ -576,6 +620,16 @@ impl ToServer {
                     Request::Pick { drop } => {
                         w.u8(4);
                         w.u64(drop);
+                    }
+                    Request::Plant { cell, layer, slot } => {
+                        w.u8(6);
+                        w.u32(cell);
+                        w.u16(layer);
+                        w.u8(slot);
+                    }
+                    Request::Harvest { cell } => {
+                        w.u8(7);
+                        w.u32(cell);
                     }
                     Request::Toss { slot, count, at_mm } => {
                         w.u8(5);
@@ -672,6 +726,12 @@ impl ToServer {
                         other => return Err(Decode::Unknown(other)),
                     }),
                     4 => Request::Pick { drop: r.u64()? },
+                    6 => Request::Plant {
+                        cell: r.u32()?,
+                        layer: r.u16()?,
+                        slot: r.u8()?,
+                    },
+                    7 => Request::Harvest { cell: r.u32()? },
                     5 => Request::Toss {
                         slot: r.u8()?,
                         count: r.u16()?,
@@ -829,6 +889,13 @@ impl ToClient {
                 w.u8(15);
                 w.u32(*player);
             }
+            Self::Record { record } => {
+                w.u8(16);
+                w.bytes(record.kind.as_bytes());
+                w.u64(record.id);
+                w.u32(record.schema);
+                w.bytes(record.body.as_bytes());
+            }
         }
         w.0
     }
@@ -926,6 +993,20 @@ impl ToClient {
                 left: r.u16()?,
             },
             15 => Self::Gone { player: r.u32()? },
+            16 => {
+                let kind = r.text()?;
+                let id = r.u64()?;
+                let schema = r.u32()?;
+                let body = String::from_utf8(r.bytes(MAX_RECORD)?).map_err(|_| Decode::Invalid)?;
+                Self::Record {
+                    record: crate::records::Record {
+                        kind,
+                        id,
+                        schema,
+                        body,
+                    },
+                }
+            }
             other => return Err(Decode::Unknown(other)),
         };
         r.end(message)
@@ -980,6 +1061,18 @@ mod tests {
             ToServer::Request {
                 id: 11,
                 request: Request::Pick { drop: 9 },
+            },
+            ToServer::Request {
+                id: 13,
+                request: Request::Plant {
+                    cell: 9,
+                    layer: 7,
+                    slot: 2,
+                },
+            },
+            ToServer::Request {
+                id: 14,
+                request: Request::Harvest { cell: 9 },
             },
             ToServer::Request {
                 id: 12,
@@ -1081,6 +1174,14 @@ mod tests {
             },
             ToClient::DropLeft { id: 41, left: 0 },
             ToClient::Gone { player: 3 },
+            ToClient::Record {
+                record: crate::records::Record {
+                    kind: "plot".into(),
+                    id: 123_456,
+                    schema: 1,
+                    body: "(layer:7,crop:Some(\"wheat\"),planted_s:10.0)".into(),
+                },
+            },
         ];
         out.extend(
             JOIN_REFUSALS
