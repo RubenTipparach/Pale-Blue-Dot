@@ -790,9 +790,9 @@ wood", a sip from the sea ("Salt water", nothing taken), then a river.
   these is pending (skipped, and met for the ones after it) until they land,
   then counts with no change to the file.
 - **The mode.** `pbd_app::missions::mode_of` is the one place the missions
-  ask a world's mode; it reads Explorer until the identity record's
-  `WorldMode` (task 2.1) is wired there (`Mode: From<WorldMode>` is ready).
-  `--mission-mode survival` is a capture instrument meanwhile.
+  ask a world's mode: the identity record's `WorldMode` (task 2.1), Explorer
+  for every older world. `--mission-mode survival` is a capture instrument
+  for a memory-only world.
 - **The kinds.** All eleven are live. `dawn`, `dive` and `fall` are raised
   by the game now (`desktop::missions::dawn_watch` and `water_watch`); the
   rest are raised as `pbd_app::missions::Did` by the survival mechanics,

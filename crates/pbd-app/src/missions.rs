@@ -57,20 +57,16 @@ pub struct MissionChain(pub Chain);
 pub struct AllMissions(pub Chain);
 
 /// A capture instrument's mode for the missions (`--mission-mode
-/// survival`), over the world's own: set only by the launch, never stored.
+/// survival`), over the world's own: set only by the launch, never stored,
+/// so a capture can show Survival's tree on a memory-only world.
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ForcedMode(pub Option<Mode>);
 
 /// The mode the open world's missions follow (`survival-mode` design 1 and
-/// 18): Explorer for every world until the world's identity carries its
-/// mode.
-///
-/// WIRE: `survival-mode` 2.1 adds `pbd_core::survival::WorldMode` to the
-/// world's identity record; read it here (`WorldMode::of_saved`) and map
-/// Survival to [`Mode::Survival`]. This is the one place the missions ask.
+/// 18): the world's own, from its identity record, Explorer for every world
+/// saved before modes. The one place the missions ask.
 pub fn mode_of(save: &WorldSave) -> Mode {
-    let _ = save;
-    Mode::Explorer
+    save.identity.mode().into()
 }
 
 /// The player's progress in the open world, and what the HUD says about it.

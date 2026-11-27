@@ -762,6 +762,22 @@ mod tests {
         assert_eq!(stored.path.as_deref(), Some("hunting"));
     }
 
+    /// 6.1: the missions follow the world's own mode, from its identity:
+    /// a Survival world's tree has the paths, an older (Explorer) one not.
+    #[test]
+    fn the_tree_follows_the_worlds_mode() {
+        let mut save = pbd_app::saves::WorldSave::memory_only();
+        assert_eq!(
+            pbd_app::missions::mode_of(&save),
+            pbd_core::missions::Mode::Explorer
+        );
+        save.identity.mode = Some(pbd_core::survival::WorldMode::Survival);
+        assert_eq!(
+            pbd_app::missions::mode_of(&save),
+            pbd_core::missions::Mode::Survival
+        );
+    }
+
     /// 6.5: an Explorer world never shows the picker, has no survival
     /// mission, and its Now is the first open one, as before.
     #[test]
