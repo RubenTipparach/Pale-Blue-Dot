@@ -2536,6 +2536,63 @@ way.
   destination's people take it only after; a record without `waiting`
   reads every delivery as picked up, keeps its parcel and gains the marker.
 
+## Faces far off are one baked card (owner, 2026-11-27)
+
+**The ask.** "looks like those eyeballs are zfighting in the distance, can
+you bake the face poses into a texture, so that anything more than like 20
+m away uses that? make a mockup for me to tune crossfade LOD face details
+distance" (on a screenshot of a townsperson a few tens of metres off whose
+eyes shimmer through each other).
+
+**Why it fights.** A face is a stack of separate pieces laid on the head's
+front (`townsfolk.rs`, `pose_face`): per eye the white, the pupil, the
+catch-light, the lid and the lash, then the brows, the blush and the mouth
+cell, each pushed off the one under it by 2 to 6 mm (`t(Vec3::new(0.0,
+0.0, 0.002))` and on). Near, the depth buffer tells 2 mm apart; a few tens
+of metres off it cannot, and the pieces swap order frame to frame. The
+exact distance it starts is not measured here (a cloud session renders on
+lavapipe, not the game's GPU path); the owner's screenshot puts it inside
+DRAW_M (60 m).
+
+**The plan, written before any code.**
+- **Near: today's face.** Within `face_card_m` (20 m, the owner's number,
+  tuned on the mockup) the modelled face is drawn as now: it blinks, looks
+  about and talks.
+- **Far: one card.** Past it the face's pieces are hidden and one quad, the
+  size of the face's area on the head, is drawn in their place: the
+  person's expression baked into a tile of a face atlas. One piece, one
+  depth: nothing left to fight. It sits 1 cm proud of the head with a small
+  depth bias, and is masked (alpha cut) so the head's own colour shows
+  round the features.
+- **Baked from the same pose.** `pbd_core::townsfolk::face` already says
+  where each piece goes for an expression (`FacePose`). The bake draws
+  those pieces flat, in the same colours, into one tile per expression
+  (`Expression::ALL`, 10), eyes looking ahead and open, at the mockup's
+  chosen resolution (32 px a tile proposed: a face 20 m off covers a few
+  pixels). It runs once at load on the CPU, so it is never out of step with
+  the model, and goes into the townsfolk atlas beside the mouth cells. Eye
+  colour, if a person has their own, tints the tile's iris.
+- **What the card loses, and why it is fine.** No blink, no gaze, no
+  talking mouth past 20 m: at that size they are a pixel or two. A talking
+  person far off shows Talking's tile.
+- **Crossfade, a moment in time** (CLAUDE.md, "A fade is a moment in
+  time"). When a person crosses `face_card_m` the two faces cross-fade by
+  dither over `face_fade_s` (0.3 s proposed) and the fade finishes; nobody
+  is drawn half-dithered for as long as they stand near the line. A band of
+  `face_band_m` (1 m proposed) round the line stops a person standing on it
+  from flipping back and forth.
+- **Every number tuned on the mockup.** M5's Face LOD tab: a street of
+  townsfolk from 5 to 60 m at night, lit by its lamps, the camera held
+  where the viewer puts it, sliders for the switch distance, the fade time
+  and the band, the card's resolution and its offset, and a view that
+  forces near, far or auto so the two can be compared at one distance. The
+  game's code waits on the owner's numbers from it.
+- **Tests, when built.** Each expression's tile is drawn and differs from
+  Neutral's; a person past the line has the card and not the pieces, and
+  inside it the pieces and not the card; a crossing starts one fade that
+  ends after `face_fade_s` whatever the person does after; standing inside
+  the band does not flip.
+
 ## Risks / Trade-offs
 
 - [Moving solids in a contact index built for static pieces] → A person's
