@@ -1731,9 +1731,13 @@ fn step(
     mut yard: ResMut<Farmyard>,
     hotbar: Option<Res<Hotbar>>,
     mut trace: Local<Option<Option<HerdTrace>>>,
-    (save, survival): (
+    (save, survival, fire): (
         Option<Res<WorldSave>>,
         Option<Res<crate::survival::Survival>>,
+        (
+            Option<Res<crate::wildfire::FireNow>>,
+            Option<Res<crate::wildfire::FireRules>>,
+        ),
     ),
 ) {
     let trace = trace.get_or_insert_with(herd_trace);
@@ -1837,6 +1841,21 @@ fn step(
                 b.idle_s = b.rng.range(1.0, 3.0);
             }
             if b.mode == Mode::Flee && b.mode_s <= 0.0 {
+                b.mode = Mode::Idle;
+                b.goal = None;
+            }
+        }
+        // Fire (`wildfire` design 10): every animal, wild, kept or hunting,
+        // runs from a burning cell within the flight's reach, at its run;
+        // a herd's members, standing together, run the same way.
+        if !b.posed
+            && let (Some(now), Some(rules)) = (fire.0.as_deref(), fire.1.as_deref())
+        {
+            if let Some(goal) = fire_goal(&rules.0, now, &o, b.pos) {
+                b.mode = Mode::Flee;
+                b.mode_s = 2.5;
+                b.goal = Some(goal);
+            } else if b.mode == Mode::Flee && b.mode_s <= 0.0 {
                 b.mode = Mode::Idle;
                 b.goal = None;
             }
@@ -2026,6 +2045,20 @@ fn step(
 /// `local` stood on the ground under it: moved along its own up to the
 /// ground's radius there (`ground(up)`, f64), through the origin, so nothing
 /// is rounded at the planet's scale (`world-frames` 10.2).
+/// Where an animal at `local` runs to from the fire, if a burning cell is
+/// within the flight's reach (`wildfire` design 10): 12 m on, away from
+/// the nearest flame along the ground. Worked out in the planet's frame in
+/// f64, the step a tangent direction, which is the same in the local frame.
+pub(crate) fn fire_goal(
+    cfg: &pbd_core::fire::FireConfig,
+    now: &crate::wildfire::FireNow,
+    origin: &SimOrigin,
+    local: Vec3,
+) -> Option<Vec3> {
+    let away = crate::wildfire::flee_from(cfg, now, origin.to_world(local).pos)?;
+    Some(local + away.as_vec3() * 12.0)
+}
+
 fn stand_on(origin: &SimOrigin, local: Vec3, ground: impl Fn(Vec3) -> f64) -> Vec3 {
     origin.with_radius(local, ground(origin.up_at(local)))
 }
@@ -2141,7 +2174,11 @@ fn draw(
             .born
             .zip(sp.keep.as_ref())
             .map_or(1.0, |(born, k)| k.young.stage(b.sex, born, day).1);
-        let place = Transform::from_translation(at).with_scale(Vec3::splat(size));
+        // A lunge's spring and nose (combat C2); drawn only.
+        let (lift, pitch, _) = hunt::lunge_draw(b);
+        let place = Transform::from_translation(at + up * lift)
+            .with_rotation(Quat::from_axis_angle(right, pitch))
+            .with_scale(Vec3::splat(size));
         match &b.entity {
             Some((e, handle)) => {
                 if let Some(mesh) = meshes.get_mut(handle) {

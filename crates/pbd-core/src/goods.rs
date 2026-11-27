@@ -192,6 +192,8 @@ pub const GOODS: &[GoodRow] = &[
     // survival-mode design 15: a bucket filled at the sea (salt, undrinkable);
     // every `water-bucket` an older save holds stays fresh.
     row("sea-bucket", 1, "items/goods/sea-bucket.png"),
+    // wildfire design 8: what a burnt tree's snag gives the axe.
+    row("charcoal", 32, "items/goods/charcoal.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the

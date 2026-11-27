@@ -677,11 +677,16 @@ pub fn dig_and_place(
     ),
     // The fell's dust and leaves (`tree_fx`); and whether the tool in hand
     // is broken, which digs as bare hands (`survival-mode` design 11).
-    (mut tree_fx, broken, claim): (
+    (mut tree_fx, broken, claim, fire): (
         Option<ResMut<pbd_app::tree_fx::TreeFxQueue>>,
         Option<Res<pbd_app::survival::HeldBroken>>,
         // A click that is a strike's (`survival-mode` combat C1).
         Option<Res<pbd_app::combat::CombatClaim>>,
+        // A burnt tree's snag, chopped for charcoal (`wildfire` design 8).
+        (
+            Option<Res<pbd_app::wildfire::FireNow>>,
+            Option<Res<pbd_app::wildfire::FireRules>>,
+        ),
     ),
 ) {
     let broken = broken.is_some_and(|b| b.0);
@@ -809,9 +814,14 @@ pub fn dig_and_place(
     // A tree's trunk nearer than the ground is worked for a log (decision 3).
     if buttons.pressed(MouseButton::Left)
         && digger.is_some()
-        && let Some(tree) = tree_on_ray(&fine, eye, look, solid_m.unwrap_or(aim::REACH_M), |cell| {
-            tree_standing(&edits, gather.0.axe_logs, cell)
-        })
+        && let Some(tree) = tree_or_snag_on_ray(
+            &fine,
+            eye,
+            look,
+            solid_m.unwrap_or(aim::REACH_M),
+            |cell| tree_standing(&edits, gather.0.axe_logs, cell),
+            |cell| is_snag(fire.0.as_deref(), cell),
+        )
     {
         let by_axe = matches!(digger, Some(Digger::Tool(Tool::Axe, _)));
         let wood = dig.0.wood.axe;
@@ -827,7 +837,35 @@ pub fn dig_and_place(
         // The stroke's impacts shake it (`shake_on_impact`).
         mining.meets = Meets::Breaks;
         mining.tree_worked = Some(tree);
-        if let Step::Broken(_) = step {
+        if let Step::Broken(_) = step
+            && is_snag(fire.0.as_deref(), tree)
+            && let Some(rules) = fire.1.as_deref()
+        {
+            if let Some((good, count)) = pbd_app::wildfire::take_snag(
+                &rules.0,
+                &mut edits,
+                &mut slots.0,
+                tree,
+                sun.clock.seconds,
+                gather.0.axe_logs,
+            ) {
+                gained.write(pbd_app::hotbar::Gained {
+                    item: Item::Good(good),
+                    count,
+                    how: pbd_app::hotbar::How::Found,
+                });
+                did.write(pbd_app::missions::Did::new(
+                    pbd_core::missions::Kind::Fell,
+                    "tree",
+                    1,
+                ));
+                if let Some(fx) = tree_fx.as_deref_mut() {
+                    fx.0.push(pbd_app::tree_fx::TreeFxEvent::Felled { cell: tree });
+                }
+            } else {
+                note.say(time.elapsed_secs(), tr("farm.no_room"));
+            }
+        } else if let Step::Broken(_) = step {
             take_log(
                 &mut edits,
                 &mut slots,
@@ -1228,6 +1266,32 @@ pub fn tree_on_ray(
     before_m: f32,
     standing: impl Fn(u32) -> bool,
 ) -> Option<u32> {
+    tree_or_snag_on_ray(fine, eye, look, before_m, standing, |_| false)
+}
+
+/// A burnt tree standing charred on `cell` (`wildfire` design 8): its
+/// generated tree is hidden from the foliage's rule, and its snag drawn.
+fn is_snag(fire: Option<&pbd_app::wildfire::FireNow>, cell: u32) -> bool {
+    fire.is_some_and(|f| {
+        f.snags.iter().any(|s| {
+            s.key == cell
+                && matches!(
+                    s.look,
+                    pbd_core::fire::TreeLook::Snag | pbd_core::fire::TreeLook::Scorched
+                )
+        })
+    })
+}
+
+/// [`tree_on_ray`], with the burnt trees' snags `snag` names as trunks too.
+pub fn tree_or_snag_on_ray(
+    fine: &PlanetFine,
+    eye: Vec3,
+    look: Vec3,
+    before_m: f32,
+    standing: impl Fn(u32) -> bool,
+    snag: impl Fn(u32) -> bool,
+) -> Option<u32> {
     let reach = before_m.min(aim::REACH_M);
     let toward = eye.normalize_or(Vec3::Y);
     let near = ((aim::REACH_M + 3.0) / PLANET_RADIUS).cos();
@@ -1238,11 +1302,11 @@ pub fn tree_on_ray(
             continue;
         };
         if up.dot(toward) < near
-            || !pbd_core::flora::grows_tree(
+            || !(pbd_core::flora::grows_tree(
                 &pbd_app::planet::terrain_config().trees,
                 record.spare[0],
                 record.metadata[1],
-            )
+            ) || snag(record.key()))
         {
             continue;
         }

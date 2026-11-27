@@ -780,6 +780,8 @@ item:
     name: feather
   sea-bucket:
     name: bucket of sea water
+  charcoal:
+    name: charcoal
   straw:
     name: straw
   stone-spear:

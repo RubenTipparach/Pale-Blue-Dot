@@ -766,6 +766,7 @@ pub fn shown(
     save: &WorldSave,
     set: &crate::planet::lod::FineSet,
     now_s: f64,
+    axe_logs: u16,
 ) -> (
     crate::planet::column::TierFire,
     BTreeMap<u32, u32>,
@@ -819,7 +820,9 @@ pub fn shown(
             let record = &set.finest_records()[i];
             // The tree's own word, without the cleared bit this module set.
             let word = record.metadata[1] & !CLEARED;
+            // A snag the axe has felled is gone, as a felled tree is.
             if look != TreeLook::Whole
+                && !felled(save, key, axe_logs)
                 && let (Some(at), Some(tree)) = (
                     point(key),
                     pbd_core::tree_kit::pick_word(record.spare[0], word),
@@ -885,6 +888,7 @@ pub fn show(
     contact: Option<ResMut<PlanetContact>>,
     sun: Option<Res<crate::sky::Sun>>,
     air: Option<Res<crate::atmosphere::Air>>,
+    gather: Option<Res<crate::config::GatherConfig>>,
     mut scars: ResMut<Scars>,
     mut now: ResMut<FireNow>,
 ) {
@@ -901,7 +905,8 @@ pub fn show(
     if serial == stamp && version == set_id && (now_s - at).abs() < 5.0 {
         return;
     }
-    let (tier_fire, want, flames, snags) = shown(&rules.0, &save, &fine.set, now_s);
+    let axe_logs = gather.map_or(4, |g| g.0.axe_logs);
+    let (tier_fire, want, flames, snags) = shown(&rules.0, &save, &fine.set, now_s, axe_logs);
     if !want.is_empty() || !flames.is_empty() {
         debug!(
             "FIRE shown: {} flames, {} snags, {} scars, {} burnt records",
@@ -948,6 +953,63 @@ pub fn show(
         fine.version += 1;
     }
     scars.seen = (stamp, Arc::as_ptr(&fine.set) as u64, now_s);
+}
+
+/// What chopping the burnt tree at `cell` gives while it stands charred:
+/// the snag's good and its count (`scar::snag_gives`), unless it is felled.
+pub fn snag_yield(
+    cfg: &FireConfig,
+    save: &WorldSave,
+    cell: u32,
+    now_s: f64,
+    axe_logs: u16,
+) -> Option<(pbd_core::goods::Good, u16)> {
+    let burnt = blaze::burnt(&save.records, cell)?;
+    if felled(save, cell, axe_logs) {
+        return None;
+    }
+    let (code, count) = fire::scar::snag_gives(cfg, &burnt, now_s)?;
+    Some((pbd_core::goods::Good::by_code(code)?, count))
+}
+
+/// Whether the axe has felled the tree at `cell` (its `tree` record).
+fn felled(save: &WorldSave, cell: u32, axe_logs: u16) -> bool {
+    use pbd_core::gather::{TREE_KIND, TreeTaken};
+    save.records
+        .get(TREE_KIND, u64::from(cell))
+        .and_then(|r| r.read::<TreeTaken>())
+        .is_some_and(|t| t.logs >= axe_logs)
+}
+
+/// Chop the snag at `cell`: its charcoal into `carried` and the tree felled
+/// (its `tree` record, so its stump regrows as a felled tree's does), in one
+/// line. What it gave, or `None` (no snag there, or no room).
+pub fn take_snag(
+    cfg: &FireConfig,
+    save: &mut WorldSave,
+    carried: &mut pbd_core::inventory::Slots,
+    cell: u32,
+    now_s: f64,
+    axe_logs: u16,
+) -> Option<(pbd_core::goods::Good, u16)> {
+    use pbd_core::gather::{TREE_KIND, TREE_SCHEMA, TreeTaken};
+    let (good, count) = snag_yield(cfg, save, cell, now_s, axe_logs)?;
+    let mut moved = carried.clone();
+    if moved.give(pbd_core::inventory::Item::Good(good), count) > 0 {
+        return None;
+    }
+    let record = pbd_core::records::Record::of(
+        TREE_KIND,
+        u64::from(cell),
+        TREE_SCHEMA,
+        &TreeTaken { logs: axe_logs },
+    );
+    if !save.store_with_hands(record, TREE_SCHEMA, &moved) {
+        return None;
+    }
+    *carried = moved;
+    info!("FIRE took {count} {} from the snag at {cell}", good.code());
+    Some((good, count))
 }
 
 /// The cell spacing every body shares, m (CLAUDE.md, "Hex size is fixed").

@@ -195,5 +195,7 @@
         ("block:tanning rack", 20, goods),
         ("block:still", 20, goods),
         ("sea-bucket", 6, goods),
+        // wildfire: a snag's charcoal, worth what coal is.
+        ("charcoal", 3, ore),
     ],
 )

@@ -140,7 +140,7 @@ fn a_torch_on_late_summer_grass_starts_a_blaze_and_the_server_spreads_it() {
     assert!(burnt >= 1, "the lit cell burnt");
     assert!(burnt <= cfg.limits.cells as usize);
     // The tier shows it: ash on the burnt cells' words.
-    let (_, want, _, _) = shown(&cfg, &save, &fine.set, 500.0);
+    let (_, want, _, _) = shown(&cfg, &save, &fine.set, 500.0, 4);
     let mut set = (*fine.set).clone();
     let mut scars = BTreeMap::new();
     assert!(apply_scars(&mut set, &want, &mut scars) >= 1);
@@ -153,7 +153,7 @@ fn a_torch_on_late_summer_grass_starts_a_blaze_and_the_server_spreads_it() {
     assert!(!scars_differ(&set, &want, &scars));
     // Sixty days on the scar is gone from the words.
     let day = f64::from(pbd_core::daylight::DAY_S);
-    let (_, later, _, snags) = shown(&cfg, &save, &set, 500.0 + 61.0 * day);
+    let (_, later, _, snags) = shown(&cfg, &save, &set, 500.0 + 61.0 * day, 4);
     assert!(later.is_empty() && snags.is_empty());
     apply_scars(&mut set, &later, &mut scars);
     assert_eq!(
@@ -284,7 +284,7 @@ fn a_placed_torch_goes_out_in_forced_rain_and_a_roof_keeps_one_lit() {
     }
     assert!(!torch::is_out(&save.records, roofed, roofed_top + 1));
     // The field: the out torch gives no light.
-    let (tier_fire, _, _, _) = shown(&cfg, &save, &set, 0.0);
+    let (tier_fire, _, _, _) = shown(&cfg, &save, &set, 0.0, 4);
     assert_eq!(tier_fire.out, vec![(cell, top + 1)]);
     let mut dark = set.clone();
     assert!(dark.columns.set_fire(tier_fire));
@@ -396,4 +396,60 @@ fn an_out_torch_is_drawn_dark_and_lights_nothing() {
         out: vec![(cell, top + 1)],
     }));
     assert_eq!(slot_lamps(&set), before + 1, "the flames light the field");
+}
+
+/// A burnt tree stands as a snag until the axe takes it: one charcoal, the
+/// tree felled in the same line, the snag gone from the draw; a sapling
+/// gives none.
+#[test]
+fn a_snag_chopped_gives_charcoal_and_is_felled() {
+    let cfg = FireConfig::shipped();
+    let (fine, _) = crate::planet::test_ground(anchor());
+    let tree = fine
+        .set
+        .finest_records()
+        .iter()
+        .find(|r| pbd_core::flora::grows_tree(&terrain_config().trees, r.spare[0], r.metadata[1]))
+        .map(|r| r.key())
+        .expect("a tree on the tier");
+    let mut save = survival_save();
+    let day = f64::from(pbd_core::daylight::DAY_S);
+    save.records.put(pbd_core::records::Record::of(
+        blaze::BURNT_KIND,
+        u64::from(tree),
+        blaze::BURNT_SCHEMA,
+        &Burnt {
+            blaze: 1,
+            out_s: 0.0,
+            plant: Plant::Deciduous,
+            crown: true,
+        },
+    ));
+    let (_, _, _, snags) = shown(&cfg, &save, &fine.set, day, 4);
+    assert!(
+        snags
+            .iter()
+            .any(|s| s.key == tree && s.look == TreeLook::Snag),
+        "drawn as a snag"
+    );
+    assert_eq!(
+        snag_yield(&cfg, &save, tree, 25.0 * day, 4),
+        None,
+        "a sapling gives none"
+    );
+    let mut carried = pbd_core::inventory::Slots::new();
+    let got = take_snag(&cfg, &mut save, &mut carried, tree, day, 4);
+    let charcoal = pbd_core::goods::Good::by_code("charcoal").unwrap();
+    assert_eq!(got, Some((charcoal, 1)));
+    assert_eq!(carried.count(pbd_core::inventory::Item::Good(charcoal)), 1);
+    assert_eq!(
+        snag_yield(&cfg, &save, tree, day, 4),
+        None,
+        "felled: nothing more"
+    );
+    let (_, _, _, snags) = shown(&cfg, &save, &fine.set, day, 4);
+    assert!(
+        snags.iter().all(|s| s.key != tree),
+        "and gone from the draw"
+    );
 }

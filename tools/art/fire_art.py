@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""The wildfire's smoke puff sheet (`openspec/changes/wildfire` 4.2).
+"""The wildfire's smoke puff sheet (`openspec/changes/wildfire` 4.2), and
+the charcoal's inventory icon (`assets/items/goods/charcoal.png`).
 
 Writes assets/textures/fire/smoke.png: 128 x 32, four 32 x 32 cells, one
 puff's life from tight to fraying. Each puff is a cluster of round lobes in
@@ -74,6 +75,46 @@ def puff(frame, rng):
     return shade, out
 
 
+ICON = os.path.join(ROOT, "assets", "items", "goods", "charcoal.png")
+# The coal icon's own ramp and outline, and an ember's orange.
+OUTLINE = (22, 22, 18)
+CHAR = [(44, 44, 37), (67, 65, 55), (93, 90, 78)]
+EMBER = (176, 82, 38)
+
+
+def charcoal_icon():
+    """A split chunk of charcoal: a burnt log's end, its rings cracked, lit
+    from the upper left, with the 1 px outline every inventory icon has."""
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    body = set()
+    for y in range(16):
+        for x in range(16):
+            # A slanted log end: an ellipse, cut flat along its bottom right.
+            u, v = (x - 7.5) / 6.0, (y - 8.0) / 5.0
+            if u * u + v * v <= 1.0 and x + y <= 23:
+                body.add((x, y))
+    for (x, y) in body:
+        # Lit from the upper left; rings every other texel from the heart.
+        light = 2 if x + y < 12 else (1 if x + y < 18 else 0)
+        ring = int(((x - 6) ** 2 + (y - 7) ** 2) ** 0.5)
+        tone = CHAR[light] if ring % 3 else CHAR[max(0, light - 1)]
+        img.putpixel((x, y), tone + (255,))
+    # Cracks across the rings, and two embers still glowing in them.
+    for (x, y) in [(5, 7), (6, 8), (7, 9), (9, 6), (10, 7)]:
+        if (x, y) in body:
+            img.putpixel((x, y), OUTLINE + (255,))
+    for (x, y) in [(8, 9), (10, 8)]:
+        img.putpixel((x, y), EMBER + (255,))
+    for y in range(16):
+        for x in range(16):
+            if (x, y) in body:
+                continue
+            if any((x + dx, y + dy) in body for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                img.putpixel((x, y), OUTLINE + (255,))
+    img.save(ICON)
+    print("wrote", ICON)
+
+
 def main():
     rng = random.Random(0x5EED)
     img = Image.new("RGBA", (CELL * 4, CELL), (0, 0, 0, 0))
@@ -90,6 +131,7 @@ def main():
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     img.save(OUT)
     print("wrote", OUT)
+    charcoal_icon()
 
 
 if __name__ == "__main__":

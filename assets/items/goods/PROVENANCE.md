@@ -148,3 +148,10 @@ inventory icon (the things in the world have none): `raw-meat`, `hide`,
 `bedroll`, `meat-stew`, and the stations `tanning-rack` and `still` (under
 `items/stations/`). A tier M33 did not draw is its drawing with the head's
 ramp swapped for that tier's.
+
+## wildfire: charcoal
+
+`charcoal`: a split chunk of burnt log in the coal icon's own ramp and
+outline, its rings cracked and two embers in them, drawn by
+`tools/art/fire_art.py` (no model: it is a snag's yield, `wildfire`
+design 8).
