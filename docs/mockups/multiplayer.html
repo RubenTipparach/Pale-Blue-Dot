@@ -242,8 +242,7 @@ dialog.infomodal td, dialog.infomodal th { border-bottom: 1px solid var(--page-l
     <ul>
       <li>A patch of the fields on hex columns (2.833 m across, 1 m layers) with the game's terrain tiles, a packed path, the game's trees and lamp posts. You stand at the near end; <b>Wren</b> walks the path. <b>Close</b>, <b>Near</b>, <b>Middle</b>, <b>Far</b> and the slider send Wren to that distance; Wren walks there and stops, then turns to face you. Nothing moves until you ask.</li>
       <li><b>The name over them only when near:</b> the name is drawn in the kit's font over the head, at the UI's whole-number scale, within <b>24 m</b>, and not past it (recommendation taken, ask only with screenshots: about eight cells, where a face can still be told apart). It shows and hides in a fifth of a second as the line is crossed, and does not linger.</li>
-      <li><b>The body is one shaped form</b>, not boxes: a body lofted from the hips up through the chest, the neck and a block head with a rolled bevel, the legs and arms tapered tubes grown out of the hips and shoulders. Normals are smooth across every curve. The face, hair, belt, cuffs and boots are painted into textures, never stuck on.</li>
-      <li><b>Textured:</b> the townsfolk's own 16 px figure tiles (<code>tools/art/npcs_art.py</code>: cloth, skin, face, hair, leather), tinted per player, sampled nearest, so another player sits in the same art style as the people of the towns. No outline.</li>
+      <li><b>The same figure as the game's townsfolk</b> (version 2, owner, 2026-11-27: "humans should be consistent with the NPCs in the game"): another player is M5's townsperson, the figure the game draws for its NPCs, built by the same kit (<code>multiplayer/figure-kit.js</code>, copied from <code>npcs.html</code>) and rolled from the Fields folk's palette. In the game another player is drawn by the townsfolk's own code (<code>multiplayer</code> design 24), so the two cannot drift apart.</li>
       <li><b>Lit like the ground:</b> the terrain's sun with its shadows, and at night the lamps' light per pixel with the towns mockup's falloff (1 - (d/R)^2)^2, every lamp lighting what is near it wherever the camera is. The moon is held at 0.035, so outside the pools the ground and Wren read near black: in the game that is <code>LitByField</code> and <code>LitLikeTerrain</code> on the body's root.</li>
       <li><b>Eyes</b> is your own view (drag to look, arrow keys too). <b>Orbit Wren</b> turns about the body to see it close (drag, wheel or pinch to zoom).</li>
     </ul>
@@ -470,7 +469,8 @@ hostRender(); joinRender(); setNight(false);
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="multiplayer/scene-kit.js?v=1"></script>
-<script src="multiplayer/player.js?v=1"></script>
+<script src="multiplayer/figure-kit.js?v=1"></script>
+<script src="multiplayer/player.js?v=2"></script>
 <script>openTab(location.hash.slice(1));</script>
 </body>
 </html>

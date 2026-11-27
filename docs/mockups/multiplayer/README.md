@@ -28,5 +28,5 @@ and 5.2 (another player in the world).
 
 | Here | Source |
 | --- | --- |
-| `fig/fig_{cloth,skin,face,hair,leather}.png` | `docs/mockups/npcs/`, drawn by `tools/art/npcs_art.py` (the townsfolk's figure tiles) |
+| `figure-kit.js` | `docs/mockups/npcs.html`, the `window.FK` block (M5's townsperson kit) and its Fields folk palette, copied verbatim (version 2: the other player is the game's NPC figure) |
 | `player.js` | the PLAYER tab: the patch, the lamps and the other player's body, whose textures it paints from the `fig/` tiles at load |

@@ -4,10 +4,8 @@
 //
 // - Ground, trees and lamp posts as scene-kit.js builds them (the game's cell, atlas tiles,
 //   settlement timber and iron), every lamp lighting what is near it per pixel.
-// - The other player is one lofted body: superellipse rings from the hips to the crown, the
-//   legs and arms tapered tubes grown from the hips and shoulders, normals smooth across every
-//   curve. Its face, hair, belt, cuffs and boots are painted into its textures from the
-//   townsfolk's 16 px figure tiles (tools/art/npcs_art.py), tinted per player.
+// - The other player is M5's townsperson (figure-kit.js), the same figure the game draws for its
+//   NPCs and, in the game, for another player (multiplayer design 24).
 // - Nothing moves until asked: a distance button sends the player walking there, then they
 //   stop and turn to face you.
 "use strict";
@@ -105,125 +103,14 @@
   const groundY = (x, z) => { const [c, r] = cellOf(x, z); return inMap(c, r) ? TOP.get(key(c, r)) : 0; };
 
   // ------------------------------------------------------------------ the other player
-  // A loft: rings of superellipse sections up an axis, resampled by Catmull-Rom so the silhouette
-  // curves; normals from the grid's own tangents, wrapping round the seam, so the body is smooth
-  // shaded everywhere. Each ring: y, half width a, half depth b, roundness n, centre x and z.
-  function loft(rings0, K, sub) {
-    const keys = ["y", "a", "b", "n", "x", "z"], rings = [];
-    const cr = (p0, p1, p2, p3, t) => 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t);
-    for (let i = 0; i < rings0.length - 1; i++) for (let s = 0; s < sub; s++) {
-      const t = s / sub, q = {}, r0 = rings0[i - 1] || rings0[i], r1 = rings0[i], r2 = rings0[i + 1], r3 = rings0[i + 2] || rings0[i + 1];
-      for (const k of keys) q[k] = cr(r0[k] ?? 0, r1[k] ?? 0, r2[k] ?? 0, r3[k] ?? 0, t);
-      q.a = Math.max(0.004, q.a); q.b = Math.max(0.004, q.b); q.n = Math.max(2, q.n); rings.push(q);
-    }
-    rings.push(Object.assign({ x: 0, z: 0 }, rings0[rings0.length - 1]));
-    const sp = (v, e) => Math.sign(v) * Math.pow(Math.abs(v), e);
-    const P = rings.map(r => { const row = []; for (let k = 0; k < K; k++) { const t = -Math.PI / 2 + 2 * Math.PI * k / K; row.push(new THREE.Vector3((r.x || 0) + r.a * sp(Math.cos(t), 2 / r.n), r.y, (r.z || 0) + r.b * sp(Math.sin(t), 2 / r.n))); } return row; });
-    const NR = P.length, N = P.map(() => []), tu = new THREE.Vector3(), tv = new THREE.Vector3();
-    for (let i = 0; i < NR; i++) for (let k = 0; k < K; k++) {
-      tu.subVectors(P[i][(k + 1) % K], P[i][(k - 1 + K) % K]); tv.subVectors(P[Math.min(NR - 1, i + 1)][k], P[Math.max(0, i - 1)][k]);
-      N[i][k] = new THREE.Vector3().crossVectors(tv, tu).normalize();
-    }
-    const y0 = rings[0].y, y1 = rings[NR - 1].y, pos = [], nor = [], uv = [];
-    const put = (i, k) => { const kk = k % K, p = P[i][kk], n = N[i][kk]; pos.push(p.x, p.y, p.z); nor.push(n.x, n.y, n.z); uv.push(k / K, (rings[i].y - y0) / (y1 - y0)); };
-    const up = y1 > y0;
-    for (let i = 0; i < NR - 1; i++) for (let k = 0; k < K; k++) {
-      const a = [i, k], b = [i, k + 1], c = [i + 1, k + 1], d = [i + 1, k];
-      for (const v of up ? [a, c, b, a, d, c] : [a, b, c, a, c, d]) put(v[0], v[1]);
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
-    return { g, y0, y1 };
-  }
-
-  // The body, from the crotch to the crown (m, before the figure's 0.9 scale).
-  const TRUNK = [
-    { y: 0.74, a: 0.02, b: 0.02, n: 2.4 }, { y: 0.765, a: 0.16, b: 0.105, n: 2.6 }, { y: 0.84, a: 0.19, b: 0.12, n: 2.7 }, { y: 0.95, a: 0.196, b: 0.125, n: 2.8 },
-    { y: 1.06, a: 0.2, b: 0.126, n: 2.8 }, { y: 1.19, a: 0.214, b: 0.132, n: 2.9 }, { y: 1.29, a: 0.214, b: 0.128, n: 3 }, { y: 1.345, a: 0.155, b: 0.1, n: 2.6 },
-    { y: 1.385, a: 0.074, b: 0.07, n: 2 }, { y: 1.43, a: 0.08, b: 0.075, n: 2 }, { y: 1.465, a: 0.17, b: 0.16, n: 3 }, { y: 1.5, a: 0.205, b: 0.19, n: 4.2 },
-    { y: 1.62, a: 0.212, b: 0.196, n: 4.6 }, { y: 1.75, a: 0.212, b: 0.196, n: 4.6 }, { y: 1.83, a: 0.204, b: 0.19, n: 4.4, z: -0.004 }, { y: 1.875, a: 0.16, b: 0.15, n: 3.4, z: -0.008 }, { y: 1.895, a: 0.012, b: 0.012, n: 2, z: -0.01 },
-  ];
-  const LEG = [ // from the hip joint
-    { y: 0.07, a: 0.03, b: 0.03, n: 2 }, { y: 0.045, a: 0.085, b: 0.09, n: 2.3 }, { y: -0.1, a: 0.09, b: 0.095, n: 2.4 }, { y: -0.4, a: 0.073, b: 0.08, n: 2.3 },
-    { y: -0.68, a: 0.063, b: 0.069, n: 2.2 }, { y: -0.74, a: 0.072, b: 0.078, n: 2.4, z: 0.005 }, { y: -0.81, a: 0.077, b: 0.1, n: 2.6, z: 0.025 },
-    { y: -0.865, a: 0.08, b: 0.125, n: 2.8, z: 0.04 }, { y: -0.9, a: 0.076, b: 0.12, n: 2.8, z: 0.04 }, { y: -0.905, a: 0.012, b: 0.012, n: 2, z: 0.04 },
-  ].reverse();
-  const ARM = [ // from the shoulder joint
-    { y: 0.06, a: 0.02, b: 0.02, n: 2 }, { y: 0.04, a: 0.07, b: 0.07, n: 2.3 }, { y: -0.05, a: 0.077, b: 0.075, n: 2.4 }, { y: -0.28, a: 0.064, b: 0.064, n: 2.3 },
-    { y: -0.5, a: 0.056, b: 0.056, n: 2.2 }, { y: -0.53, a: 0.059, b: 0.059, n: 2.2 }, { y: -0.565, a: 0.047, b: 0.044, n: 2.2 }, { y: -0.625, a: 0.054, b: 0.04, n: 2.6 },
-    { y: -0.685, a: 0.048, b: 0.034, n: 2.6 }, { y: -0.715, a: 0.01, b: 0.01, n: 2 },
-  ].reverse();
-
-  // ---- its textures: painted from the townsfolk's figure tiles, tinted per player
-  const LOOK = { tunic: "#15578a", trousers: "#725244", leather: "#41322c", skin: "#e69d69", hair: "#522b2f", buckle: "#5d778d" };
-  const TILES = {}, tileNames = ["cloth", "skin", "face", "hair", "leather"];
-  const hexRGB = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-  const hash = (a, b) => PBD.hash2(a, b);
-  function tile(name, x, y) { const t = TILES[name]; if (!t) return [255, 255, 255]; const i = ((((y % 16) + 16) % 16) * 16 + (((x % 16) + 16) % 16)) * 4; return [t[i], t[i + 1], t[i + 2]]; }
-  const mul = (c, tint, f = 1) => { const t = hexRGB(tint); return [c[0] * t[0] / 255 * f, c[1] * t[1] / 255 * f, c[2] * t[2] / 255 * f]; };
-  function canvasTex(w, hgt, paint) {
-    const cv = document.createElement("canvas"); cv.width = w; cv.height = hgt;
-    const tex = new THREE.CanvasTexture(cv); tex.encoding = THREE.sRGBEncoding; tex.magFilter = tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false; tex.wrapS = THREE.RepeatWrapping;
-    tex.userData = { draw() { const ctx = cv.getContext("2d"), im = ctx.createImageData(w, hgt); for (let py = 0; py < hgt; py++) for (let px = 0; px < w; px++) { const c = paint(px, py), i = (py * w + px) * 4; im.data[i] = c[0]; im.data[i + 1] = c[1]; im.data[i + 2] = c[2]; im.data[i + 3] = 255; } ctx.putImageData(im, 0, 0); tex.needsUpdate = true; } };
-    return tex;
-  }
-  // the body: 64 round by 72 up, the crotch (0.74 m) at the bottom row and the crown at the top
-  const BW = 64, BH = 72, BY0 = 0.74, BY1 = 1.895, bodyY = py => BY0 + (1 - (py + 0.5) / BH) * (BY1 - BY0), PXM = (BY1 - BY0) / BH;
-  const bodyTex = canvasTex(BW, BH, (px, py) => {
-    const y = bodyY(py), u = (px + 0.5) / BW, d = Math.abs(u - 0.5) * 2;   // d: 0 at the front, 1 at the back
-    // the hairline: a fringe over the brow, down past the ears at the sides, to the nape behind,
-    // stepping a pixel or two at random so the edge is ragged, not ruled
-    const hairline = 1.795 - 0.27 * smooth(0.24, 0.86, d) + (hash(px, 3) < 0.45 ? PXM : 0) + (d < 0.24 && hash(px, 9) < 0.3 ? -PXM : 0);
-    if (y >= hairline) return mul(tile("hair", px, py), LOOK.hair, 0.95 + 0.1 * smooth(1.8, 1.89, y));
-    if (y >= 1.455) {
-      const fx = px - 24, fy = Math.floor((1.812 - y) / PXM);
-      if (fx >= 0 && fx < 16 && fy >= 0 && fy < 16) {
-        const c = tile("face", fx, fy), l = (c[0] + c[1] + c[2]) / 765;
-        if (l < 0.2) return [c[0] + 30, c[1] + 22, c[2] + 18];                              // the eyes
-        if (fy >= 4 && fy <= 6 && l > 0.97 && (fx === 3 || fx === 11) && fy === 5) return [255, 250, 240]; // their glint
-        if (fy === 3 && l < 0.6) return mul([255, 255, 255], LOOK.hair, 0.9);               // the brows
-        if (l < 0.75 && fx > 0 && fx < 15) return mul([255, 255, 255], LOOK.skin, 0.62);    // the mouth
-      }
-      return mul(tile("skin", px, py), LOOK.skin, 1 - 0.06 * smooth(1.5, 1.46, y));
-    }
-    if (y >= 1.352) return mul(tile("skin", px, py), LOOK.skin, 0.9);
-    if (y >= 0.99) {   // the tunic: a darker collar and hem
-      const f = y > 1.33 ? 0.78 : y < 1.006 ? 0.84 : 1;
-      return mul(tile("cloth", px, py), LOOK.tunic, f);
-    }
-    if (y >= 0.93) {   // the belt, its buckle at the front
-      if (Math.abs(u - 0.5) < 0.035 && y > 0.94 && y < 0.983) return mul(tile("leather", px, py), LOOK.buckle, Math.abs(u - 0.5) < 0.017 && y > 0.952 && y < 0.97 ? 0.55 : 0.85);
-      return mul(tile("leather", px, py), LOOK.leather, 1.25);
-    }
-    return mul(tile("cloth", px * 2, py), LOOK.trousers, 1);
-  });
-  const LEG_Y0 = -0.905, LEG_Y1 = 0.07, legTex = canvasTex(32, 48, (px, py) => {
-    const y = LEG_Y0 + (1 - (py + 0.5) / 48) * (LEG_Y1 - LEG_Y0);
-    if (y < -0.74) return mul(tile("leather", px, py), LOOK.leather, y > -0.76 ? 1.35 : y < -0.885 ? 0.8 : 1.1);
-    return mul(tile("cloth", px, py), LOOK.trousers, y < -0.72 ? 0.85 : 1);
-  });
-  const ARM_Y0 = -0.715, ARM_Y1 = 0.06, armTex = canvasTex(32, 40, (px, py) => {
-    const y = ARM_Y0 + (1 - (py + 0.5) / 40) * (ARM_Y1 - ARM_Y0);
-    if (y < -0.553) return mul(tile("skin", px, py), LOOK.skin, 0.96);
-    if (y < -0.515) return mul(tile("cloth", px, py), LOOK.tunic, 0.78);
-    return mul(tile("cloth", px, py), LOOK.tunic, 1);
-  });
-  const ALLTEX = [bodyTex, legTex, armTex];
-  ALLTEX.forEach(t => t.userData.draw());
-  let tilesLeft = tileNames.length;
-  for (const n of tileNames) {
-    const im = new Image();
-    im.onload = () => { const cv = document.createElement("canvas"); cv.width = cv.height = 16; const ctx = cv.getContext("2d"); ctx.drawImage(im, 0, 0); TILES[n] = ctx.getImageData(0, 0, 16, 16).data; if (--tilesLeft === 0) { ALLTEX.forEach(t => t.userData.draw()); dirty = true; } };
-    im.src = PBD.base + "fig/fig_" + n + ".png?v=1";
-  }
-
-  const fig = new THREE.Group(); scene.add(fig);
-  const body = new THREE.Group(); body.scale.setScalar(0.9); fig.add(body);
-  const mesh = (geo, tex, parent) => { const m = new THREE.Mesh(geo, PBD.litMaterial(tex, 0xffffff)); m.castShadow = true; m.receiveShadow = true; parent.add(m); return m; };
-  mesh(loft(TRUNK, 28, 3).g, bodyTex, body);
-  const limb = (rings, tex, x, y, rz) => { const p = new THREE.Group(); p.position.set(x, y, 0); p.rotation.z = rz; body.add(p); mesh(loft(rings, 14, 3).g, tex, p); return p; };
-  const legL = limb(LEG, legTex, -0.1, 0.9, 0), legR = limb(LEG, legTex, 0.1, 0.9, 0);
-  const armL = limb(ARM, armTex, -0.226, 1.3, -0.07), armR = limb(ARM, armTex, 0.226, 1.3, 0.07);
+  // M5's townsperson, the figure the game draws for its NPCs and for another player
+  // (figure-kit.js, copied from npcs.html), rolled from the Fields folk's palette for player 1.
+  const spec = FK.genSpec(1, 1, FK_FIELDS);
+  spec.mood = "happy";
+  const F = FK.friend(spec); FK.setExprOn(F, spec.mood, true); FK.liveFace(F, 0);
+  F.g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  const fig = new THREE.Group(); fig.add(F.g); scene.add(fig);
+  const [legL, legR] = F.legs, [armL, armR] = F.arms;
 
   // ------------------------------------------------------------------ you, and where Wren walks
   const EYE = { x: -0.7, z: cz(0, 2) };            // you stand on the path's near end
@@ -326,6 +213,7 @@
     raf = requestAnimationFrame(frame);
     const dt = Math.min(0.05, (t - last) / 1000 || 0); last = t;
     const moving = step(dt);
+    FK.liveFace(F, dt);
     if (!moving && !dirty && t - shownAt > 3000) return;   // the first seconds draw while the textures load
     dirty = false;
     placeCamera(); renderer.render(scene, camera); placeTag();
