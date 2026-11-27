@@ -1090,7 +1090,16 @@ fn fragment(in: VertexOut, @builtin(front_facing) front: bool) -> @location(0) v
         refracted_uv = uv;
         refracted_depth = own_depth;
     }
-    let scene = textureSampleLevel(scene_color,scene_sampler,refracted_uv,0.0).rgb;
+    // Colour and depth from the same whole pixel: filtered at the fractional
+    // offset, a sample half a pixel off something thin and bright in front
+    // of the sheet (a fishing line at night) passed the depth test at its
+    // own pixel and blended the line's colour in, a scatter of glints round
+    // it (owner, 2026-11-26: "shimmering around objects at night with
+    // water", "this happens with fishing lines"). As the view from under
+    // the water reads it (`ocean-environments` B24).
+    let csize = vec2<i32>(textureDimensions(scene_color));
+    let rpx = clamp(vec2<i32>(refracted_uv*vec2<f32>(csize)),vec2<i32>(0),csize-1);
+    let scene = textureLoad(scene_color,rpx,0).rgb;
     let to_camera = view.camera_time.xyz-in.local_position;
     let camera_distance = length(to_camera);
     let look = safe_normal(to_camera);

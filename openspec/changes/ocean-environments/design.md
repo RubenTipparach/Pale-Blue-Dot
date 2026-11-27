@@ -3010,3 +3010,23 @@ eye are 40 times more common, so this cost would be met far more often.
   water, held or placed, through the same cell light field as on land. A torch or campfire (an open
   flame) does not; that part is a recommendation taken (ask only with screenshots). Written up as a
   task; code waits for a request.
+
+### B26. Glints round a fishing line over water at night (owner, 2026-11-26)
+
+The owner: "how do we get rid of the shimmering around objects at night
+with water?", "this happens with fishing lines", with a still of the line
+over dark water and a scatter of pale teal dots either side of it.
+
+**Cause** (read in `water.wgsl`, the sheet's `fragment`): the refraction
+shifts its read of the scene by the wave's slope, and rejects a shift that
+lands on something in front of the sheet by the depth at that point. The
+depth was read at the whole pixel, the colour filtered at the fractional
+point. Half a pixel off a one-pixel line, the depth is the water's own and
+passes, while the filtered colour takes half the line's. The line is drawn
+bright and unlit, so at night each such pixel is a glint, and the waves
+move them about: a shimmer. B24's fix for the view from under the water.
+
+**Fix:** the refraction reads the colour at the same whole pixel as its
+depth (`textureLoad`). The only other change is that what is seen through
+the water moves by whole pixels instead of blending between two, which the
+pixel look's nearest sampling everywhere else already does.
