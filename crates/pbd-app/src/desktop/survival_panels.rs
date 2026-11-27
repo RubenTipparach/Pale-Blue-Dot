@@ -657,6 +657,7 @@ fn bench_repair(
 /// A town's repair (design 11): the talk's REPAIR plaque (painted by the
 /// talk with its price) is greyed while the purse is short, and a press
 /// pays and restores every use; the talk says what happened.
+#[allow(clippy::too_many_arguments)]
 fn town_repair(
     screen: Res<Screen>,
     mut talking: ResMut<super::talk::Talking>,

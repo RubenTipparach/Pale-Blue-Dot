@@ -234,6 +234,10 @@ pub enum Act {
     /// these roster ids (`|` between them), look at it and hold the left
     /// button, a carcass struck again to dress it; until.
     Hunt(String, Until),
+    /// After a death (`survival-mode` design 8): Enter on "You died" to wake
+    /// up, then walk to the newest dropped bag until it is picked up. The
+    /// bot puts this in front of whatever it was doing when it dies.
+    Revive,
     /// A key pressed once, as the player presses it (`F`, `W`, ...).
     Tap(String),
     /// A key held for seconds.

@@ -673,6 +673,7 @@ pub(crate) fn tick(
 
 /// A hit from outside the tick, through the server.
 pub fn hit(save: &mut WorldSave, survival: &mut Survival, cause: Cause, pts: f32) {
+    info!("SURVIVAL hit {cause:?} for {pts:.1}");
     if let Some(acted) = save.survival_act(Act::Hit(cause, pts)) {
         survival.hit_s = HIT_S;
         for event in acted.events {

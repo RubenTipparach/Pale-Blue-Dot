@@ -588,8 +588,10 @@ struct Sight<'a> {
     jobs: Vec<(u64, pbd_core::economy::jobs::JobKind, u32, bool)>,
     /// Aboard a craft.
     aboard: bool,
-    /// The path picker is up, and the path chosen (`survival-mode` 6.5).
+    /// The path picker is up (`survival-mode` 6.5).
     path_picker: bool,
+    /// F would drink the water ahead (`survival-mode` 6.6).
+    can_drink: bool,
 }
 
 fn tangent(v: Vec3, up: Vec3) -> Vec3 {
@@ -3055,6 +3057,8 @@ impl Drop for BotTimer {
     }
 }
 
+/// The bot's frame: look, decide, press.
+#[allow(clippy::too_many_arguments)]
 pub fn drive(
     mut commands: Commands,
     mut player: ResMut<Player>,
@@ -3252,6 +3256,11 @@ pub fn drive(
         }),
         aboard: w.aboard.as_deref().is_some_and(|a| a.0.is_some()),
         path_picker: w.path_picker.as_deref().is_some_and(|p| p.shown),
+        can_drink: w
+            .interact
+            .as_deref()
+            .and_then(|i| i.now.as_ref())
+            .is_some_and(|o| o.act == pbd_app::interact::Act::Drink),
         cards: {
             let scale = hands.pointer.single().map_or(1.0, |w| w.scale_factor());
             w.cards
@@ -3502,6 +3511,13 @@ pub fn drive(
         && shot.until.iter().all(|id| mission_done(&sight, id))
     {
         bot.act = shot.acts.len();
+    }
+    // Dead in a Survival world: wake up and fetch the bag first, then on
+    // with what was being done.
+    if sight.screen == Screen::Dead && bot.injected.front() != Some(&file::Act::Revive) {
+        info!("showcase: died; waking up to fetch the bag");
+        bot.injected.push_front(file::Act::Revive);
+        bot.reset_act(&sight);
     }
     let mut out = Intent::default();
     if let Some(act) = bot.injected.front().cloned() {
@@ -4126,18 +4142,33 @@ fn run(
         Act::Eat(name) => eat(bot, name, s, out),
         Act::Path(branch) => path(bot, branch, s, out),
         Act::Empty => empty_hand(bot, s, out),
+        Act::Revive => revive(bot, s, out),
         Act::Hunt(species, until) => hunt(bot, species, until, s, out),
         Act::Drink(n) => {
+            // Up to the water's edge first: on, looking down, until F would
+            // drink (a bank a step above the water is out of reach).
+            if bot.phase == 0 {
+                if s.can_drink {
+                    bot.next_phase();
+                } else {
+                    out.held.insert(KeyCode::KeyW);
+                    bot.steer(s, out, s.heading, -0.6);
+                    if bot.act_s > 25.0 {
+                        return Status::Fail("no water in reach to drink".into());
+                    }
+                }
+                return Status::Running;
+            }
             let gap = 1.5;
-            let taps = (bot.act_s / gap).floor() as u32;
-            let before = ((bot.act_s - s.dt) / gap).floor() as u32;
+            let taps = (bot.phase_s / gap).floor() as u32;
+            let before = ((bot.phase_s - s.dt) / gap).floor() as u32;
             if taps != before && taps >= 1 && taps <= *n {
                 out.taps.push(KeyCode::KeyF);
                 if taps == 1 && bot.stilled.insert("drink") {
                     bot.want_still = true;
                 }
             }
-            if bot.act_s > gap * (*n as f32 + 1.0) {
+            if bot.phase_s > gap * (*n as f32 + 1.0) {
                 Status::Done
             } else {
                 Status::Running
@@ -4873,12 +4904,15 @@ fn path(bot: &mut Bot, branch: &str, s: &Sight, out: &mut Intent) -> Status {
                 out.taps.push(KeyCode::KeyO);
             }
         }
-        2 if bot.phase_s > 1.5 => {
-            if bot.stilled.insert("path") {
+        2 => {
+            // The picker as the player sees it, then the card pressed.
+            if bot.phase_s < s.dt * 1.5 {
                 bot.want_still = true;
             }
-            out.click = Some(Click::Path(branch.to_string()));
-            bot.next_phase();
+            if bot.phase_s > 3.0 {
+                out.click = Some(Click::Path(branch.to_string()));
+                bot.next_phase();
+            }
         }
         3 if bot.phase_s > 1.5 => {
             if !chosen {
@@ -4930,8 +4964,7 @@ fn hunt(bot: &mut Bot, species: &str, until: &Until, s: &Sight, out: &mut Intent
         .filter(|a| {
             a.wild
                 && !a.dressed
-                && s
-                    .land
+                && s.land
                     .get(a.species as usize)
                     .is_some_and(|sp| wanted.contains(&sp.id.as_str()))
         })
@@ -4979,9 +5012,43 @@ fn hunt(bot: &mut Bot, species: &str, until: &Until, s: &Sight, out: &mut Intent
     } else {
         bot.aim_at(s, out, centre);
         out.lmb = true;
-        if bot.stilled.insert(if animal.dead { "dress" } else { "hunt" }) {
+        if bot
+            .stilled
+            .insert(if animal.dead { "dress" } else { "hunt" })
+        {
             bot.want_still = true;
         }
+    }
+    Status::Running
+}
+
+/// After a death: Enter to wake up, then walk to the newest bag lying in the
+/// world until it is picked up (the walker takes it within reach).
+fn revive(bot: &mut Bot, s: &Sight, out: &mut Intent) -> Status {
+    if s.screen == Screen::Dead {
+        if (bot.act_s % 1.0) < s.dt * 1.5 {
+            out.taps.push(KeyCode::Enter);
+        }
+        return Status::Running;
+    }
+    let newest = pbd_app::survival::bags(s.save)
+        .into_iter()
+        .max_by_key(|(id, _)| *id);
+    let Some((id, bag)) = newest else {
+        info!("showcase: the bag is back in the pack");
+        return Status::Done;
+    };
+    if bot.act_s > 600.0 {
+        return Status::Fail(format!("could not reach bag {id}"));
+    }
+    let at = bag.at.pos.as_vec3();
+    if bot.walk_to(s, out, at, 0.8) == Walked::There {
+        // On it: a step either way until the walker picks it up.
+        out.held.insert(if (bot.act_s % 2.0) < 1.0 {
+            KeyCode::KeyW
+        } else {
+            KeyCode::KeyS
+        });
     }
     Status::Running
 }
