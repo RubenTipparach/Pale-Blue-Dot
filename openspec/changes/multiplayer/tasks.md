@@ -45,7 +45,7 @@ Groups 1 and 2 are the dependencies, and each is its own change.
 
 ## 8. Sharing the world
 
-- [ ] 8.1 Other players' presence: snapshots at 20 Hz, interpolation, drawn in the client's own origin. Verify: two-client `--capture` shots; a test that a rebase on one client leaves the other's positions unchanged.
+- [x] 8.1 (Built 2026-11-27, design 24: poses at 20 Hz through the server, `Gone` on leaving, drawn 100 ms behind as the townsfolk figure; tests `a_pose_goes_to_the_others_and_a_leaver_is_gone`, `another_player_is_drawn_behind_between_poses_on_the_sphere`, `a_pose_does_not_depend_on_either_games_origin`, `another_player_is_a_visitor_not_a_townsperson`. The two-client `--capture` shots wait for the owner's machines.) Other players' presence: snapshots at 20 Hz, interpolation, drawn in the client's own origin. Verify: two-client `--capture` shots; a test that a rebase on one client leaves the other's positions unchanged.
 - [ ] 8.2 (Drops made by a dig, and pickups, through the server: design 23, 2026-11-27.) Drops, containers, crops, lamps and stations replicated as region records. Verify: an app test where one client drops an item and the other picks it up, and the item exists exactly once.
 - [ ] 8.3 Animals run on the server for subscribed regions; fishing's catch is a server request. Verify: a test that taming an animal on one client shows it tamed on the other.
 - [ ] 8.4 Water flow runs on the server; liquid changes ride the region stream. Verify: a dug channel floods the same on both clients, and their digests match after it settles.
