@@ -33,6 +33,12 @@ pub struct SurvivalConfig {
     pub weapons: WeaponsConfig,
     pub hunting: HuntingConfig,
     pub wear: WearConfig,
+    /// The hunt (`survival-mode` combat C2), by species id.
+    pub predators: BTreeMap<String, Predator>,
+    /// The hunt's shared numbers.
+    pub hunt: HuntConfig,
+    /// Townsfolk who fight back (combat C3).
+    pub townsfolk: TownsfolkConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
@@ -315,6 +321,68 @@ pub struct WeaponsConfig {
     pub bow: BowConfig,
     pub arrows: BTreeMap<String, f32>,
     pub flight_max_s: f32,
+    /// A swing's hit lands this share of its `time_s` after the press
+    /// (combat C1).
+    pub hit_share: f32,
+    /// A tool's or bare hands' swing, s.
+    pub tool_swing_s: f32,
+    /// A spear is raised at least this long before a release throws it, s.
+    pub throw_min_s: f32,
+}
+
+/// One predator's hunt (combat C2): distances m, speeds m/s, times s,
+/// damage pts.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Predator {
+    pub notice_m: f32,
+    pub stalk_mps: f32,
+    pub warn_m: f32,
+    pub warn_s: f32,
+    pub lunge_m: f32,
+    pub lunge_mps: f32,
+    pub bite_m: f32,
+    pub damage: f32,
+}
+
+/// What every predator shares (combat C2).
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HuntConfig {
+    /// Notice reaches this many times further at night.
+    pub night_mult: f32,
+    /// The least a warning is held before the first attack, s (design 6).
+    pub warn_min_s: f32,
+    /// A shorter warning between attacks, s.
+    pub rewarn_s: f32,
+    /// Flees below this share of its health.
+    pub flee_below: f32,
+    pub flee_s: f32,
+    /// After fleeing it notices nothing this long, s.
+    pub calm_s: f32,
+    /// Gives up when the player is past 1.5 x notice this long, s.
+    pub give_up_s: f32,
+    /// A lunge is over after this long, s.
+    pub lunge_s: f32,
+}
+
+/// Townsfolk who fight back (combat C3).
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct TownsfolkConfig {
+    /// Standing lost a strike on a townsperson.
+    pub struck_standing: i32,
+    /// Guards within this of the struck come, m.
+    pub call_m: f32,
+    pub guard_mps: f32,
+    pub guard_reach_m: f32,
+    pub guard_windup_s: f32,
+    pub guard_damage: f32,
+    pub guard_every_s: f32,
+    /// Anyone else runs from the player this long, s.
+    pub flee_s: f32,
+    /// The fight ends this far past the town's walls, m.
+    pub leave_m: f32,
 }
 
 /// One hunted species.
@@ -664,6 +732,56 @@ impl SurvivalConfig {
             non_negative(&format!("weapons.arrows.{id}"), *v)?;
         }
         positive("weapons.flight_max_s", wp.flight_max_s)?;
+        within("weapons.hit_share", wp.hit_share, 0.05, 0.95)?;
+        positive("weapons.tool_swing_s", wp.tool_swing_s)?;
+        non_negative("weapons.throw_min_s", wp.throw_min_s)?;
+
+        for (id, p) in &self.predators {
+            let n = |f: &str| format!("predators.{id}.{f}");
+            positive(&n("notice_m"), p.notice_m)?;
+            positive(&n("stalk_mps"), p.stalk_mps)?;
+            positive(&n("warn_m"), p.warn_m)?;
+            positive(&n("lunge_m"), p.lunge_m)?;
+            positive(&n("lunge_mps"), p.lunge_mps)?;
+            positive(&n("bite_m"), p.bite_m)?;
+            non_negative(&n("damage"), p.damage)?;
+            if p.warn_s < self.hunt.warn_min_s {
+                return Err(format!(
+                    "survival.ron predators.{id}.warn_s is below hunt.warn_min_s"
+                ));
+            }
+            if !(p.bite_m < p.lunge_m && p.lunge_m <= p.warn_m && p.warn_m < p.notice_m) {
+                return Err(format!(
+                    "survival.ron predators.{id}: bite < lunge <= warn < notice"
+                ));
+            }
+            if !self.hunting.game.contains_key(id) {
+                return Err(format!(
+                    "survival.ron predators.{id} has no hunting.game row"
+                ));
+            }
+        }
+        let hn = &self.hunt;
+        within("hunt.night_mult", hn.night_mult, 1.0, 4.0)?;
+        within("hunt.warn_min_s", hn.warn_min_s, 1.5, 10.0)?;
+        positive("hunt.rewarn_s", hn.rewarn_s)?;
+        within("hunt.flee_below", hn.flee_below, 0.0, 1.0)?;
+        positive("hunt.flee_s", hn.flee_s)?;
+        non_negative("hunt.calm_s", hn.calm_s)?;
+        positive("hunt.give_up_s", hn.give_up_s)?;
+        positive("hunt.lunge_s", hn.lunge_s)?;
+        let tf = &self.townsfolk;
+        if !(0..=100).contains(&tf.struck_standing) {
+            return Err("survival.ron townsfolk.struck_standing must be 0..=100".into());
+        }
+        positive("townsfolk.call_m", tf.call_m)?;
+        positive("townsfolk.guard_mps", tf.guard_mps)?;
+        positive("townsfolk.guard_reach_m", tf.guard_reach_m)?;
+        non_negative("townsfolk.guard_windup_s", tf.guard_windup_s)?;
+        non_negative("townsfolk.guard_damage", tf.guard_damage)?;
+        positive("townsfolk.guard_every_s", tf.guard_every_s)?;
+        positive("townsfolk.flee_s", tf.flee_s)?;
+        non_negative("townsfolk.leave_m", tf.leave_m)?;
 
         let hu = &self.hunting;
         non_negative("hunting.carcass_s", hu.carcass_s)?;
