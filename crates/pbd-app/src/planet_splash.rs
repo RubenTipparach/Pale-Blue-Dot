@@ -290,6 +290,8 @@ fn update_splashes(
     fine: Option<Res<PlanetFine>>,
     structures: Option<Res<crate::walking::Structures>>,
     sea: Option<Res<crate::sea::Sea>>,
+    eye_water: Option<Res<crate::planet::EyeWaterState>>,
+    water_settings: Option<Res<crate::config::WaterSettings>>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     mut splashes: ResMut<RainSplashes>,
     mut key: Local<ListKey>,
@@ -307,7 +309,13 @@ fn update_splashes(
     let eye = (camera.translation().as_dvec3() - frame.center).as_vec3();
     let radius = eye.length();
     let up = eye / radius.max(1e-3);
-    let submerged = super::surface_height(up) < 0.0 && radius < PLANET_RADIUS;
+    // Under the sea, a lake, a river or a pool (`rain-under-water` design
+    // 6): the one rule the shower and the listener ask.
+    let submerged = super::eye_under_water(
+        eye,
+        eye_water.as_deref(),
+        PLANET_RADIUS - water_settings.as_ref().map_or(0.5, |s| s.depth_offset_m),
+    );
     let rain = weather.liquid();
     splashes.rain = rain;
     splashes.eye = eye;

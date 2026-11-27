@@ -57,8 +57,8 @@ pub use terrain::{
     switch_generator, terrain_config, terrain_epoch, terrain_radius, tileset_slot,
 };
 pub use water::{
-    EyeWater, EyeWaterState, RainShadows, emerge, eye_surface_radius, eye_water_at, inland_surface,
-    submersion,
+    EyeWater, EyeWaterState, RainShadows, emerge, eye_surface_radius, eye_under_water,
+    eye_water_at, inland_surface, submersion,
 };
 
 use bevy::math::{DMat4, DVec3};
