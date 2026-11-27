@@ -186,6 +186,11 @@ pub struct Player {
     /// The world time they joined at, s: a crew `each` waits for them
     /// until they have been in for its grace time.
     pub joined_s: f64,
+    /// Their survival bars in a Survival world, `None` in Explorer
+    /// ([`survival`], `survival-mode` task 4.1).
+    pub vitals: Option<pbd_core::survival::Vitals>,
+    /// Seconds of play since the vitals were last journaled.
+    pub since_vitals_s: f32,
 }
 
 /// A world's crew missions as the server counts them: the chain and the
@@ -298,6 +303,8 @@ impl Server {
                 name: name.clone(),
                 slots,
                 joined_s: self.clock_s,
+                vitals: None,
+                since_vitals_s: 0.0,
             },
         );
         self.send(
@@ -702,6 +709,8 @@ impl Server {
         }
     }
 }
+
+pub mod survival;
 
 #[cfg(test)]
 mod tests;

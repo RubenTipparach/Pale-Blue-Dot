@@ -578,3 +578,104 @@ fn a_world_with_no_crew_chain_journals_no_crew_record() {
     assert_eq!(st.entries.len(), 1);
     assert!(st.records.is_empty());
 }
+
+// ------------------------------------------------ survival (task 4.1)
+
+use crate::survival::{Act, VITALS_EVERY_S, VITALS_KIND, vitals_of};
+use pbd_core::survival::health::Cause;
+use pbd_core::survival::temperature::Exposure;
+use pbd_core::survival::{Conditions, Event, SurvivalConfig, Vitals, WorldMode};
+
+#[test]
+fn a_long_dive_drains_health_and_surfacing_refills_breath() {
+    let cfg = SurvivalConfig::shipped();
+    let (mut s, mut store) = server();
+    let p = joined(&mut s, &[1], Slots::new())[0];
+    s.set_vitals(p, vitals_of(&cfg, WorldMode::Survival, &store.records, p));
+    let dive = Conditions {
+        head_in_water: true,
+        in_deep_water: true,
+        exposure: Exposure {
+            air_c: 20.0,
+            in_water: true,
+            ..Exposure::default()
+        },
+        ..Conditions::default()
+    };
+    // Breath runs out after its 30 s, then health drains at 5 a second.
+    for _ in 0..400 {
+        s.survive(&mut store, &cfg, p, &dive, 0.1).unwrap();
+    }
+    let v = s.vitals(p).unwrap().clone();
+    assert_eq!(v.breath.breath_s, 0.0);
+    assert!((v.health - 50.0).abs() < 1.0, "{}", v.health);
+    // Journaled as it went: the record holds the drained bar.
+    let saved: Vitals = store
+        .records
+        .get(VITALS_KIND, u64::from(p))
+        .and_then(|r| r.read())
+        .unwrap();
+    // (at most VITALS_EVERY_S behind: 5 s of drowning is 25 points)
+    assert!(
+        saved.health < v.health + 26.0 && saved.health < 80.0,
+        "{}",
+        saved.health
+    );
+    let surfaced = Conditions::default();
+    for _ in 0..40 {
+        s.survive(&mut store, &cfg, p, &surfaced, 0.1).unwrap();
+    }
+    let v = s.vitals(p).unwrap();
+    assert!((v.breath.breath_s - cfg.breath.under_s).abs() < 1e-3);
+}
+
+#[test]
+fn an_explorer_world_has_no_vitals_and_an_old_save_reads_explorer() {
+    let cfg = SurvivalConfig::shipped();
+    let (mut s, mut store) = server();
+    let p = joined(&mut s, &[1], Slots::new())[0];
+    // A save from before survival has no mode: Explorer, no bars.
+    let mode = WorldMode::of_saved(None);
+    s.set_vitals(p, vitals_of(&cfg, mode, &store.records, p));
+    assert!(
+        s.survive(&mut store, &cfg, p, &Conditions::default(), 1.0)
+            .is_none()
+    );
+    assert!(
+        s.survival_act(&mut store, &cfg, p, Act::Hit(Cause::Fall, 50.0))
+            .is_none()
+    );
+    assert!(store.records.get(VITALS_KIND, u64::from(p)).is_none());
+}
+
+#[test]
+fn vitals_are_journaled_on_a_hit_and_every_few_seconds_and_read_back() {
+    let cfg = SurvivalConfig::shipped();
+    let (mut s, mut store) = server();
+    let p = joined(&mut s, &[1], Slots::new())[0];
+    s.set_vitals(p, vitals_of(&cfg, WorldMode::Survival, &store.records, p));
+    // Ticking alone writes nothing until VITALS_EVERY_S has passed.
+    s.survive(&mut store, &cfg, p, &Conditions::default(), 1.0);
+    assert!(store.records.get(VITALS_KIND, u64::from(p)).is_none());
+    s.survive(&mut store, &cfg, p, &Conditions::default(), VITALS_EVERY_S);
+    assert!(store.records.get(VITALS_KIND, u64::from(p)).is_some());
+    // A hit is written at once.
+    let acted = s
+        .survival_act(&mut store, &cfg, p, Act::Hit(Cause::Fall, 100.0))
+        .unwrap();
+    assert!(acted.events.contains(&Event::Died(Cause::Fall)));
+    // A reopened world (a new server over the same records) reads it back.
+    let (mut again, _) = server();
+    let q = joined(&mut again, &[1], Slots::new())[0];
+    again.set_vitals(q, vitals_of(&cfg, WorldMode::Survival, &store.records, q));
+    assert!(again.vitals(q).unwrap().is_dead());
+    // Waking up is journaled too: full health, half food.
+    s.survival_act(&mut store, &cfg, p, Act::WakeUp).unwrap();
+    let saved: Vitals = store
+        .records
+        .get(VITALS_KIND, u64::from(p))
+        .and_then(|r| r.read())
+        .unwrap();
+    assert_eq!(saved.health, cfg.health.max_pts);
+    assert_eq!(saved.food_fp as f32, cfg.food.wake_fp);
+}
