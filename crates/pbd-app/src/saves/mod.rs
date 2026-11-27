@@ -12,9 +12,10 @@
 //! hole the moment the player walked far enough for a new anchor - and it is
 //! the only thing in the process that queues a write.
 
-pub mod format;
+// The journal's format and writer live in `pbd-save`, shared with the
+// dedicated server (`multiplayer` design 27).
+pub use pbd_save::{format, writer};
 pub mod migrate;
-pub mod writer;
 
 use bevy::prelude::*;
 use format::{Identity, KEY_VERSION, Record, WorldFile};
@@ -35,7 +36,7 @@ pub const IDENTITY: &str = "identity.ron";
 /// The log of everything changed, appended to per edit. Version 1 keys each
 /// edit by its cell's exact key (`pbd_core::cell_key`); a save with only the
 /// old `edits.log` is migrated into it once, on open ([`migrate`]).
-pub const LOG: &str = "edits.v1.log";
+pub use pbd_save::LOG;
 /// The metadata and the pose, replaced whole on a timer.
 pub const WORLD: &str = "world.ron";
 /// The simulated atmosphere's state (`pbd_core::atmosphere`), replaced whole
@@ -60,14 +61,7 @@ pub const NAME_MAX: usize = 31;
 /// is exactly why it is the only part on a timer.
 pub const AUTOSAVE_S: f32 = 5.0;
 
-/// Who the water's edits are journaled as: `@wwater:flow/0`.
-pub fn water_author() -> Author {
-    Author::World {
-        process: "water".into(),
-        kind: "flow".into(),
-        id: 0,
-    }
-}
+pub use pbd_save::water_author;
 
 pub fn now_unix_s() -> u64 {
     SystemTime::now()

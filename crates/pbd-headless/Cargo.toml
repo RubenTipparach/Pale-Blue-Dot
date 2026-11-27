@@ -11,4 +11,6 @@ rust-version.workspace = true
 pbd-core = { path = "../pbd-core" }
 pbd-server = { path = "../pbd-server" }
 pbd-net = { path = "../pbd-net" }
+pbd-save = { path = "../pbd-save" }
+ron = "0.12"
 glam.workspace = true

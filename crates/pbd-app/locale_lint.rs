@@ -241,9 +241,9 @@ pub const DEV_SCOPES: &[(&str, &str)] = &[
         "path_cells",
     ),
     // What a save's writer and record keep for the log.
-    ("crates/pbd-app/src/saves/writer.rs", "send"),
-    ("crates/pbd-app/src/saves/writer.rs", "drain"),
-    ("crates/pbd-app/src/saves/writer.rs", "note"),
+    ("crates/pbd-save/src/writer.rs", "send"),
+    ("crates/pbd-save/src/writer.rs", "drain"),
+    ("crates/pbd-save/src/writer.rs", "note"),
     ("crates/pbd-app/src/towns.rs", "unsettled_record"),
     ("crates/pbd-app/src/towns.rs", "stand"),
     // Timing and missing-edit labels for the log (`lod::spent`).

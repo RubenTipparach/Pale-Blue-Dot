@@ -34,6 +34,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+pub mod disk;
+
 /// The game's default spawn (`desktop::spawn_direction`), where a joined
 /// game stands when it opens.
 pub const DEFAULT_SPAWN: Vec3 = Vec3::new(0.8776, 0.4794, 0.0);
@@ -60,6 +62,9 @@ pub struct ServeOptions {
     pub kit: u16,
     /// Stop after this long, if given.
     pub seconds: Option<f64>,
+    /// Keep the world on disk in this folder (design 27): opened if it holds
+    /// one, made with `seed` if not. `None` keeps it in memory.
+    pub world: Option<std::path::PathBuf>,
 }
 
 impl Default for ServeOptions {
@@ -70,6 +75,7 @@ impl Default for ServeOptions {
             clock_s: 1200.0,
             kit: 64,
             seconds: None,
+            world: None,
         }
     }
 }
@@ -100,32 +106,65 @@ pub fn serve(
     stop: &AtomicBool,
     ready: Option<std::sync::mpsc::Sender<SocketAddr>>,
 ) -> std::io::Result<Served> {
+    match &options.world {
+        Some(dir) => {
+            let store = disk::DiskStore::open(dir, options.seed)?;
+            let world = (store.identity.seed, store.identity.generator);
+            serve_on(options, world, stop, ready, store)
+        }
+        None => serve_on(
+            options,
+            (options.seed, GENERATOR_VERSION),
+            stop,
+            ready,
+            MemoryStore::new(Edits::new()),
+        ),
+    }
+}
+
+/// [`serve`] over `store`, the world `(seed, generator)`.
+fn serve_on<S: pbd_server::Store>(
+    options: &ServeOptions,
+    (seed, generator): (u64, u32),
+    stop: &AtomicBool,
+    ready: Option<std::sync::mpsc::Sender<SocketAddr>>,
+    mut store: S,
+) -> std::io::Result<Served> {
     let start = Instant::now();
     let host = Host::bind_to(options.addr)?;
     let addr = host.local_addr();
     let mut server = Server::new(
         pbd_server::World {
-            terrain: TerrainConfig::for_version(GENERATOR_VERSION)
-                .expect("this build's generator has a config"),
+            terrain: TerrainConfig::for_version(generator).ok_or_else(|| {
+                std::io::Error::other(format!("generator {generator} is not in this build"))
+            })?,
             worms: WormField::DEFAULT,
             versions: Versions {
                 protocol: PROTOCOL,
                 protocol_min: PROTOCOL_MIN,
                 topology: TOPOLOGY_VERSION,
-                generator: GENERATOR_VERSION,
+                generator,
                 content: 0,
-                world: options.seed,
+                world: seed,
             },
         },
         options.clock_s,
     );
-    let mut store = MemoryStore::new(Edits::new());
     let mut players: BTreeMap<u64, u32> = BTreeMap::new();
     let mut served = Served::default();
     log(
         start,
         "serve",
-        &format!("hosting on {addr} (world in memory, seed {})", options.seed),
+        &format!(
+            "hosting on {addr} (seed {seed}, {})",
+            options
+                .world
+                .as_ref()
+                .map_or("world in memory".to_string(), |d| format!(
+                    "world in {}",
+                    d.display()
+                ))
+        ),
     );
     log(
         start,
@@ -245,7 +284,7 @@ pub fn serve(
                     served.accepted,
                     served.refused,
                     served.changes_sent,
-                    store.ledger.regions().regions().len(),
+                    store.ledger().regions().regions().len(),
                     server.clock_s()
                 ),
             );

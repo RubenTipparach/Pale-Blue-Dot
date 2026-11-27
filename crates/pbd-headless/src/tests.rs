@@ -69,3 +69,49 @@ fn a_player_who_rejoins_is_served_on_the_new_connection() {
     stop.store(true, Ordering::Relaxed);
     let _ = server.join().unwrap();
 }
+
+/// Design 27: a server whose world is on disk keeps it across a restart.
+/// A bot builds; the server stops; the folder reopens with the bot's edits
+/// and the world's seed; a second server on it sends a new bot that world.
+#[test]
+fn a_server_on_disk_keeps_its_world_across_a_restart() {
+    let dir = std::env::temp_dir().join(format!("pbd-disk-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let run = |seed: u64| {
+        let stop = Arc::new(AtomicBool::new(false));
+        let (ready_tx, ready) = std::sync::mpsc::channel();
+        let options = ServeOptions {
+            addr: SocketAddr::from(([127, 0, 0, 1], 0)),
+            seed,
+            world: Some(dir.clone()),
+            ..ServeOptions::default()
+        };
+        let server = {
+            let stop = stop.clone();
+            std::thread::spawn(move || serve(&options, &stop, Some(ready_tx)))
+        };
+        let addr = ready.recv_timeout(Duration::from_secs(10)).unwrap();
+        let bot = Bot::join(addr, BotOptions::default(), 64).expect("joined");
+        let report = bot.play();
+        stop.store(true, Ordering::Relaxed);
+        server.join().unwrap().expect("served");
+        report
+    };
+    let first = run(5);
+    assert!(first.ok(), "{}", first.line());
+    let opened = disk::DiskStore::open(&dir, 999).expect("reopened");
+    assert_eq!(
+        opened.identity.seed, 5,
+        "the world's own seed, not the flag's"
+    );
+    let kept = pbd_server::Store::edits(&opened).len();
+    assert!(kept > 0, "the bot's edits are on disk");
+    drop(opened);
+    // A second server on the same folder serves that world: its new bot's
+    // copy agrees with the server's, edits included.
+    let second = run(999);
+    assert!(second.regions_checked > 0, "{}", second.line());
+    let reopened = disk::DiskStore::open(&dir, 1).expect("reopened");
+    assert!(pbd_server::Store::edits(&reopened).len() >= kept);
+    let _ = std::fs::remove_dir_all(&dir);
+}

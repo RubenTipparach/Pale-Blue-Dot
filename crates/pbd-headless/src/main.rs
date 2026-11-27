@@ -2,7 +2,7 @@
 //! (`multiplayer` design 21).
 //!
 //! ```text
-//! pbd-headless serve [--port 47124] [--bind 127.0.0.1] [--seed 77] [--clock 1200] [--kit 64] [--seconds S]
+//! pbd-headless serve [--port 47124] [--bind 127.0.0.1] [--seed 77] [--clock 1200] [--kit 64] [--seconds S] [--world DIR]
 //! pbd-headless bot --join 127.0.0.1:47124 [--name bot0] [--role 0/3] [--at LAT,LON] [--stress S] [--rate HZ] [--pace S] [--kit 64]
 //! pbd-headless soak [--bots 3] [--stress S] [--kit 64]
 //! ```
@@ -36,13 +36,17 @@ fn main() {
             let bind = value(&args, "--bind").unwrap_or("127.0.0.1");
             let port: u16 = number(&args, "--port", 47124);
             let options = ServeOptions {
-                addr: format!("{bind}:{port}")
-                    .parse()
-                    .expect("--bind takes an address"),
+                // A name resolves too: Fly's UDP is bound on
+                // `fly-global-services` (`multiplayer` design 27).
+                addr: std::net::ToSocketAddrs::to_socket_addrs(&(bind, port))
+                    .ok()
+                    .and_then(|mut a| a.next())
+                    .expect("--bind takes an address or a host name"),
                 seed: number(&args, "--seed", 77),
                 clock_s: number(&args, "--clock", 1200.0),
                 kit: number(&args, "--kit", 64),
                 seconds: value(&args, "--seconds").map(|s| s.parse().expect("--seconds")),
+                world: value(&args, "--world").map(std::path::PathBuf::from),
             };
             match serve(&options, &AtomicBool::new(false), None) {
                 Ok(_) => 0,
