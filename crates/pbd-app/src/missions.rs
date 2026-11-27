@@ -13,8 +13,8 @@ use crate::saves::WorldSave;
 use bevy::prelude::*;
 use pbd_core::inventory::Item;
 use pbd_core::missions::{
-    Catalog, Chain, Happened, Kind, MISSIONS_ID, MISSIONS_KIND, MISSIONS_SCHEMA, MissionFile,
-    Objective, Progress, Want, item_code,
+    Catalog, Chain, Happened, Kind, MISSIONS_ID, MISSIONS_KIND, MISSIONS_SCHEMA, MissionFile, Mode,
+    Objective, Offer, Progress, Want, item_code,
 };
 use pbd_core::records::{Author, Record as StoredRecord};
 use pbd_core::terrain::Material;
@@ -45,9 +45,33 @@ pub struct MissionDone {
     pub id: String,
 }
 
-/// The chain, resolved against this build's tables at startup.
+/// The open world's tree: the chain resolved against this build's tables at
+/// startup, holding the missions of the world's mode (`survival-mode` design
+/// 18). Every system that reads the starter tree reads this one.
 #[derive(Resource, Clone, Debug, Default)]
 pub struct MissionChain(pub Chain);
+
+/// Every mission of `missions.ron`, every mode's: what [`MissionChain`] is
+/// cut from when a world opens. Absent when a test gives its own chain.
+#[derive(Resource, Clone, Debug, Default)]
+pub struct AllMissions(pub Chain);
+
+/// A capture instrument's mode for the missions (`--mission-mode
+/// survival`), over the world's own: set only by the launch, never stored.
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ForcedMode(pub Option<Mode>);
+
+/// The mode the open world's missions follow (`survival-mode` design 1 and
+/// 18): Explorer for every world until the world's identity carries its
+/// mode.
+///
+/// WIRE: `survival-mode` 2.1 adds `pbd_core::survival::WorldMode` to the
+/// world's identity record; read it here (`WorldMode::of_saved`) and map
+/// Survival to [`Mode::Survival`]. This is the one place the missions ask.
+pub fn mode_of(save: &WorldSave) -> Mode {
+    let _ = save;
+    Mode::Explorer
+}
 
 /// The player's progress in the open world, and what the HUD says about it.
 #[derive(Resource, Clone, Debug, Default)]
@@ -60,6 +84,40 @@ pub struct Missions {
     joined: Option<u64>,
     /// The focus was picked on the tree and is to be stored.
     pub refocused: bool,
+    /// The mode of the open world, which [`MissionChain`] was cut for.
+    pub mode: Mode,
+    /// The path picker to open now, and why (`survival-mode` design 18):
+    /// set when the fire is lit or the chosen path runs out, taken by the
+    /// Missions screen.
+    pub offer: Option<Offer>,
+}
+
+impl Missions {
+    /// Pick `branch` as the path (the picker's card, or the bot's): Now and
+    /// the HUD's line follow it, and the record is stored with the next
+    /// count. Whether it was taken.
+    pub fn choose_path(&mut self, chain: &Chain, branch: &str) -> bool {
+        let mode = self.mode;
+        let picked = self.progress.choose_path(chain, mode, branch);
+        if picked {
+            self.refocused = true;
+        }
+        picked || self.progress.path.as_deref() == Some(branch)
+    }
+
+    /// Whether a path is to be picked (none in Explorer).
+    pub fn choosing(&self, chain: &Chain) -> bool {
+        self.progress.choosing(chain, self.mode)
+    }
+}
+
+/// The dawn watch (`survival-mode` design 18, "The first night"): set when
+/// the clock passes 20:00 with the world open, and `dawn` raised when it
+/// then reaches 06:00. HOOK: a death in Survival (`survival-mode` 4.2)
+/// clears `since_dusk`, so a night is only seen through alive.
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DawnWatch {
+    pub since_dusk: bool,
 }
 
 /// How long a finished mission's "Done" line stays up, seconds.
@@ -168,7 +226,9 @@ pub struct Happenings(pub Vec<Happened>);
 /// Everything the counting reads and writes, in one parameter.
 #[derive(bevy::ecs::system::SystemParam)]
 pub struct Counting<'w, 's> {
-    chain: Res<'w, MissionChain>,
+    chain: ResMut<'w, MissionChain>,
+    all: Option<Res<'w, AllMissions>>,
+    forced: Option<Res<'w, ForcedMode>>,
     missions: ResMut<'w, Missions>,
     save: Option<ResMut<'w, WorldSave>>,
     hotbar: Option<Res<'w, Hotbar>>,
@@ -276,6 +336,21 @@ pub fn count(mut c: Counting) {
         .filter(|m| *m != Material::Air)
         .collect();
     let state = |o: &Objective| held(o, &slots, &owned, &placed);
+    // A world opening: its tree is its mode's (`survival-mode` design 18).
+    if joining {
+        let mode = c
+            .forced
+            .as_deref()
+            .and_then(|f| f.0)
+            .unwrap_or_else(|| mode_of(&save));
+        if let Some(all) = c.all.as_deref()
+            && (mode != c.missions.mode || c.chain.0.missions.is_empty())
+        {
+            c.chain.0 = all.0.for_mode(mode);
+        }
+        c.missions.mode = mode;
+        c.missions.offer = None;
+    }
     let chain = &c.chain.0;
     let missions = &mut *c.missions;
     let mut done = Vec::new();
@@ -303,6 +378,11 @@ pub fn count(mut c: Counting) {
         info!("mission done: {id} ({title})");
         c.finished.write(MissionDone { id: id.clone() });
         missions.notice = Some((title.to_string(), NOTICE_S));
+    }
+    // The fire lit, or the chosen path run out: the path picker opens.
+    if let Some(offer) = missions.progress.offer_after(chain, missions.mode, &done) {
+        info!("the path picker is offered: {offer:?}");
+        missions.offer = Some(offer);
     }
     if changed {
         let record = StoredRecord::of(
@@ -425,7 +505,9 @@ fn start(
     land: Res<HusbandryConfig>,
 ) {
     if given.is_none() {
-        commands.insert_resource(MissionChain(load_chain(&recipes, &fauna, &land)));
+        let all = load_chain(&recipes, &fauna, &land);
+        commands.insert_resource(MissionChain(all.for_mode(Mode::Explorer)));
+        commands.insert_resource(AllMissions(all));
     }
 }
 
@@ -447,6 +529,7 @@ impl Plugin for MissionsPlugin {
             .init_resource::<Missions>()
             .init_resource::<Happenings>()
             .init_resource::<RecipeLocks>()
+            .init_resource::<DawnWatch>()
             .add_systems(PreStartup, start)
             .add_systems(
                 PostUpdate,

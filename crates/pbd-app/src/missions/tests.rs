@@ -98,6 +98,7 @@ fn every_kind_counts_from_its_message() {
                 branch: String::new(),
                 icon: String::new(),
                 coins: 0,
+                mode: None,
             })
             .collect(),
     };

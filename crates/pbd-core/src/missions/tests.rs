@@ -67,6 +67,7 @@ fn mission(id: &str, needs: &[&str], objectives: Vec<ObjectiveEntry>) -> Mission
         branch: String::new(),
         icon: String::new(),
         coins: 0,
+        mode: None,
     }
 }
 
@@ -333,7 +334,11 @@ fn the_record_round_trips_and_keeps_what_it_does_not_know() {
 #[test]
 fn the_shipped_chain_names_only_what_the_build_knows() {
     let book = shipped_book();
-    let chain = shipped_file().resolve(&shipped_catalog(&book)).unwrap();
+    // An Explorer world's tree, as it was before Survival's paths.
+    let chain = shipped_file()
+        .resolve(&shipped_catalog(&book))
+        .unwrap()
+        .for_mode(Mode::Explorer);
     assert_eq!(chain.missions.len(), 44);
     // One parent each, and only `gather` without one.
     for m in &chain.missions {
@@ -769,4 +774,464 @@ fn a_record_from_before_the_cast_was_dropped_keeps_its_fish() {
     // Read again: nothing more moves.
     progress.migrate();
     assert_eq!(progress.counts["go-fishing"], vec![2]);
+}
+
+// ---- Survival's missions and paths (`survival-mode` design 18).
+
+fn shipped_chain() -> Chain {
+    shipped_file()
+        .resolve(&shipped_catalog(&shipped_book()))
+        .unwrap()
+}
+
+/// The trunk's events, from bare hands to the fire.
+fn to_the_fire() -> Vec<Happened> {
+    let ev = Happened::new;
+    vec![
+        ev(Kind::Gather, "fibre", 8),
+        ev(Kind::Gather, "stone", 9),
+        ev(Kind::Gather, "block:dirt", 6),
+        ev(Kind::Open, "pack", 1),
+        ev(Kind::Craft, "recipe:stone-axe", 1),
+        ev(Kind::Fell, "tree", 2),
+        ev(Kind::Gather, "log", 10),
+        ev(Kind::Craft, "planks", 8),
+        ev(Kind::Craft, "rope", 2),
+        ev(Kind::Craft, "block:workbench", 1),
+        ev(Kind::Place, "block:workbench", 1),
+        ev(Kind::Craft, "tool:pickaxe", 1),
+        ev(Kind::Craft, "tool:shovel", 1),
+        ev(Kind::Craft, "block:campfire", 1),
+        ev(Kind::Place, "block:campfire", 1),
+    ]
+}
+
+const SURVIVAL_IDS: [&str; 25] = [
+    "drink",
+    "forage",
+    "cook-meal",
+    "straw",
+    "cactus",
+    "still",
+    "spear",
+    "hunt",
+    "cook-meat",
+    "dress",
+    "tan",
+    "bow",
+    "long-shot",
+    "hunting-axe",
+    "sword",
+    "fend-off",
+    "first-night",
+    "warm-up",
+    "dress-weather",
+    "cool-down",
+    "relight",
+    "put-out",
+    "long-swim",
+    "hold-breath",
+    "soft-landing",
+];
+
+/// 6.1: the shipped file's 25 survival missions are Survival's only, each
+/// on its path, and an Explorer world's tree has none of them and counts
+/// none of their deeds.
+#[test]
+fn an_explorer_world_shows_and_counts_no_survival_mission() {
+    let full = shipped_chain();
+    let survival: Vec<&Mission> = full
+        .missions
+        .iter()
+        .filter(|m| m.mode == Some(Mode::Survival))
+        .collect();
+    let ids: Vec<&str> = survival.iter().map(|m| m.id.as_str()).collect();
+    assert_eq!(ids, SURVIVAL_IDS);
+    for m in &survival {
+        assert!(
+            ["eat-drink", "hunting", "shelter", "water"].contains(&m.branch.as_str()),
+            "{}: {}",
+            m.id,
+            m.branch
+        );
+        // A path's head hangs off the fire; nothing hangs off the pack.
+        assert_ne!(m.needs, ["pack"], "{}", m.id);
+    }
+    for head in ["drink", "spear", "first-night", "long-swim"] {
+        assert_eq!(full.get(head).unwrap().needs, [PATHS_FROM], "{head}");
+    }
+    let explorer = full.for_mode(Mode::Explorer);
+    assert_eq!(explorer.missions.len(), full.missions.len() - 25);
+    assert!(explorer.missions.iter().all(|m| m.mode.is_none()));
+    let survival_tree = full.for_mode(Mode::Survival);
+    assert_eq!(survival_tree.missions.len(), full.missions.len());
+    // Every deed of Survival's, in an Explorer world past the fire, counts
+    // for nothing and opens nothing.
+    let mut progress = Progress::default();
+    for event in to_the_fire() {
+        progress.record(&explorer, &event, &none);
+    }
+    let before = progress.clone();
+    let ev = Happened::new;
+    for event in [
+        ev(Kind::Drink, "fresh", 3),
+        ev(Kind::Kill, "yard hen", 1),
+        ev(Kind::Dawn, "night", 1),
+        ev(Kind::Dive, "water", 1),
+        ev(Kind::Fall, "water", 1),
+        ev(Kind::Warm, "fire", 1),
+    ] {
+        let step = progress.record(&explorer, &event, &none);
+        assert!(step.done.is_empty(), "{event:?}");
+    }
+    assert_eq!(progress, before);
+    for id in SURVIVAL_IDS {
+        assert!(!progress.is_done(id) && !progress.counts.contains_key(id));
+        assert!(explorer.get(id).is_none(), "{id}");
+    }
+    // And no picker: no cards, nothing to choose, no path taken.
+    assert!(progress.path_cards(&explorer, Mode::Explorer).is_empty());
+    assert!(!progress.choosing(&explorer, Mode::Explorer));
+    assert!(!progress.choose_path(&explorer, Mode::Explorer, "fishing"));
+    assert_eq!(progress.path, None);
+}
+
+/// 6.1: the pack leads to the axe in both modes, and no survival mission
+/// opens before the fire.
+#[test]
+fn the_pack_leads_to_the_axe_in_both_modes() {
+    let full = shipped_chain();
+    for mode in [Mode::Explorer, Mode::Survival] {
+        let chain = full.for_mode(mode);
+        let mut progress = Progress::default();
+        for event in &to_the_fire()[..4] {
+            progress.record(&chain, event, &none);
+        }
+        assert!(progress.is_done("pack"), "{mode:?}");
+        assert_eq!(
+            progress.current(&chain).map(|m| m.id.as_str()),
+            Some("axe"),
+            "{mode:?}"
+        );
+        assert!(
+            progress.open(&chain).all(|m| m.mode.is_none()),
+            "{mode:?}: a survival mission before the fire"
+        );
+    }
+}
+
+/// 6.1: "Make a fire"'s ancestors hold every basic tool mission: the stone
+/// axe, pickaxe and shovel are all made by the fire.
+#[test]
+fn the_fires_ancestors_hold_every_basic_tool() {
+    let chain = shipped_chain().for_mode(Mode::Survival);
+    let mut ancestors = Vec::new();
+    let mut at = chain.get(PATHS_FROM).unwrap();
+    while let Some(parent) = at.needs.first() {
+        ancestors.push(parent.clone());
+        at = chain.get(parent).unwrap();
+    }
+    let made: Vec<String> = ancestors
+        .iter()
+        .flat_map(|id| chain.get(id).unwrap().objectives.iter())
+        .filter(|o| o.kind == Kind::Craft)
+        .flat_map(|o| match &o.want {
+            Want::Names(names) => names.clone(),
+            _ => Vec::new(),
+        })
+        .collect();
+    for tool in [
+        "recipe:stone-axe",
+        "recipe:stone-pickaxe",
+        "recipe:stone-shovel",
+    ] {
+        assert!(made.iter().any(|n| n == tool), "{tool} not before the fire");
+    }
+}
+
+/// 6.1: in a Survival world the fire opens every path's head: Survival's
+/// four (or, while a head waits on goods this build lacks, the mission
+/// after it) and the starter tree's own.
+#[test]
+fn a_survival_world_opens_the_paths_with_the_fire() {
+    let chain = shipped_chain().for_mode(Mode::Survival);
+    let mut progress = Progress::default();
+    let events = to_the_fire();
+    for event in &events[..events.len() - 1] {
+        progress.record(&chain, event, &none);
+    }
+    assert!(progress.path_cards(&chain, Mode::Survival).is_empty());
+    let last = events.last().unwrap();
+    let step = progress.record(&chain, last, &none);
+    assert!(step.done.iter().any(|d| d == PATHS_FROM));
+    let open: Vec<&str> = progress.open(&chain).map(|m| m.id.as_str()).collect();
+    for id in [
+        "drink",
+        "first-night",
+        "long-swim",
+        "rod",
+        "find-seeds",
+        "fence",
+        "dig-deep",
+        "build",
+    ] {
+        assert!(open.contains(&id), "{id} not open: {open:?}");
+    }
+    // The spear opens with them, unless its recipe is still to come; then
+    // the hunt it leads to is open in its place.
+    let spear = chain.get("spear").unwrap();
+    assert!(
+        open.contains(&"spear") || (spear.pending.is_some() && open.contains(&"hunt")),
+        "{open:?}"
+    );
+    // A mission waits only on goods and recipes this build lacks, never on a
+    // kind the game cannot raise.
+    for (id, why) in chain.pending() {
+        assert!(
+            why.iter().all(|w| !w.ends_with("in the game")),
+            "{id}: {why:?}"
+        );
+    }
+    let cards = progress.path_cards(&chain, Mode::Survival);
+    let branches: Vec<&str> = cards.iter().map(|c| c.branch.as_str()).collect();
+    assert_eq!(
+        branches,
+        [
+            "eat-drink",
+            "hunting",
+            "fishing",
+            "farming",
+            "shelter",
+            "water",
+            "herding",
+            "mining",
+            "light"
+        ]
+    );
+    assert!(cards.iter().all(|c| c.first.is_some() && c.done == 0));
+    assert_eq!(
+        cards[0].first.as_deref(),
+        Some("drink"),
+        "Eat and drink starts with a drink"
+    );
+    assert!(progress.choosing(&chain, Mode::Survival));
+    assert_eq!(
+        progress.offer_after(&chain, Mode::Survival, &step.done),
+        Some(Offer::FireLit)
+    );
+    assert_eq!(
+        progress.offer_after(&chain, Mode::Explorer, &step.done),
+        None
+    );
+}
+
+/// 6.2: each of Survival's kinds counts its own deed and names, and nothing
+/// else; a sip of salt water names nothing a mission may count.
+#[test]
+fn each_survival_kind_counts_its_own_deed() {
+    let rows = [
+        (Kind::Drink, "fresh|rain|bucket|still|cactus"),
+        (Kind::Kill, "yard hen|long-shot"),
+        (Kind::Dawn, "night"),
+        (Kind::Cool, "heat"),
+        (Kind::Warm, "fire"),
+        (Kind::Wear, "wool"),
+        (Kind::Dive, "water"),
+        (Kind::Fall, "water"),
+        (Kind::DriveOff, "predator"),
+        (Kind::Relight, "torch"),
+        (Kind::Douse, "fire"),
+    ];
+    for (kind, names) in rows {
+        assert!(Kind::LIVE.contains(&kind), "{kind:?} not live");
+        let file = MissionFile {
+            missions: vec![mission("m", &[], vec![objective(kind, names, 2)])],
+            ..Default::default()
+        };
+        let chain = file.resolve(&shipped_catalog(&shipped_book())).unwrap();
+        assert!(chain.get("m").unwrap().pending.is_none(), "{kind:?}");
+        let first = names.split('|').next().unwrap();
+        let mut progress = Progress::default();
+        // Another kind with the same name, and this kind with another name,
+        // count nothing.
+        let other = if kind == Kind::Dive {
+            Kind::Swim
+        } else {
+            Kind::Dive
+        };
+        progress.record(&chain, &Happened::new(other, first, 1), &none);
+        progress.record(&chain, &Happened::new(kind, "elsewhere", 1), &none);
+        assert!(progress.counts.is_empty(), "{kind:?}");
+        progress.record(&chain, &Happened::new(kind, first, 1), &none);
+        assert_eq!(progress.counts["m"], [1], "{kind:?}");
+        let step = progress.record(&chain, &Happened::new(kind, first, 1), &none);
+        assert_eq!(step.done, ["m"], "{kind:?}");
+    }
+    // Salt water is never a drink: no objective may name it.
+    let file = MissionFile {
+        missions: vec![mission("sea", &[], vec![objective(Kind::Drink, "sea", 1)])],
+        ..Default::default()
+    };
+    assert!(file.resolve(&shipped_catalog(&shipped_book())).is_err());
+    // The drink mission counts fresh water, rain, a fresh bucket and the
+    // still, and not a cactus (its own mission's) or anything salt.
+    let chain = shipped_chain();
+    let drink = &chain.get("drink").unwrap().objectives[0];
+    for name in ["fresh", "rain", "bucket", "still"] {
+        assert!(drink.want.matches(Kind::Drink, name), "{name}");
+    }
+    for name in ["cactus", "sea", "salt"] {
+        assert!(!drink.want.matches(Kind::Drink, name), "{name}");
+    }
+    // The survival rules' water sources: salt names nothing, so no sip of it
+    // is ever raised or counted.
+    use crate::survival::water::WaterSource as W;
+    for (source, named) in [
+        (W::Fresh, Some("fresh")),
+        (W::Bucket { salt: false }, Some("bucket")),
+        (W::Still, Some("still")),
+        (W::Cactus, Some("cactus")),
+        (W::Sea, None),
+        (W::Brackish, None),
+        (W::Bucket { salt: true }, None),
+    ] {
+        assert_eq!(drink_name(source), named, "{source:?}");
+    }
+}
+
+/// A tree of paths for the picker: the fire, then `a` (two missions), `b`
+/// (whose second waits on `c`'s), and `c`.
+fn path_chain() -> Chain {
+    let mut rows = vec![
+        mission(
+            "fire",
+            &[],
+            vec![objective(Kind::Place, "block:campfire", 1)],
+        ),
+        mission("a1", &["fire"], vec![objective(Kind::Drink, "fresh", 1)]),
+        mission("a2", &["a1"], vec![objective(Kind::Dawn, "night", 1)]),
+        mission("b1", &["fire"], vec![objective(Kind::Dive, "water", 1)]),
+        mission("b2", &["b1"], vec![objective(Kind::Fall, "water", 1)]),
+        mission("c1", &["fire"], vec![objective(Kind::Douse, "fire", 1)]),
+    ];
+    rows[4].after = vec!["c1".into()];
+    for (row, branch) in rows.iter_mut().zip(["trunk", "a", "a", "b", "b", "c"]) {
+        row.branch = branch.into();
+    }
+    MissionFile {
+        missions: rows,
+        ..Default::default()
+    }
+    .resolve(&shipped_catalog(&shipped_book()))
+    .unwrap()
+}
+
+/// 6.5: a chosen path's first open mission is Now and the HUD's goal; when
+/// it is done Now moves down the path; a finished path leaves the picker
+/// and offers it again; a path whose next waits keeps a card naming what it
+/// waits on; with no path open Now falls back to the file's first open one.
+#[test]
+fn a_path_is_now_until_it_runs_out() {
+    let chain = path_chain();
+    let ev = Happened::new;
+    let s = Mode::Survival;
+    let mut p = Progress::default();
+    let step = p.record(&chain, &ev(Kind::Place, "block:campfire", 1), &none);
+    assert_eq!(p.offer_after(&chain, s, &step.done), Some(Offer::FireLit));
+    // Before a pick: the first open mission, and a choice due.
+    assert_eq!(p.focused(&chain).map(|m| m.id.as_str()), Some("a1"));
+    assert!(p.choosing(&chain, s));
+    // A path with nothing open cannot be picked.
+    assert!(!p.choose_path(&chain, s, "nowhere"));
+    // Picking `b` makes its first mission Now, over the file's order and
+    // over a focus picked on the tree.
+    p.focus = Some("a1".into());
+    assert!(p.choose_path(&chain, s, "b"));
+    assert_eq!(p.focus, None);
+    assert_eq!(p.path_now(&chain).map(|m| m.id.as_str()), Some("b1"));
+    assert_eq!(p.focused(&chain).map(|m| m.id.as_str()), Some("b1"));
+    assert!(!p.choosing(&chain, s));
+    // The others still count.
+    p.record(&chain, &ev(Kind::Drink, "fresh", 1), &none);
+    assert!(p.is_done("a1"));
+    assert_eq!(p.focused(&chain).map(|m| m.id.as_str()), Some("b1"));
+    // `b1` done: `b2` waits on `c1`, so the path has nothing open; the
+    // picker is offered again and `b` keeps a card that names `c1`.
+    let step = p.record(&chain, &ev(Kind::Dive, "water", 1), &none);
+    assert_eq!(step.done, ["b1"]);
+    assert_eq!(p.path_now(&chain), None);
+    assert_eq!(
+        p.offer_after(&chain, s, &step.done),
+        Some(Offer::PathWaits("b".into(), "c1".into()))
+    );
+    let cards = p.path_cards(&chain, s);
+    let b = cards.iter().find(|c| c.branch == "b").unwrap();
+    assert_eq!(
+        (b.first.as_deref(), b.waits_on.as_deref()),
+        (None, Some("c1"))
+    );
+    assert_eq!((b.done, b.total), (1, 2));
+    assert!(p.choosing(&chain, s));
+    // Meanwhile Now falls back to the first open mission in the file.
+    assert_eq!(p.focused(&chain).map(|m| m.id.as_str()), Some("a2"));
+    // Pick `a`; finish it: the path is done, left off the picker.
+    assert!(p.choose_path(&chain, s, "a"));
+    let step = p.record(&chain, &ev(Kind::Dawn, "night", 1), &none);
+    assert_eq!(
+        p.offer_after(&chain, s, &step.done),
+        Some(Offer::PathDone("a".into()))
+    );
+    let cards = p.path_cards(&chain, s);
+    assert!(cards.iter().all(|c| c.branch != "a"), "{cards:?}");
+    // `c1` done opens `b2` again; a deed off the chosen path offers nothing.
+    let step = p.record(&chain, &ev(Kind::Douse, "fire", 1), &none);
+    assert_eq!(step.done, ["c1"]);
+    assert_eq!(p.offer_after(&chain, s, &step.done), None);
+    assert!(p.choose_path(&chain, s, "b"));
+    assert_eq!(p.focused(&chain).map(|m| m.id.as_str()), Some("b2"));
+    // All done: no cards, nothing to choose, no goal.
+    p.record(&chain, &ev(Kind::Fall, "water", 1), &none);
+    assert!(p.path_cards(&chain, s).is_empty());
+    assert!(!p.choosing(&chain, s));
+    assert_eq!(p.focused(&chain), None);
+}
+
+/// 6.5: the chosen path is saved in the `missions` record (schema 2), and a
+/// schema 1 record, which has none, reads as no path.
+#[test]
+fn the_path_is_saved_and_an_older_record_reads_none() {
+    assert_eq!(MISSIONS_SCHEMA, 2);
+    let old = r#"{"done":["gather","pack"],"counts":{"axe":[0]},"focus":"axe"}"#;
+    let read: Progress = serde_json::from_str(old).unwrap();
+    assert_eq!(read.path, None);
+    assert_eq!(read.focus.as_deref(), Some("axe"));
+    // A record with no path writes none, as schema 1 did.
+    assert!(!serde_json::to_string(&read).unwrap().contains("path"));
+    let mut chosen = read.clone();
+    chosen.path = Some("hunting".into());
+    let back: Progress = serde_json::from_str(&serde_json::to_string(&chosen).unwrap()).unwrap();
+    assert_eq!(back.path.as_deref(), Some("hunting"));
+}
+
+/// A mission every world has may not wait on one of a single mode, so an
+/// Explorer tree is whole without Survival's.
+#[test]
+fn a_mission_for_every_world_never_waits_on_one_mode() {
+    let mut rows = vec![
+        mission("a", &[], vec![objective(Kind::Dawn, "night", 1)]),
+        mission("b", &["a"], vec![objective(Kind::Dawn, "night", 1)]),
+    ];
+    rows[0].mode = Some(Mode::Survival);
+    let file = MissionFile {
+        missions: rows,
+        ..Default::default()
+    };
+    let err = file.resolve(&shipped_catalog(&shipped_book())).unwrap_err();
+    assert!(err.contains("another mode"), "{err}");
+}
+#[test]
+fn zz_print_pending() {
+    for (id, why) in shipped_chain().pending() {
+        println!("PENDING {id}: {why:?}");
+    }
 }

@@ -38,6 +38,7 @@ static NOTHING: Progress = Progress {
     counts: BTreeMap::new(),
     seen: BTreeMap::new(),
     focus: None,
+    path: None,
 };
 
 /// The tree the tab shows, and its progress.
@@ -399,10 +400,16 @@ pub fn rezoom(pan: Vec2, at: Vec2, from: &Level, to: &Level) -> Vec2 {
 }
 
 /// The branches in M33's order, with the keys of the names drawn over them.
-pub const BRANCHES: [(&str, &str); 15] = [
+pub const BRANCHES: [(&str, &str); 19] = [
     ("trunk", "mission_tree.branch.hands_tools"),
+    // Survival's paths (`survival-mode` design 18), in the picker's order
+    // among the starter tree's; an Explorer tree has none of them.
+    ("eat-drink", "mission_tree.branch.eat_drink"),
+    ("hunting", "mission_tree.branch.hunting"),
     ("fishing", "mission_tree.branch.fishing"),
     ("farming", "mission_tree.branch.farming"),
+    ("shelter", "mission_tree.branch.shelter_weather"),
+    ("water", "mission_tree.branch.in_the_water"),
     ("herding", "mission_tree.branch.herding"),
     ("mining", "mission_tree.branch.mining_smelting"),
     ("cooking", "mission_tree.branch.cooking"),
@@ -426,7 +433,7 @@ fn branch_rank(key: &str) -> usize {
         .unwrap_or(BRANCHES.len())
 }
 
-fn branch_name(key: &str) -> Localized {
+pub(super) fn branch_name(key: &str) -> Localized {
     BRANCHES
         .iter()
         .find(|(k, _)| *k == key)
@@ -725,6 +732,8 @@ fn spawn_labels(world: &mut ChildSpawnerCommands, kit: &UiKit, chain: &Chain) {
                     ..default()
                 },
                 BranchLabel(first),
+                // Lit round when its path is the chosen one (`path_picker`).
+                Outline::new(px(2), px(1), Color::NONE),
             ))
             .with_children(|plaque| {
                 plaque.spawn(KitText::new(
@@ -1008,20 +1017,23 @@ pub fn switch_tree(
     screen: Res<Screen>,
     layers: Query<Entity, With<TreeLayer>>,
     mut view: ResMut<TreeView>,
-    mut built: Local<Option<ShownTree>>,
+    mut built: Local<Option<(ShownTree, usize)>>,
 ) {
     let want = if trees.town_open() {
         *trees.shown
     } else {
         ShownTree::Starter
     };
+    // The starter tree is a world's mode's (`survival-mode` design 18): a
+    // world of another mode opened is a tree to draw again.
+    let missions = trees.starter_chain.0.missions.len();
     if built.is_none() {
-        *built = Some(ShownTree::Starter);
+        *built = Some((ShownTree::Starter, missions));
     }
-    if *built == Some(want) {
+    if *built == Some((want, missions)) {
         return;
     }
-    *built = Some(want);
+    *built = Some((want, missions));
     for layer in &layers {
         commands.entity(layer).despawn();
     }
@@ -1447,8 +1459,10 @@ pub fn steer(
     if !next.placed || (!next.touched && moved) {
         // Open on the current mission, until the player moves the view.
         let at = layout(tree);
+        // The mission the player is on: a pick on the tree, the chosen
+        // path's Now (`survival-mode` design 18), else the first open one.
         let current = progress
-            .current(tree)
+            .focused(tree)
             .and_then(|m| tree.missions.iter().position(|n| n.id == m.id))
             .unwrap_or(0);
         if !next.placed

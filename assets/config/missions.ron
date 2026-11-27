@@ -32,12 +32,28 @@
 // as not in this build, and met for the missions that need it. Any other
 // unknown name is an error.
 //
+// `mode: survival` puts a mission in Survival worlds only (`survival-mode`
+// design 18): an Explorer world's tree is the rest, as before. A mission for
+// every world never waits on one for a single mode. In a Survival world each
+// branch off the fire is a path the player picks.
+//
 // A mission's `id` is saved in the world's `missions` record: append-only,
 // never renamed. The old line's ids keep their place in the tree; an id the
 // tree dropped (`metal-tool`) stays in an old world's record, unread.
 //
 (
-    awaited: [],
+    // Survival's goods, recipes, stations and game (`survival-mode` 4.10 and
+    // 4.11), awaited until they are built: a mission naming only these is
+    // pending.
+    awaited: [
+        "recipe:straw", "recipe:stone-spear", "recipe:bow", "recipe:stone-arrows",
+        "recipe:bone-arrows", "recipe:bronze-hunting-axe", "recipe:bronze-sword",
+        "block:still", "hide", "straw-hat", "wool-cloak", "hare", "ridge goat",
+        "straw", "still", "meat-stew", "tanning-rack", "bow",
+        "stone-arrows", "bone-arrows", "bronze-hunting-axe", "bronze-sword",
+        "bronze-spear", "bronze-arrows", "iron-sword", "iron-spear",
+        "iron-hunting-axe", "bedroll",
+    ],
     missions: [
         // ---- 0. The trunk: hands to tools, and a fire.
         (
@@ -480,6 +496,281 @@
             objectives: [
                 (kind: board, what: "boat", count: 1),
                 (kind: travel, what: "boat", count: 100),
+            ],
+        ),
+        // ---- Survival's paths (`survival-mode` design 18): in Survival worlds
+        // only (`mode: survival`), each hanging off the fire. A sip of salt
+        // water is never a `drink` (design 15).
+        // -- Eat and drink.
+        (
+            id: "drink",
+            branch: "eat-drink",
+            icon: "goods/water-bucket",
+            mode: survival,
+            needs: ["fire"],
+            objectives: [
+                (kind: drink, what: "fresh|rain|bucket|still", count: 3),
+            ],
+            unlocks: ["straw", "still"],
+        ),
+        (
+            id: "forage",
+            branch: "eat-drink",
+            icon: "goods/apple",
+            mode: survival,
+            needs: ["drink"],
+            objectives: [
+                (kind: eat, what: "apple|cherry|mango|marula|papaya|pear|plum|egg", count: 2),
+            ],
+        ),
+        (
+            id: "cook-meal",
+            branch: "eat-drink",
+            icon: "goods/fried-egg",
+            mode: survival,
+            needs: ["forage"],
+            objectives: [
+                (kind: cook, what: "any", count: 1),
+                (kind: eat, what: "any", count: 1),
+            ],
+        ),
+        (
+            id: "straw",
+            branch: "eat-drink",
+            icon: "goods/fibre",
+            mode: survival,
+            needs: ["drink"],
+            objectives: [
+                (kind: craft, what: "recipe:straw", count: 1),
+            ],
+        ),
+        (
+            id: "cactus",
+            branch: "eat-drink",
+            icon: "goods/fibre",
+            mode: survival,
+            needs: ["straw"],
+            objectives: [
+                (kind: drink, what: "cactus", count: 3),
+            ],
+            unlocks: ["straw-hat"],
+        ),
+        (
+            id: "still",
+            branch: "eat-drink",
+            icon: "goods/bucket",
+            mode: survival,
+            needs: ["drink"],
+            objectives: [
+                (kind: place, what: "block:still", count: 1),
+                (kind: drink, what: "still", count: 3),
+            ],
+        ),
+        // -- Hunting. The spear's recipe is named by no mission: open from the
+        // start of a Survival world.
+        (
+            id: "spear",
+            branch: "hunting",
+            icon: "goods/log",
+            mode: survival,
+            needs: ["fire"],
+            objectives: [
+                (kind: craft, what: "recipe:stone-spear", count: 1),
+            ],
+        ),
+        (
+            id: "hunt",
+            branch: "hunting",
+            icon: "missions/yard-hen",
+            mode: survival,
+            needs: ["spear"],
+            objectives: [
+                (kind: kill, what: "yard hen|hare|ridge goat", count: 1),
+            ],
+        ),
+        (
+            id: "cook-meat",
+            branch: "hunting",
+            icon: "goods/roast-meat",
+            mode: survival,
+            needs: ["hunt"],
+            objectives: [
+                (kind: cook, what: "roast-meat", count: 2),
+            ],
+            unlocks: ["meat-stew"],
+        ),
+        (
+            id: "dress",
+            branch: "hunting",
+            icon: "goods/leather",
+            mode: survival,
+            needs: ["hunt"],
+            objectives: [
+                (kind: gather, what: "hide", count: 1),
+            ],
+            unlocks: ["tanning-rack"],
+        ),
+        (
+            id: "tan",
+            branch: "hunting",
+            icon: "goods/leather",
+            mode: survival,
+            needs: ["dress"],
+            objectives: [
+                (kind: craft, what: "leather", count: 1),
+            ],
+            unlocks: ["bow", "stone-arrows"],
+        ),
+        (
+            id: "bow",
+            branch: "hunting",
+            icon: "goods/planks",
+            mode: survival,
+            needs: ["tan"],
+            objectives: [
+                (kind: craft, what: "recipe:bow", count: 1),
+                (kind: craft, what: "recipe:stone-arrows|recipe:bone-arrows", count: 2),
+            ],
+            unlocks: ["bone-arrows"],
+        ),
+        (
+            id: "long-shot",
+            branch: "hunting",
+            icon: "goods/planks",
+            mode: survival,
+            needs: ["bow"],
+            objectives: [
+                (kind: kill, what: "long-shot", count: 1),
+            ],
+            unlocks: ["bronze-hunting-axe"],
+        ),
+        (
+            id: "hunting-axe",
+            branch: "hunting",
+            icon: "tools/bronze-axe",
+            mode: survival,
+            needs: ["long-shot"],
+            after: ["smelt"],
+            objectives: [
+                (kind: craft, what: "recipe:bronze-hunting-axe", count: 1),
+                (kind: gather, what: "hide", count: 1),
+            ],
+            unlocks: ["bronze-sword", "bronze-spear", "bronze-arrows"],
+        ),
+        (
+            id: "sword",
+            branch: "hunting",
+            icon: "goods/bronze-ingot",
+            mode: survival,
+            needs: ["hunting-axe"],
+            objectives: [
+                (kind: craft, what: "recipe:bronze-sword", count: 1),
+            ],
+            unlocks: ["iron-sword", "iron-spear", "iron-hunting-axe"],
+        ),
+        (
+            id: "fend-off",
+            branch: "hunting",
+            icon: "goods/bronze-ingot",
+            mode: survival,
+            needs: ["sword"],
+            objectives: [
+                (kind: drive_off, what: "predator", count: 1),
+            ],
+        ),
+        // -- Shelter and weather.
+        (
+            id: "first-night",
+            branch: "shelter",
+            icon: "lights/campfire",
+            mode: survival,
+            needs: ["fire"],
+            objectives: [
+                (kind: dawn, what: "night", count: 1),
+            ],
+            unlocks: ["bedroll"],
+        ),
+        (
+            id: "warm-up",
+            branch: "shelter",
+            icon: "lights/campfire",
+            mode: survival,
+            needs: ["first-night"],
+            objectives: [
+                (kind: warm, what: "fire", count: 1),
+            ],
+            unlocks: ["wool-cloak"],
+        ),
+        (
+            id: "dress-weather",
+            branch: "shelter",
+            icon: "goods/wool",
+            mode: survival,
+            needs: ["warm-up"],
+            objectives: [
+                (kind: wear, what: "straw-hat|wool-cloak", count: 1),
+            ],
+        ),
+        (
+            id: "cool-down",
+            branch: "shelter",
+            icon: "goods/water-bucket",
+            mode: survival,
+            needs: ["first-night"],
+            objectives: [
+                (kind: cool, what: "heat", count: 1),
+            ],
+        ),
+        (
+            id: "relight",
+            branch: "shelter",
+            icon: "lights/torch",
+            mode: survival,
+            needs: ["first-night"],
+            after: ["torch"],
+            objectives: [
+                (kind: relight, what: "torch", count: 1),
+            ],
+        ),
+        (
+            id: "put-out",
+            branch: "shelter",
+            icon: "goods/water-bucket",
+            mode: survival,
+            needs: ["relight"],
+            objectives: [
+                (kind: douse, what: "fire", count: 3),
+            ],
+        ),
+        // -- In the water.
+        (
+            id: "long-swim",
+            branch: "water",
+            icon: "water_life/sea_otter",
+            mode: survival,
+            needs: ["fire"],
+            objectives: [
+                (kind: swim, what: "water", count: 100),
+            ],
+        ),
+        (
+            id: "hold-breath",
+            branch: "water",
+            icon: "water_life/sea_otter",
+            mode: survival,
+            needs: ["long-swim"],
+            objectives: [
+                (kind: dive, what: "water", count: 1),
+            ],
+        ),
+        (
+            id: "soft-landing",
+            branch: "water",
+            icon: "water_life/sea_otter",
+            mode: survival,
+            needs: ["hold-breath"],
+            objectives: [
+                (kind: fall, what: "water", count: 1),
             ],
         ),
     ],

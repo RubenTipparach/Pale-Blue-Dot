@@ -214,6 +214,7 @@ impl Job {
             branch: String::new(),
             icon: String::new(),
             coins: 0,
+            mode: None,
         }
     }
 

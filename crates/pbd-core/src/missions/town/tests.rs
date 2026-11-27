@@ -397,6 +397,7 @@ fn a_town_unlock_waits_for_its_mission_across_both_trees() {
         branch: String::new(),
         icon: String::new(),
         coins: 10,
+        mode: None,
     };
     let town = MissionFile {
         crew: None,

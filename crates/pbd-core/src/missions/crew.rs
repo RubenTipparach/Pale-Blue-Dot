@@ -130,6 +130,7 @@ impl CrewFile {
                     branch: "crew".into(),
                     icon: m.icon.clone(),
                     coins: 0,
+                    mode: None,
                 })
                 .collect(),
             crew: None,

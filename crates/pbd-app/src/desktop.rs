@@ -28,6 +28,7 @@ mod mission_tree;
 mod missions;
 mod overlay_ui;
 mod pack;
+mod path_picker;
 mod planner;
 mod repro;
 mod scene;
@@ -444,6 +445,14 @@ pub struct Launch {
     /// `town-missions-tree` design 6).
     pub tree_town: bool,
     pub town_focus: Option<String>,
+    /// `--mission-mode survival`: the missions follow a Survival world's
+    /// tree whatever the world's own mode (a capture instrument,
+    /// `survival-mode` 6.5, until worlds carry their mode).
+    pub mission_mode: Option<pbd_core::missions::Mode>,
+    /// `--pick-path <branch>`: once the path picker is up, that path is
+    /// picked as a click on its card would (a capture instrument,
+    /// `survival-mode` 6.5).
+    pub pick_path: Option<String>,
     /// `--tree-jobs`: the Missions tab shows the taken jobs once the town
     /// tree is open; `--track-job`: the first job taken is tracked, as its
     /// TRACK would (capture instruments, playtest-fixes design 2).
@@ -631,6 +640,8 @@ impl Launch {
             tree_hover: None,
             tree_town: false,
             town_focus: None,
+            mission_mode: None,
+            pick_path: None,
             tree_jobs: false,
             track_job: false,
             no_readout: false,
@@ -923,6 +934,22 @@ impl Launch {
                     result.town_focus = Some(
                         args.get(i)
                             .expect("--town-focus takes a town mission id")
+                            .clone(),
+                    );
+                }
+                "--mission-mode" => {
+                    i += 1;
+                    result.mission_mode = Some(match args.get(i).map(String::as_str) {
+                        Some("survival") => pbd_core::missions::Mode::Survival,
+                        Some("explorer") => pbd_core::missions::Mode::Explorer,
+                        _ => panic!("--mission-mode takes survival or explorer"),
+                    });
+                }
+                "--pick-path" => {
+                    i += 1;
+                    result.pick_path = Some(
+                        args.get(i)
+                            .expect("--pick-path takes a path's branch id")
                             .clone(),
                     );
                 }
@@ -2002,6 +2029,7 @@ pub fn run(args: &[String]) {
     // The starter missions (`starter-missions`): the chain, its counting
     // and the player's record; the HUD line and the tab are `missions`.
     .add_plugins(pbd_app::missions::MissionsPlugin)
+    .insert_resource(pbd_app::missions::ForcedMode(launch.mission_mode))
     // Coins, trade and town jobs (`townsfolk` design 5 to 12): the rules'
     // state and counting, then the coin count and the talk, trade and
     // board panels.
@@ -2038,6 +2066,25 @@ pub fn run(args: &[String]) {
             showcase::hide_readout.run_if(|launch: Res<Launch>| launch.no_readout),
             missions::night_watch.run_if(pbd_app::loading::ready),
             missions::about_watch.run_if(pbd_app::loading::ready),
+        ),
+    )
+    // Survival's paths (`survival-mode` design 18): the picker over the tree,
+    // and the watches that raise the deeds the game already sees.
+    .init_resource::<path_picker::Picker>()
+    .add_systems(
+        Update,
+        (
+            (
+                path_picker::offer,
+                path_picker::press,
+                path_picker::paint,
+                path_picker::light_lane,
+            )
+                .chain()
+                .after(mission_tree::hover_tip),
+            path_picker::scripted_pick.run_if(pbd_app::loading::ready),
+            missions::dawn_watch.run_if(pbd_app::loading::ready),
+            missions::water_watch.run_if(pbd_app::loading::ready),
         ),
     )
     // The world, loaded before the planet is built: `create_planet` reads its
@@ -2164,6 +2211,7 @@ pub fn run(args: &[String]) {
                     missions::spawn,
                     breeding::spawn,
                     mission_tree::spawn,
+                    path_picker::spawn,
                 ),
                 boat::spawn,
             )

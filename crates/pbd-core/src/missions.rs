@@ -26,7 +26,9 @@ pub mod town;
 /// The record kind progress is stored as, its schema and its one id (the
 /// player's).
 pub const MISSIONS_KIND: &str = "missions";
-pub const MISSIONS_SCHEMA: u32 = 1;
+/// Schema 2 (`survival-mode` design 18) adds the chosen path, `path`; a
+/// schema 1 record reads as no path.
+pub const MISSIONS_SCHEMA: u32 = 2;
 pub const MISSIONS_ID: u64 = 0;
 
 /// What an objective counts. Saved in the chain's file by its lower-case
@@ -137,6 +139,43 @@ pub enum Kind {
     Hitch,
     /// A stack put in a chest, by the item's name (`storage-chests` 9).
     Store,
+    // ---- `survival-mode` design 18: Survival's kinds. Each is a [`Happened`]
+    // its system raises as `pbd_app::missions::Did`; the ones marked "hook"
+    // wait for the survival mechanics to raise them.
+    /// A sip of fresh water, by its source: `fresh` (a river, a lake, a
+    /// swamp pool), `rain`, `bucket` (a bucket of fresh water), `still`,
+    /// `cactus` (through a straw). Salt water is never raised (design 15).
+    /// Hook: the drinking (`survival-mode` 6.6).
+    Drink,
+    /// An animal killed: its roster name in lower case, and `long-shot`
+    /// beside it for a kill by an arrow from 20 m or more. Hook: hunting
+    /// (`survival-mode` 3.8).
+    Kill,
+    /// The clock reached 06:00 with the player in the world since before
+    /// 20:00 and not dead since: `night`. Raised by the dawn watch.
+    Dawn,
+    /// The body cooled from hot to fine: `heat`. Hook: body temperature
+    /// (`survival-mode` 3.6).
+    Cool,
+    /// The body warmed from cold to fine: `fire` within a fire's reach,
+    /// `other` elsewhere. Hook: body temperature.
+    Warm,
+    /// A worn thing put on, by its good's code. Hook: the worn slots
+    /// (`survival-mode` 4.9).
+    Wear,
+    /// Surfaced after 15 s or more under water: `water`. Raised by the
+    /// survival watch.
+    Dive,
+    /// A fall of 10 layers or more: `water` into deep water, `ground` onto
+    /// land. Raised by the survival watch.
+    Fall,
+    /// A predator made to flee, or killed: `predator`. Hook: predators
+    /// (`survival-mode` 4.3).
+    DriveOff,
+    /// A torch the rain put out lit again: `torch`. Hook: `wildfire`.
+    Relight,
+    /// A burning cell put out with water: `fire`. Hook: `wildfire`.
+    Douse,
 }
 
 impl Kind {
@@ -146,7 +185,13 @@ impl Kind {
     /// by the paving (`townsfolk` design 39 to 41, 45), `Haul` and `Hitch`
     /// by the carts (`land-transport` design 11), `Sit`, `Lie` and `Loot`
     /// by the furniture (`furniture` design 12).
-    pub const LIVE: [Kind; 48] = [
+    ///
+    /// Survival's kinds are live too (`survival-mode` design 18): their
+    /// missions are in Survival worlds only, and the systems that raise
+    /// `Drink`, `Kill`, `Cool`, `Warm`, `Wear`, `DriveOff`, `Relight` and
+    /// `Douse` come with the survival mechanics; until then those missions
+    /// stay open and uncounted rather than hidden.
+    pub const LIVE: [Kind; 59] = [
         Kind::Gather,
         Kind::Craft,
         Kind::Place,
@@ -195,6 +240,17 @@ impl Kind {
         Kind::Lie,
         Kind::Loot,
         Kind::Store,
+        Kind::Drink,
+        Kind::Kill,
+        Kind::Dawn,
+        Kind::Cool,
+        Kind::Warm,
+        Kind::Wear,
+        Kind::Dive,
+        Kind::Fall,
+        Kind::DriveOff,
+        Kind::Relight,
+        Kind::Douse,
     ];
 
     /// Whether this kind counts each name once in a mission (a fish's kind,
@@ -223,6 +279,38 @@ impl Happened {
             count,
         }
     }
+}
+
+/// What a sip from `source` names for a `drink` objective (`survival-mode`
+/// design 15): none for salt water, which the missions never count.
+pub fn drink_name(source: crate::survival::water::WaterSource) -> Option<&'static str> {
+    use crate::survival::water::WaterSource;
+    match source {
+        WaterSource::Fresh => Some("fresh"),
+        WaterSource::Bucket { salt: false } => Some("bucket"),
+        WaterSource::Cactus => Some("cactus"),
+        WaterSource::Still => Some("still"),
+        WaterSource::Sea | WaterSource::Brackish | WaterSource::Bucket { salt: true } => None,
+    }
+}
+
+impl From<crate::survival::WorldMode> for Mode {
+    fn from(mode: crate::survival::WorldMode) -> Self {
+        match mode {
+            crate::survival::WorldMode::Explorer => Mode::Explorer,
+            crate::survival::WorldMode::Survival => Mode::Survival,
+        }
+    }
+}
+
+/// A world's mode as the missions read it (`survival-mode` design 1 and
+/// 18): which missions a world's tree holds. Every older world is Explorer.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Mode {
+    #[default]
+    Explorer,
+    Survival,
 }
 
 /// One objective as the file writes it.
@@ -277,6 +365,24 @@ pub struct MissionEntry {
     /// starter tree pays none.
     #[serde(default, skip_serializing_if = "is_nought")]
     pub coins: u32,
+    /// The one mode whose worlds have it (`mode: survival`); none for every
+    /// world. An Explorer world never shows or counts a Survival mission.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "one_mode",
+        serialize_with = "write_mode"
+    )]
+    pub mode: Option<Mode>,
+}
+
+/// `mode: survival` in the file, read as the one mode.
+fn one_mode<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Mode>, D::Error> {
+    Mode::deserialize(d).map(Some)
+}
+
+fn write_mode<S: serde::Serializer>(mode: &Option<Mode>, s: S) -> Result<S::Ok, S::Error> {
+    mode.unwrap_or_default().serialize(s)
 }
 
 fn is_nought(n: &u32) -> bool {
@@ -392,6 +498,8 @@ pub struct Mission {
     pub icon: String,
     /// The coins its completion pays.
     pub coins: u32,
+    /// The one mode whose worlds have it; none for every world.
+    pub mode: Option<Mode>,
 }
 
 /// What the build knows, for resolving names: built by the app from its
@@ -520,6 +628,18 @@ impl Catalog {
             Kind::Pave => matches!(name, "gravel" | "joined"),
             Kind::Haul => name == "cart",
             Kind::Hitch => name == "horse",
+            // Fresh water only: a sip of salt water is never raised.
+            Kind::Drink => matches!(name, "fresh" | "rain" | "bucket" | "still" | "cactus"),
+            Kind::Kill => self.animals.contains(name) || name == "long-shot",
+            Kind::Dawn => name == "night",
+            Kind::Cool => name == "heat",
+            Kind::Warm => matches!(name, "fire" | "other"),
+            Kind::Wear => item(),
+            Kind::Dive => name == "water",
+            Kind::Fall => matches!(name, "water" | "ground"),
+            Kind::DriveOff => name == "predator",
+            Kind::Relight => name == "torch",
+            Kind::Douse => name == "fire",
             Kind::Gather
             | Kind::Store
             | Kind::Find
@@ -664,6 +784,7 @@ impl MissionFile {
                 branch: entry.branch.clone(),
                 icon: entry.icon.clone(),
                 coins: entry.coins,
+                mode: entry.mode,
             });
         }
         for m in &missions {
@@ -672,12 +793,33 @@ impl MissionFile {
                     return Err(format!("{}: after {gate:?}, which is no mission", m.id));
                 }
             }
+            // A mission every world has never waits on one only some have,
+            // so a mode's tree is whole without the others' missions.
+            for need in m.needs.iter().chain(&m.after) {
+                let other = missions.iter().find(|n| &n.id == need).and_then(|n| n.mode);
+                if other.is_some() && other != m.mode {
+                    return Err(format!("{}: waits on {need:?}, of another mode", m.id));
+                }
+            }
         }
         Ok(Chain { missions })
     }
 }
 
 impl Chain {
+    /// The tree a world of `mode` has: every mission for every world, and
+    /// those for its own mode, in the file's order.
+    pub fn for_mode(&self, mode: Mode) -> Chain {
+        Chain {
+            missions: self
+                .missions
+                .iter()
+                .filter(|m| m.mode.is_none_or(|own| own == mode))
+                .cloned()
+                .collect(),
+        }
+    }
+
     pub fn get(&self, id: &str) -> Option<&Mission> {
         self.missions.iter().find(|m| m.id == id)
     }
@@ -845,6 +987,11 @@ pub struct Progress {
     /// done. Absent from a record written before it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub focus: Option<String>,
+    /// The path picked in a Survival world (`survival-mode` design 18): a
+    /// branch id. Absent from a schema 1 record, and from every Explorer
+    /// world's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
 }
 
 impl Progress {
@@ -883,12 +1030,13 @@ impl Progress {
     }
 
     /// The one mission the HUD shows: the focus while it is open, else the
-    /// first open one.
+    /// chosen path's first open mission, else the first open one.
     pub fn focused<'a>(&'a self, chain: &'a Chain) -> Option<&'a Mission> {
         self.focus
             .as_deref()
             .and_then(|id| chain.missions.iter().find(|m| m.id == id))
             .filter(|m| self.standing(chain, m) == Standing::Open)
+            .or_else(|| self.path_now(chain))
             .or_else(|| self.current(chain))
     }
 
@@ -1098,6 +1246,188 @@ impl Progress {
                 .map(|(o, c)| format!("{} {c}/{}", o.label, o.count))
                 .collect();
             format!("{}: {}", mission.title, parts.join(", "))
+        })
+    }
+}
+
+// ---- The paths after the fire (`survival-mode` design 18).
+
+/// The mission whose completion opens the paths.
+pub const PATHS_FROM: &str = "fire";
+
+/// The paths in the order the picker lays them out (M33 version 11); a
+/// branch not named here follows them, in the file's order.
+pub const PATH_ORDER: [&str; 11] = [
+    "eat-drink",
+    "hunting",
+    "fishing",
+    "farming",
+    "shelter",
+    "water",
+    "herding",
+    "mining",
+    "light",
+    "cooking",
+    "about",
+];
+
+/// Why the picker is offered now.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Offer {
+    /// "Make a fire" was just finished.
+    FireLit,
+    /// The chosen path has nothing left.
+    PathDone(String),
+    /// The chosen path's next mission waits on this mission of another
+    /// path.
+    PathWaits(String, String),
+}
+
+/// One path's card in the picker.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PathCard {
+    /// The branch id.
+    pub branch: String,
+    /// Its first open mission, in the file's order.
+    pub first: Option<String>,
+    /// When nothing is open on a started path: the mission of another path
+    /// it waits on.
+    pub waits_on: Option<String>,
+    /// Its missions done, and all of them (pending ones left out).
+    pub done: usize,
+    pub total: usize,
+}
+
+/// Every path of `chain`: each branch but the trunk, in the picker's order.
+pub fn paths(chain: &Chain) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for m in &chain.missions {
+        if m.branch != "trunk" && !m.branch.is_empty() && !out.contains(&m.branch) {
+            out.push(m.branch.clone());
+        }
+    }
+    let rank = |b: &String| {
+        PATH_ORDER
+            .iter()
+            .position(|p| p == b)
+            .unwrap_or(PATH_ORDER.len())
+    };
+    out.sort_by_key(rank);
+    out
+}
+
+impl Progress {
+    /// Whether the paths are open: "Make a fire" is done.
+    pub fn paths_open(&self, chain: &Chain) -> bool {
+        chain.get(PATHS_FROM).is_some() && self.is_done(PATHS_FROM)
+    }
+
+    /// The first open mission of `branch`, in the file's order.
+    pub fn first_open_of<'a>(&self, chain: &'a Chain, branch: &str) -> Option<&'a Mission> {
+        chain
+            .missions
+            .iter()
+            .find(|m| m.branch == branch && self.standing(chain, m) == Standing::Open)
+    }
+
+    /// The chosen path's first open mission: Now, while there is one.
+    pub fn path_now<'a>(&self, chain: &'a Chain) -> Option<&'a Mission> {
+        self.first_open_of(chain, self.path.as_deref()?)
+    }
+
+    /// The card of `branch`: none for a path finished, or one with nothing
+    /// open that has not been started.
+    pub fn path_card(&self, chain: &Chain, branch: &str) -> Option<PathCard> {
+        let own: Vec<&Mission> = chain
+            .missions
+            .iter()
+            .filter(|m| m.branch == branch && m.pending.is_none())
+            .collect();
+        let done = own.iter().filter(|m| self.is_done(&m.id)).count();
+        if own.is_empty() || done == own.len() {
+            return None;
+        }
+        let first = self.first_open_of(chain, branch).map(|m| m.id.clone());
+        let waits_on = if first.is_none() {
+            if done == 0 {
+                return None;
+            }
+            // The first mission whose own parent is done: what holds it shut
+            // is a gate of another path.
+            own.iter()
+                .filter(|m| !self.is_done(&m.id))
+                .filter(|m| m.needs.iter().all(|n| self.is_done(n)))
+                .flat_map(|m| m.needs.iter().chain(&m.after))
+                .find(|gate| !self.is_done(gate))
+                .cloned()
+        } else {
+            None
+        };
+        Some(PathCard {
+            branch: branch.to_string(),
+            first,
+            waits_on,
+            done,
+            total: own.len(),
+        })
+    }
+
+    /// The picker's cards: every path with a mission open, and every
+    /// started path that waits, in the picker's order. None in Explorer or
+    /// before the fire.
+    pub fn path_cards(&self, chain: &Chain, mode: Mode) -> Vec<PathCard> {
+        if mode != Mode::Survival || !self.paths_open(chain) {
+            return Vec::new();
+        }
+        paths(chain)
+            .iter()
+            .filter_map(|b| self.path_card(chain, b))
+            .collect()
+    }
+
+    /// Whether a path is to be picked: in a Survival world after the fire,
+    /// with no path chosen or nothing open on it, and a path to pick.
+    pub fn choosing(&self, chain: &Chain, mode: Mode) -> bool {
+        self.path_now(chain).is_none()
+            && self
+                .path_cards(chain, mode)
+                .iter()
+                .any(|c| c.first.is_some())
+    }
+
+    /// Pick `branch` as the path: the focus picked on the tree gives way to
+    /// it. Refused for a branch with nothing open, or in Explorer. Whether
+    /// the record changed.
+    pub fn choose_path(&mut self, chain: &Chain, mode: Mode, branch: &str) -> bool {
+        if mode != Mode::Survival || self.first_open_of(chain, branch).is_none() {
+            return false;
+        }
+        let changed = self.path.as_deref() != Some(branch) || self.focus.is_some();
+        self.path = Some(branch.to_string());
+        self.focus = None;
+        changed
+    }
+
+    /// Whether the picker is to open after the missions `done` were
+    /// finished: on the fire, and when the chosen path ran out.
+    pub fn offer_after(&self, chain: &Chain, mode: Mode, done: &[String]) -> Option<Offer> {
+        if mode != Mode::Survival || done.is_empty() {
+            return None;
+        }
+        let any = |pick: bool| pick && self.choosing(chain, mode);
+        if any(done.iter().any(|d| d == PATHS_FROM)) {
+            return Some(Offer::FireLit);
+        }
+        let path = self.path.as_deref()?;
+        let on_path = done
+            .iter()
+            .any(|d| chain.get(d).is_some_and(|m| m.branch == path));
+        if !any(on_path) {
+            return None;
+        }
+        Some(match self.path_card(chain, path).and_then(|c| c.waits_on) {
+            Some(on) => Offer::PathWaits(path.to_string(), on),
+            None => Offer::PathDone(path.to_string()),
         })
     }
 }

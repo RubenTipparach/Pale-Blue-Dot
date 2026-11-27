@@ -80,6 +80,8 @@ pub const DATA_PREFIXES: &[&str] = &[
     "map.layer.",
     // `missions.ron`: each mission's title, help and objective labels by id.
     "mission.",
+    // `survival-mode` design 18: each path's name and line by its branch id.
+    "mission_path.",
     // `town_missions.ron`: each town mission's words by id.
     "town_mission.",
     // `missions.ron`'s crew section: each crew mission's words by id
