@@ -15,7 +15,7 @@ trunk). A new trap always finds the gap between them.
 
 - A last resort over all of them, checked every frame outside every act. If
   the bot has a point to reach more than 5 m off and has not covered 3 m in
-  180 s, whatever it tried, the walker is put ashore 20 m toward the goal by
+  100 s, whatever it tried, the walker is put ashore 20 m toward the goal by
   the game's own `walking::put_ashore` rule (the start search's dry land).
 - Every rescue is logged `BOT_RESCUE` with the time and the distance left, so
   each one is still a trap to fix properly, never hidden.

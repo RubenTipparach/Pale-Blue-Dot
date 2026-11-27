@@ -18,6 +18,11 @@ dropped, so the act plans afresh from dry ground.
 
 ## 3. Numbers
 
-180 s is past every existing escape's own time (60 s watchdog, 90 s up and
+100 s is past every existing escape's own time (60 s watchdog, 90 s up and
 out, 20 s swim out), so the rescue only fires after they have all failed.
 Recommendation taken (ask only with screenshots).
+
+Lowered from 180 s to 100 s on the first town run (2026-11-27). Acts that give
+up and retry at 120 s ("never reached the shore") reset the goal, and so the
+anchor, before 180 s ever came: three fish tries in a row stood 14 m from the
+same shore. 100 s is still after the 60 s watchdog and the 90 s climb.

@@ -136,7 +136,7 @@ enum Click {
 
 /// How long a walk may go without three metres before the bot is put ashore
 /// (`bot-rescue`), s.
-const RESCUE_AFTER_S: f32 = 180.0;
+const RESCUE_AFTER_S: f32 = 100.0;
 
 /// One frame's inputs.
 #[derive(Default)]
@@ -984,7 +984,7 @@ impl Bot {
 
     /// The last resort (`bot-rescue`; owner, 2026-11-27: "improve bot
     /// scripts so it never gets stuck like this ever"): with a point to go
-    /// to more than 5 m off, three minutes without three metres of ground,
+    /// to more than 5 m off, 100 s without three metres of ground,
     /// whatever was tried (a plan, up and out, a dig, a tool swapped over and
     /// over), and the walker is put ashore 20 m toward the goal by the game's
     /// own rule. Checked every frame, outside every act, so no loop inside
