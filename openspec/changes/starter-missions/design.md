@@ -835,17 +835,21 @@ pack, and nothing tells a new player where it is.
   open the pack after gathering; after "Gather by hand" the line is "Open
   your pack 0/1", then "Craft an axe 0/1".
 
-## A Survival branch (owner, 2026-11-26)
+## A Survival branch (owner, 2026-11-26; reshaped 2026-11-27)
 
 The owner: "we're gonna work on survival mode which will add new branch to
-starter missions to handle survival". The branch, `8 · SURVIVAL`, is
-designed in `survival-mode` design 18: 23 missions off `pack`, each marked
-`mode: survival` and shown only in Survival worlds, mocked up on M33's
-Survival tab (`docs/mockups/mission-tree.html#survival`). Its tasks are
-`survival-mode`'s section 6; nothing in this change's tree moves for it.
+starter missions to handle survival". The shape was then set on
+2026-11-27: "Survival: consist of the starter tree today then (in the game)
+then branch off to all survival stuff like eating and drinking, hunting
+etc.", and "after making a fire present players with the tree and show them
+options on what branch to take. Then when they click on that topic show them
+the tree branch, then the tree continues along their chosen path".
 
-The owner, 2026-11-26 (survey G11): "Off Open the pack", and "Go right into
-survival after pack is opened (if survival mode is active)". So in a
-Survival world, "Drink water" is the current goal the moment `pack` is done,
-ahead of `axe`; in an Explorer world `axe` follows `pack` as it does today
-(`survival-mode` design 18).
+So a Survival world runs this change's trunk unchanged up to `fire`; after
+it the Missions screen offers the paths (eat and drink, hunting, fishing,
+farming and the rest) and the one picked is the current goal. The survival
+missions are marked `mode: survival` and shown only in Survival worlds. This
+supersedes the owner's G11 answer of 2026-11-26 ("Off Open the pack"). The
+design is `survival-mode` design 18, mocked up on M33's Survival tab
+(`docs/mockups/mission-tree.html#survival`); its tasks are `survival-mode`'s
+section 6. Nothing in an Explorer world's tree moves for it.
