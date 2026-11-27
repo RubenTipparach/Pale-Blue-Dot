@@ -76,7 +76,9 @@ impl Class {
             | Material::Sticks
             | Material::Grinder
             | Material::Mixer
+            | Material::TanningRack
             | Material::Chest => Class::Wood,
+            Material::Still => Class::Stone,
             Material::Torch
             | Material::LanternPost
             | Material::LanternWall

@@ -499,7 +499,9 @@ pub fn surface_family(material: Material) -> Option<Family> {
         | Material::Sticks
         | Material::Grinder
         | Material::Mixer
+        | Material::TanningRack
         | Material::Chest => Family::Wood,
+        Material::Still => Family::Stone,
         Material::Water | crate::flowing_water!() => Family::Shallow,
         Material::Air
         | Material::Torch

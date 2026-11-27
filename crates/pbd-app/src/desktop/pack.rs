@@ -1042,6 +1042,8 @@ mod tests {
             drafting: Handle::default(),
             grinder: Handle::default(),
             mixer: Handle::default(),
+            tanning_rack: Handle::default(),
+            still: Handle::default(),
             tiered: Vec::new(),
         });
         app.insert_resource(pbd_app::config::Recipes(

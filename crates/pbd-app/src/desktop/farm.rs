@@ -1591,6 +1591,8 @@ pub fn show(
                 | Material::DraftingTable
                 | Material::Grinder
                 | Material::Mixer
+                | Material::TanningRack
+                | Material::Still
                 | Material::Chest
         ) {
             continue;
@@ -1728,13 +1730,18 @@ pub fn show(
                 });
             continue;
         }
-        if matches!(material, Material::Grinder | Material::Mixer) {
-            // The gravel stations (`townsfolk` design 41): shaped forms of
-            // timber, iron and stone, lit as the ground is.
-            let parts = if material == Material::Grinder {
-                &paving.grinder
-            } else {
-                &paving.mixer
+        if matches!(
+            material,
+            Material::Grinder | Material::Mixer | Material::TanningRack | Material::Still
+        ) {
+            // The gravel stations (`townsfolk` design 41) and Survival's
+            // (`survival-mode` design 17, 18): shaped forms of timber,
+            // iron, stone and hide, lit as the ground is.
+            let parts = match material {
+                Material::Grinder => &paving.grinder,
+                Material::Mixer => &paving.mixer,
+                Material::TanningRack => &paving.tanning_rack,
+                _ => &paving.still,
             };
             commands
                 .spawn((

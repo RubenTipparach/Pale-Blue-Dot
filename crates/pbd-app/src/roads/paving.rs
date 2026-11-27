@@ -747,6 +747,10 @@ pub struct PavingLooks {
     pub stakes: Vec<Vec<(super::models::Stuff, Handle<Mesh>)>>,
     pub grinder: Vec<(super::models::Stuff, Handle<Mesh>)>,
     pub mixer: Vec<(super::models::Stuff, Handle<Mesh>)>,
+    /// Survival's stations (`survival-mode` design 17, 18), drawn by the
+    /// same parts and the same textures.
+    pub tanning_rack: Vec<(super::models::Stuff, Handle<Mesh>)>,
+    pub still: Vec<(super::models::Stuff, Handle<Mesh>)>,
 }
 
 impl PavingLooks {
@@ -795,6 +799,8 @@ pub fn make_looks(
             .collect(),
         grinder: add(super::models::grinder()),
         mixer: add(super::models::mixer()),
+        tanning_rack: add(super::models::tanning_rack()),
+        still: add(super::models::still()),
     };
     commands
         .spawn((
@@ -812,6 +818,8 @@ pub fn make_looks(
                 .iter()
                 .chain(&looks.grinder)
                 .chain(&looks.mixer)
+                .chain(&looks.tanning_rack)
+                .chain(&looks.still)
             {
                 root.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(looks.material(*stuff))));
             }

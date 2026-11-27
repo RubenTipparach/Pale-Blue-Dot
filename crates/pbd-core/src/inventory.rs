@@ -393,6 +393,8 @@ fn material_key(material: Material) -> &'static str {
         Material::Chest => "block.chest.name",
         Material::Carpenter => "block.carpenter.name",
         Material::DraftingTable => "block.drafting_table.name",
+        Material::TanningRack => "block.tanning_rack.name",
+        Material::Still => "block.still.name",
         crate::flowing_water!() => "block.flowing_water.name",
     }
 }

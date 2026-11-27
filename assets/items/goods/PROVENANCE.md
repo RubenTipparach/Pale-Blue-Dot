@@ -135,3 +135,16 @@ inventory icon (the pieces in the world have none):
 | `staghorn-coral`, `finger-coral`, `brain-coral`, `table-coral`, `soft-coral`, `tube-sponge`, `barrel-sponge`, `sea-fan`, `sea-anemone`, `sea-lettuce`, `coral-rubble`, `mussels` | rendered from the game's own model of that piece (`fish::places::library`, dumped to `tools/art/sea_models.json` by the ignored test `dump_sea_models`): its triangles and vertex colours times its kind's first palette colour, the water life's atlas sampled nearest at its UVs, lit from the top left, three-quarter view from above; 64 px reduced to 16 px by area average, its colours snapped to five of its own |
 | `kelp` | a frond in the colours of the kelp card the game draws (`assets/textures/water_life/kelp_card.png`), which is a card, not a model |
 | `fertilizer`, `steamed-mussels`, `kelp-crisps` | pixel maps in the goods' browns and the reef's palette (no model) |
+
+## survival-mode task 4.10: the kill, the weapons, what is worn
+
+Drawn by `tools/art/survival_icons.py` from M33's Survival tab icons
+(`tools/mockup_survival_icons.py`, the functions the owner saw on
+`docs/mockups/mission-tree.html#survival`), with the 1 px outline of an
+inventory icon (the things in the world have none): `raw-meat`, `hide`,
+`bone`, `feather`, `straw`, `stone-spear`, `bronze-spear`, `iron-spear`,
+`bow`, `stone-arrow`, `bone-arrow`, `bronze-arrow`, `bronze-hunting-axe`,
+`iron-hunting-axe`, `bronze-sword`, `iron-sword`, `straw-hat`, `wool-cloak`,
+`bedroll`, `meat-stew`, and the stations `tanning-rack` and `still` (under
+`items/stations/`). A tier M33 did not draw is its drawing with the head's
+ramp swapped for that tier's.

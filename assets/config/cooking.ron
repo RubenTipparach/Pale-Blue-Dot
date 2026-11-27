@@ -43,6 +43,8 @@
         (good: "glowing-mushroom", effect: Glow, minutes: 3.0),
         (good: "steamed-mussels", effect: Steady, minutes: 6.0),
         (good: "kelp-crisps", effect: Stride, minutes: 4.0),
+        // `survival-mode` design 17: the stew, Survival's own.
+        (good: "meat-stew", effect: Stride, minutes: 10.0),
     ],
     glow: (
         level: 10,
@@ -103,7 +105,7 @@
             inputs: [("fertile-egg", 1)],
             outputs: [("fried-egg", 1)],
         ),
-        // Pending until `animal-husbandry` adds raw meat.
+        // Raw meat is a kill's (`survival-mode` design 17).
         (
             code: "roast-meat",
             station: "campfire",
@@ -134,6 +136,16 @@
             secs: 15.0,
             inputs: [("kelp", 2)],
             outputs: [("kelp-crisps", 2)],
+        ),
+        // `survival-mode` design 17: raw meat and a turnip stewed in a
+        // bucket of water, the bucket given back. Survival only.
+        (
+            code: "meat-stew",
+            station: "campfire",
+            secs: 40.0,
+            inputs: [("raw-meat", 1), ("turnip", 1), ("water-bucket", 1)],
+            outputs: [("meat-stew", 1), ("bucket", 1)],
+            survival: true,
         ),
     ],
 )

@@ -89,6 +89,20 @@ pub const STATIONS: &[StationRow] = &[
         material: Some(Material::Mixer),
         max_jobs: 4,
     },
+    // `survival-mode` design 17: a hide tanned into leather.
+    StationRow {
+        code: "tanning-rack",
+        material: Some(Material::TanningRack),
+        max_jobs: 4,
+    },
+    // `survival-mode` design 15 and 18: the still holds water, not jobs.
+    // What it holds and boils is the survival rules' (`survival.ron`
+    // `still`); F on it is theirs too.
+    StationRow {
+        code: "still",
+        material: Some(Material::Still),
+        max_jobs: 0,
+    },
 ];
 
 /// The record id of the hands' queue (`tool-crafting` decision 4): kept like
@@ -164,6 +178,11 @@ pub struct RecipeEntry {
     pub inputs: Vec<(String, u16)>,
     /// What it gives.
     pub outputs: Vec<(String, u16)>,
+    /// Made only in a Survival world (`survival-mode` design 16 to 19): an
+    /// Explorer world's book leaves it out ([`RecipeBook::for_mode`]).
+    /// Written `survival: true`; left out, false.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub survival: bool,
 }
 
 /// `assets/config/recipes.ron`.
@@ -188,6 +207,12 @@ impl Default for RecipeFile {
             secs,
             inputs: inputs.iter().map(|&(n, k)| pair(n, k)).collect(),
             outputs: outputs.iter().map(|&(n, k)| pair(n, k)).collect(),
+            survival: false,
+        };
+        // A Survival world's own (`survival-mode` design 15 to 18).
+        let survival = |entry: RecipeEntry| RecipeEntry {
+            survival: true,
+            ..entry
         };
         let stone_tool = |tool: &str| {
             recipe(
@@ -219,6 +244,7 @@ impl Default for RecipeFile {
                         pair("iron-ingot", 1),
                         pair("tin-ore", 1),
                     ],
+                    survival: false,
                 },
                 RecipeEntry {
                     code: "bronze".into(),
@@ -226,6 +252,7 @@ impl Default for RecipeFile {
                     secs: 5.0,
                     inputs: vec![pair("copper-ingot", 1), pair("tin-ore", 1), pair("coal", 1)],
                     outputs: vec![pair("bronze-ingot", 2)],
+                    survival: false,
                 },
             ],
         };
@@ -412,6 +439,7 @@ impl Default for RecipeFile {
                     ),
                     1,
                 )],
+                survival: false,
             },
             recipe("chair", "carpenter", 3.0, &[("planks", 3)], &[("chair", 1)]),
             recipe("stool", "carpenter", 2.0, &[("planks", 2)], &[("stool", 1)]),
@@ -467,6 +495,7 @@ impl Default for RecipeFile {
                     ),
                     1,
                 )],
+                survival: false,
             },
             recipe(
                 "mallet",
@@ -489,8 +518,155 @@ impl Default for RecipeFile {
                         secs: 3.0,
                         inputs: vec![pair(piece.code(), n)],
                         outputs: vec![pair(crate::sea_gather::FERTILIZER, out)],
+                        survival: false,
                     })
                 }),
+        );
+        // ---- survival-mode design 15 to 18 (task 4.10): Survival's own, in
+        // the file's order. The weapons and what they need, what is worn,
+        // the bedroll and the two stations.
+        let block = |m: Material| format!("block:{}", crate::inventory::material_id(m));
+        let rack = block(Material::TanningRack);
+        let still = block(Material::Still);
+        file.recipes.extend(
+            [
+                recipe("straw", "hand", 1.0, &[("fibre", 2)], &[("straw", 1)]),
+                recipe(
+                    "stone-spear",
+                    "hand",
+                    3.0,
+                    &[("log", 1), ("stone", 2), ("fibre", 2)],
+                    &[("stone-spear", 1)],
+                ),
+                recipe(
+                    "stone-arrows",
+                    "hand",
+                    2.0,
+                    &[("planks", 1), ("stone", 1), ("fibre", 1)],
+                    &[("stone-arrow", 4)],
+                ),
+                recipe(
+                    "bone-meal",
+                    "hand",
+                    1.0,
+                    &[("bone", 1)],
+                    &[("fertilizer", 2)],
+                ),
+                recipe(
+                    "straw-hat",
+                    "hand",
+                    3.0,
+                    &[("wheat", 3)],
+                    &[("straw-hat", 1)],
+                ),
+                recipe(
+                    "fibre-hat",
+                    "hand",
+                    3.0,
+                    &[("fibre", 6)],
+                    &[("straw-hat", 1)],
+                ),
+                recipe(
+                    "bedroll",
+                    "hand",
+                    4.0,
+                    &[("hide", 2), ("wool", 1)],
+                    &[("bedroll", 1)],
+                ),
+                recipe(
+                    "tanning-rack",
+                    "workbench",
+                    5.0,
+                    &[("planks", 4), ("rope", 2)],
+                    &[(rack.as_str(), 1)],
+                ),
+                recipe(
+                    "tan-hide",
+                    "tanning-rack",
+                    60.0,
+                    &[("hide", 1)],
+                    &[("leather", 1)],
+                ),
+                recipe(
+                    "still",
+                    "workbench",
+                    5.0,
+                    &[("stone", 6), ("planks", 2), ("rope", 1)],
+                    &[(still.as_str(), 1)],
+                ),
+                recipe(
+                    "wool-cloak",
+                    "workbench",
+                    4.0,
+                    &[("wool", 4), ("rope", 1)],
+                    &[("wool-cloak", 1)],
+                ),
+                recipe(
+                    "bow",
+                    "workbench",
+                    4.0,
+                    &[("planks", 2), ("rope", 2)],
+                    &[("bow", 1)],
+                ),
+                recipe(
+                    "bone-arrows",
+                    "workbench",
+                    2.0,
+                    &[("planks", 1), ("bone", 1), ("feather", 2)],
+                    &[("bone-arrow", 4)],
+                ),
+                recipe(
+                    "bronze-arrows",
+                    "workbench",
+                    3.0,
+                    &[("bronze-ingot", 1), ("planks", 1), ("feather", 2)],
+                    &[("bronze-arrow", 8)],
+                ),
+                recipe(
+                    "bronze-spear",
+                    "workbench",
+                    4.0,
+                    &[("bronze-ingot", 1), ("planks", 2)],
+                    &[("bronze-spear", 1)],
+                ),
+                recipe(
+                    "iron-spear",
+                    "workbench",
+                    4.0,
+                    &[("iron-ingot", 1), ("planks", 2)],
+                    &[("iron-spear", 1)],
+                ),
+                recipe(
+                    "bronze-hunting-axe",
+                    "workbench",
+                    4.0,
+                    &[("bronze-ingot", 2), ("planks", 1), ("leather", 1)],
+                    &[("bronze-hunting-axe", 1)],
+                ),
+                recipe(
+                    "iron-hunting-axe",
+                    "workbench",
+                    4.0,
+                    &[("iron-ingot", 2), ("planks", 1), ("leather", 1)],
+                    &[("iron-hunting-axe", 1)],
+                ),
+                recipe(
+                    "bronze-sword",
+                    "workbench",
+                    5.0,
+                    &[("bronze-ingot", 3), ("planks", 1), ("leather", 1)],
+                    &[("bronze-sword", 1)],
+                ),
+                recipe(
+                    "iron-sword",
+                    "workbench",
+                    5.0,
+                    &[("iron-ingot", 3), ("planks", 1), ("leather", 1)],
+                    &[("iron-sword", 1)],
+                ),
+            ]
+            .into_iter()
+            .map(survival),
         );
         file
     }
@@ -540,6 +716,8 @@ pub struct Recipe {
     /// The tools it gives to the tool slot, with their tiers
     /// (`tool-crafting`): a `tool:` output, not in `outputs`.
     pub tools: Vec<(Tool, Tier)>,
+    /// Made only in a Survival world (`RecipeEntry::survival`).
+    pub survival: bool,
 }
 
 impl Recipe {
@@ -559,7 +737,14 @@ impl Recipe {
 /// Every recipe, resolved and checked.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct RecipeBook {
+    /// Every recipe this build knows, Survival's own among them: what a
+    /// mission file and a saved queue are resolved against.
     pub recipes: Vec<Recipe>,
+    /// Whether the world it serves is a Survival world (`survival-mode`
+    /// design 16 and 19): only then does a station offer Survival's own
+    /// recipes ([`RecipeBook::at`]). False, an Explorer world's, unless the
+    /// world says otherwise.
+    pub survival: bool,
 }
 
 impl RecipeFile {
@@ -619,9 +804,13 @@ impl RecipeFile {
                 inputs: items(&entry.inputs)?,
                 outputs,
                 tools,
+                survival: entry.survival,
             });
         }
-        Ok(RecipeBook { recipes })
+        Ok(RecipeBook {
+            recipes,
+            survival: false,
+        })
     }
 
     pub fn validate(&self) -> Result<(), String> {
@@ -634,11 +823,31 @@ impl RecipeBook {
         self.recipes.iter().find(|r| r.code == code)
     }
 
-    /// A station's recipes, in file order.
+    /// A station's recipes this world offers, in file order: Survival's
+    /// own only in a Survival world.
     pub fn at(&self, station: &str) -> impl Iterator<Item = &Recipe> {
-        self.recipes
-            .iter()
-            .filter(move |r| r.station.code == station)
+        self.offered().filter(move |r| r.station.code == station)
+    }
+
+    /// Every recipe this world offers, in file order (`survival-mode`
+    /// design 16 and 19): all but Survival's own in an Explorer world.
+    pub fn offered(&self) -> impl Iterator<Item = &Recipe> {
+        let survival = self.survival;
+        self.recipes.iter().filter(move |r| survival || !r.survival)
+    }
+
+    /// Whether this world offers the recipe with this code.
+    pub fn offers(&self, code: &str) -> bool {
+        self.get(code).is_some_and(|r| self.survival || !r.survival)
+    }
+
+    /// The same book for a world of this mode: the world opening sets it
+    /// (an Explorer world's is the default).
+    pub fn for_mode(&self, survival: bool) -> RecipeBook {
+        RecipeBook {
+            recipes: self.recipes.clone(),
+            survival,
+        }
     }
 }
 
@@ -906,6 +1115,8 @@ mod tests {
         let file: RecipeFile =
             ron::from_str(include_str!("../../../assets/config/recipes.ron")).unwrap();
         assert_eq!(file, RecipeFile::default());
+        // An Explorer world's book (the default): Survival's own are
+        // counted in `survival_recipes_are_offered_only_in_a_survival_world`.
         let book = file.resolve().unwrap();
         assert_eq!(book.at("forge").count(), 2);
         // Planks, rope, survey stakes (`townsfolk` design 41, in gravel's
@@ -957,6 +1168,189 @@ mod tests {
         );
         assert_eq!(station_by_code("hand").map(|s| s.material), Some(None));
         assert_eq!(book.at("carpenter").count(), 10, "the Furniture branch");
+    }
+
+    /// `survival-mode` task 4.10: the goods, recipes and stations of design
+    /// 15 to 18. Every one resolves to real things and is made where the
+    /// design says; an Explorer world's book offers none of them and keeps
+    /// every other recipe in its order; the two new stations are blocks
+    /// with their own codes, and every recipe a Survival mission unlocks is
+    /// one of these.
+    #[test]
+    fn survival_recipes_are_offered_only_in_a_survival_world() {
+        let all = book().for_mode(true);
+        let survival: Vec<&Recipe> = all.recipes.iter().filter(|r| r.survival).collect();
+        let codes: Vec<&str> = survival.iter().map(|r| r.code.as_str()).collect();
+        for code in [
+            "straw",
+            "stone-spear",
+            "stone-arrows",
+            "bone-meal",
+            "straw-hat",
+            "fibre-hat",
+            "bedroll",
+            "tanning-rack",
+            "tan-hide",
+            "still",
+            "wool-cloak",
+            "bow",
+            "bone-arrows",
+            "bronze-arrows",
+            "bronze-spear",
+            "iron-spear",
+            "bronze-hunting-axe",
+            "iron-hunting-axe",
+            "bronze-sword",
+            "iron-sword",
+        ] {
+            assert!(codes.contains(&code), "{code}");
+        }
+        let at = |code: &str| all.get(code).unwrap();
+        assert_eq!(at("straw").station.code, "hand");
+        assert_eq!(at("stone-spear").station.code, "hand");
+        assert_eq!(
+            at("stone-spear").inputs,
+            vec![
+                (Item::Good(Good::LOG), 1),
+                (Item::Good(Good::LOOSE_STONE), 2),
+                (Item::Good(Good::FIBRE), 2),
+            ]
+        );
+        assert_eq!(
+            at("stone-arrows").outputs,
+            vec![(Item::Good(Good::STONE_ARROW), 4)]
+        );
+        assert_eq!(
+            at("bronze-arrows").outputs,
+            vec![(Item::Good(Good::BRONZE_ARROW), 8)]
+        );
+        for code in [
+            "bow",
+            "bronze-sword",
+            "iron-hunting-axe",
+            "wool-cloak",
+            "still",
+        ] {
+            assert_eq!(at(code).station.code, "workbench", "{code}");
+        }
+        let tan = at("tan-hide");
+        assert_eq!(tan.station.code, "tanning-rack");
+        assert_eq!(tan.secs, 60.0);
+        assert_eq!(tan.inputs, vec![(Item::Good(Good::HIDE), 1)]);
+        assert_eq!(
+            tan.outputs,
+            vec![(Item::Good(Good::by_code("leather").unwrap()), 1)]
+        );
+        assert_eq!(
+            at("tanning-rack").outputs,
+            vec![(Item::Block(Material::TanningRack), 1)]
+        );
+        assert_eq!(at("still").outputs, vec![(Item::Block(Material::Still), 1)]);
+        assert_eq!(
+            station_of(Material::TanningRack).map(|s| s.code),
+            Some("tanning-rack")
+        );
+        assert_eq!(
+            station_of(Material::Still).map(|s| (s.code, s.max_jobs)),
+            Some(("still", 0))
+        );
+        for m in [Material::TanningRack, Material::Still] {
+            let code = crate::terrain::material_code(m);
+            assert_eq!(crate::terrain::material_of(code), Some(m));
+            assert!((48..64).contains(&code), "{m:?} {code}");
+        }
+        // Each weapon and worn thing is one to a slot; arrows stack.
+        for good in [
+            Good::STONE_SPEAR,
+            Good::BOW,
+            Good::BRONZE_SWORD,
+            Good::IRON_HUNTING_AXE,
+            Good::STRAW,
+            Good::STRAW_HAT,
+            Good::WOOL_CLOAK,
+        ] {
+            assert_eq!(good.stack_limit(), 1, "{}", good.code());
+        }
+        assert!(Good::STONE_ARROW.stack_limit() >= 8);
+        // Explorer (the default book): none of them at any station, and
+        // every other recipe where it was; the book still knows them, so a
+        // mission file resolves the same in both.
+        let explorer = book();
+        assert!(!explorer.survival);
+        assert!(explorer.offered().all(|r| !r.survival));
+        for code in &codes {
+            assert!(!explorer.offers(code), "{code} in an Explorer world");
+            assert!(all.offers(code), "{code} in a Survival world");
+            assert!(explorer.get(code).is_some());
+        }
+        for row in STATIONS {
+            assert!(
+                explorer.at(row.code).all(|r| !r.survival),
+                "{} offers a Survival recipe in Explorer",
+                row.code
+            );
+        }
+        let older: Vec<&str> = all
+            .recipes
+            .iter()
+            .filter(|r| !r.survival)
+            .map(|r| r.code.as_str())
+            .collect();
+        let kept: Vec<&str> = explorer.offered().map(|r| r.code.as_str()).collect();
+        assert_eq!(older, kept);
+        // And with the kitchen: the stew is Survival's too.
+        let kitchen = crate::cooking::CookingFile::default().resolve().unwrap();
+        let stew = kitchen
+            .recipes
+            .iter()
+            .find(|r| r.code == "meat-stew")
+            .unwrap();
+        assert!(stew.survival);
+        assert_eq!(
+            stew.outputs,
+            vec![
+                (Item::Good(Good::MEAT_STEW), 1),
+                (Item::Good(Good::BUCKET), 1)
+            ]
+        );
+        assert!(kitchen.dish(Good::MEAT_STEW).is_some());
+    }
+
+    /// Every recipe the missions file unlocks in a Survival world names a
+    /// recipe of this book (`survival-mode` design 18's unlocks).
+    #[test]
+    fn every_survival_unlock_in_the_missions_file_is_a_recipe() {
+        let mut all = book();
+        all.recipes.extend(
+            crate::cooking::CookingFile::default()
+                .resolve()
+                .unwrap()
+                .recipes,
+        );
+        for code in [
+            "straw",
+            "still",
+            "straw-hat",
+            "meat-stew",
+            "tanning-rack",
+            "bow",
+            "stone-arrows",
+            "bone-arrows",
+            "bronze-hunting-axe",
+            "bronze-sword",
+            "bronze-spear",
+            "bronze-arrows",
+            "iron-sword",
+            "iron-spear",
+            "iron-hunting-axe",
+            "bedroll",
+            "wool-cloak",
+        ] {
+            assert!(
+                all.get(code).is_some_and(|r| r.survival),
+                "{code} is a Survival recipe"
+            );
+        }
     }
 
     #[test]

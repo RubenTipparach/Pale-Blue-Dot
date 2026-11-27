@@ -13,6 +13,10 @@ arrival:
   new_world: A NEW WORLD
   welcome_back: WELCOME BACK
 block:
+  tanning_rack:
+    name: tanning rack
+  still:
+    name: still
   drafting_table:
     name: drafting table
   air:
@@ -589,6 +593,10 @@ guide:
   title: FIELD GUIDE
 husbandry:
   adult:
+    billy: billy
+    nanny: nanny
+    boar: boar
+    sow: sow
     bull: bull
     cockerel: cockerel
     cow: cow
@@ -598,6 +606,9 @@ husbandry:
     ram: ram
     stallion: stallion
   coat:
+    sooty: sooty
+    pink: pink
+    ginger: ginger
     bay: bay
     black: black
     brown: brown
@@ -649,12 +660,15 @@ husbandry:
     sick: sick
     strayed: "strayed: feed it"
   morph:
+    gold: gold
     albino: albino
     dapple: dapple
     golden: golden
     melanic: melanic
   no_room: No room to carry it
   pattern:
+    saddle: saddle
+    spotted: spotted
     belted: belted
     blaze: blaze
     piebald: piebald
@@ -670,6 +684,9 @@ husbandry:
     female: female
     male: male
   stage:
+    kid: kid
+    piglet: piglet
+    weaner: weaner
     calf: calf
     chick: chick
     foal: foal
@@ -744,6 +761,46 @@ interact:
 inventory:
   fish: fish
 item:
+  raw-meat:
+    name: raw meat
+  hide:
+    name: hide
+  bone:
+    name: bone
+  feather:
+    name: feather
+  straw:
+    name: straw
+  stone-spear:
+    name: stone spear
+  bronze-spear:
+    name: bronze spear
+  iron-spear:
+    name: iron spear
+  bow:
+    name: bow
+  stone-arrow:
+    name: stone arrow
+  bone-arrow:
+    name: bone arrow
+  bronze-arrow:
+    name: bronze arrow
+  bronze-hunting-axe:
+    name: bronze hunting axe
+  iron-hunting-axe:
+    name: iron hunting axe
+  bronze-sword:
+    name: bronze sword
+  iron-sword:
+    name: iron sword
+  straw-hat:
+    name: straw hat
+  wool-cloak:
+    name: wool cloak
+  bedroll:
+    name: bedroll
+  meat-stew:
+    name: meat stew
   staghorn-coral:
     name: staghorn coral
   finger-coral:
@@ -1510,6 +1567,48 @@ planner:
     iso: Isometric
     top: Top down
 recipe:
+  straw:
+    name: STRAW
+  stone-spear:
+    name: STONE SPEAR
+  stone-arrows:
+    name: STONE ARROWS
+  bone-meal:
+    name: BONE MEAL
+  straw-hat:
+    name: STRAW HAT
+  fibre-hat:
+    name: FIBRE HAT
+  bedroll:
+    name: BEDROLL
+  tanning-rack:
+    name: TANNING RACK
+  tan-hide:
+    name: TAN HIDE
+  still:
+    name: STILL
+  wool-cloak:
+    name: WOOL CLOAK
+  bow:
+    name: BOW
+  bone-arrows:
+    name: BONE ARROWS
+  bronze-arrows:
+    name: BRONZE ARROWS
+  bronze-spear:
+    name: BRONZE SPEAR
+  iron-spear:
+    name: IRON SPEAR
+  bronze-hunting-axe:
+    name: BRONZE HUNTING AXE
+  iron-hunting-axe:
+    name: IRON HUNTING AXE
+  bronze-sword:
+    name: BRONZE SWORD
+  iron-sword:
+    name: IRON SWORD
+  meat-stew:
+    name: MEAT STEW
   crush-staghorn-coral:
     name: CRUSH STAGHORN CORAL
   crush-finger-coral:
@@ -1723,6 +1822,36 @@ slots:
   many: "{name} x {count}"
   tool_tip: "{tool}: {purpose}"
 species:
+  hare:
+    caps: HARE
+    entry: "A long-eared hare of the meadows and the scrub. It sits still in the grass until something comes close, then bolts and zigzags away."
+    lower: hare
+    name: Hare
+    tip: "Come up on it slowly. It runs at fourteen meters."
+  ridge-goat:
+    caps: RIDGE GOAT
+    entry: "A sure-footed goat of the hills, grey with curled horns. Small herds graze the slopes and run uphill when chased."
+    lower: ridge goat
+    name: Ridge goat
+    tip: "Feed it wheat or turf to tame it."
+  rootling:
+    caps: ROOTLING
+    entry: "A stout wild pig that roots in soft ground for tubers. A boar will turn on whatever corners it."
+    lower: rootling
+    name: Rootling
+    tip: "Feed it turnips to tame it. Give a cornered boar room."
+  red-fox:
+    caps: RED FOX
+    entry: "A lean red fox of the woods and fields. It hunts small game at dusk and keeps its distance by day."
+    lower: red fox
+    name: Red fox
+    tip: "It cannot be tamed."
+  dust-hound:
+    caps: DUST HOUND
+    entry: "A rangy sand-coloured hound of the desert. Small packs roam the dunes and the rock."
+    lower: dust hound
+    name: Dust hound
+    tip: "It cannot be tamed."
   beaver:
     caps: BEAVER
     entry: "A big brown rodent of slow rivers. Beavers fell trees, dam the stream with sticks and build a lodge in the pond behind the dam. Beavers are protected: none may be caught."
@@ -1868,6 +1997,10 @@ species:
     name: Woolback
     tip: Four feeds of wheat or turf, standing still. Pen them on grass and they feed themselves.
 station:
+  tanning-rack:
+    name: tanning rack
+  still:
+    name: still
   campfire:
     name: campfire
   chest:
