@@ -75,6 +75,10 @@ pub enum Landed {
 #[derive(SystemSet, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CombatSet;
 
+/// A projectile's drawn model.
+#[derive(Component)]
+pub struct InFlight;
+
 /// A projectile in flight and its drawn model.
 struct Flying {
     projectile: Projectile,
@@ -840,7 +844,7 @@ pub fn fly(
     contact: Option<Res<crate::planet::PlanetContact>>,
     frame: Option<Res<crate::planet::PlanetRenderFrame>>,
     looks: Option<Res<crate::drops::DropLooks>>,
-    mut views: Query<&mut Transform>,
+    mut views: Query<&mut Transform, With<InFlight>>,
     (mut yard, config, body): (
         Option<ResMut<Farmyard>>,
         Option<Res<crate::config::HusbandryConfig>>,
@@ -1016,7 +1020,7 @@ fn draw_flight(
     f: &mut Flying,
     looks: Option<&crate::drops::DropLooks>,
     frame: Option<&crate::planet::PlanetRenderFrame>,
-    views: &mut Query<&mut Transform>,
+    views: &mut Query<&mut Transform, With<InFlight>>,
     at: Vec3,
 ) {
     let Some(frame) = frame else {
@@ -1039,6 +1043,7 @@ fn draw_flight(
     let e = commands
         .spawn((
             Name::new("in flight"),
+            InFlight,
             crate::field_light::LitByField,
             crate::field_light::LitLikeTerrain,
             place,

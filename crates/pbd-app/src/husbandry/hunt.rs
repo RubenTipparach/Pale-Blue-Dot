@@ -624,4 +624,18 @@ mod tests {
         assert_eq!((h.square, h.member, h.day), (0x51, 2, 4.5));
         assert!(drops.iter().any(|(g, _)| g == "raw-meat"));
     }
+
+    /// The yard's systems with the hunt's parameters have no conflicting
+    /// queries (Bevy's B0001).
+    #[test]
+    fn the_yards_systems_have_no_conflicting_queries() {
+        use bevy::ecs::system::IntoSystem;
+        let mut world = bevy::ecs::world::World::new();
+        let mut step = IntoSystem::into_system(super::super::step);
+        step.initialize(&mut world);
+        let mut sync = IntoSystem::into_system(super::super::sync);
+        sync.initialize(&mut world);
+        let mut draw = IntoSystem::into_system(super::super::draw);
+        draw.initialize(&mut world);
+    }
 }
