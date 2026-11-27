@@ -577,7 +577,10 @@ pub fn rebuild_hand_list(
         if list.0 == codes {
             continue;
         }
-        info!("craft: the pack's list rebuilt, {} hand recipes", codes.len());
+        info!(
+            "craft: the pack's list rebuilt, {} hand recipes",
+            codes.len()
+        );
         list.0 = codes.clone();
         commands
             .entity(entity)
