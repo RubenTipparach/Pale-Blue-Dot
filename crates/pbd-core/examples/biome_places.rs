@@ -57,7 +57,11 @@ fn main() {
         let north = d.cross(east);
         let inside = (0..8).all(|k| {
             let a = k as f32 * std::f32::consts::FRAC_PI_4;
-            let reach = if matches!(biome, Biome::Beach | Biome::Swamp) { 30.0 } else { 150.0 };
+            let reach = if matches!(biome, Biome::Beach | Biome::Swamp) {
+                30.0
+            } else {
+                150.0
+            };
             let off = (east * a.cos() + north * a.sin()) * (reach / radius);
             here((d + off).normalize()).0 == biome
         });

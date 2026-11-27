@@ -247,6 +247,13 @@ impl Material {
         self.emission() > 0
     }
 
+    /// Drawn as a model standing in its cell, not by the terrain
+    /// (`station-models` design 1): still solid, walked on, lit, dug and
+    /// saved as any block; only the terrain's own draw skips it.
+    pub fn modelled(self) -> bool {
+        matches!(self, Material::Chest | Material::Workbench)
+    }
+
     /// Flowing water at `level` (0 to 7), falling or not.
     pub fn flowing(level: u8, falling: bool) -> Material {
         FLOWING[usize::from(level.min(7)) + if falling { 8 } else { 0 }]

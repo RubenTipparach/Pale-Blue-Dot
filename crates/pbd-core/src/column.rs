@@ -125,6 +125,15 @@ impl Column {
         (0..LAYERS).rev().find(|index| self.solid(*index))
     }
 
+    /// The topmost layer the terrain DRAWS: the surface, under any modelled
+    /// blocks stood on it (`station-models` design 1), which are drawn as
+    /// models and not as terrain.
+    pub fn drawn_surface(&self) -> Option<usize> {
+        (0..LAYERS)
+            .rev()
+            .find(|&index| self.solid(index) && !self.material(index).modelled())
+    }
+
     /// Set a layer. Refuses the bedrock floor: without it a player digs through
     /// the bottom of the world and sees the inside of the planet, which is the
     /// one hole that cannot be fixed by drawing more faces.
@@ -232,10 +241,15 @@ impl Column {
     /// Solid runs, bottom up, as half-open layer ranges. What the renderer draws
     /// a cap and walls for, instead of one cap at one height.
     pub fn runs(&self) -> Vec<(usize, usize)> {
+        self.runs_where(|index| self.solid(index))
+    }
+
+    /// Runs of the layers `filled` says are filled, bottom up.
+    fn runs_where(&self, filled: impl Fn(usize) -> bool) -> Vec<(usize, usize)> {
         let mut runs = Vec::new();
         let mut start = None;
         for index in 0..LAYERS {
-            match (self.solid(index), start) {
+            match (filled(index), start) {
                 (true, None) => start = Some(index),
                 (false, Some(from)) => {
                     runs.push((from, index));
@@ -314,7 +328,8 @@ impl Column {
     /// every solid layer, and what the budget costs is a cave rather than a
     /// hole.
     pub fn drawn_runs(&self) -> Vec<Run> {
-        let mut runs = self.runs();
+        let mut runs =
+            self.runs_where(|index| self.solid(index) && !self.material(index).modelled());
         while runs.len() > MAX_RUNS {
             let thinnest = (1..runs.len())
                 .min_by_key(|&i| runs[i].0 - runs[i - 1].1)
@@ -1211,6 +1226,19 @@ mod tests {
         let a = generate(&worms, &FIELD, &TERRAIN, d);
         let b = generate(&worms, &FIELD, &TERRAIN, d);
         assert!((0..LAYERS).all(|i| a.material(i) == b.material(i)));
+    }
+
+    #[test]
+    fn a_modelled_block_is_solid_but_not_drawn() {
+        let (spawn, worms) = spawn();
+        let mut column = generate(&worms, &FIELD, &TERRAIN, spawn);
+        let top = column.surface().unwrap();
+        assert!(column.set(top + 1, Material::Chest));
+        assert!(column.solid(top + 1));
+        assert_eq!(column.surface(), Some(top + 1));
+        assert_eq!(column.drawn_surface(), Some(top));
+        assert_eq!(column.drawn_runs().last().map(|r| r.to), Some(top + 1));
+        assert_eq!(column.runs().last().map(|r| r.1), Some(top + 2));
     }
 
     #[test]
