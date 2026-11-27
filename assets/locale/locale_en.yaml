@@ -1655,6 +1655,7 @@ missions:
   coins: "+{count}"
   done: "DONE: {title}"
   objective_metres: "{label} {count}/{total} m"
+  parcel_from: "{label} {count}/{total}  Job from {town} {distance}"
   tab:
     guide: GUIDE  J
     map: MAP  M
