@@ -7665,7 +7665,11 @@ fn job(bot: &mut Bot, s: &Sight, out: &mut Intent) -> Status {
             // the next town, twice.
             if bot.job_towns < 3 {
                 bot.job_towns += 1;
-                let next = if bot.job_towns == 1 { "town" } else { "other-town" };
+                let next = if bot.job_towns == 1 {
+                    "town"
+                } else {
+                    "other-town"
+                };
                 info!("showcase: job: no giver in reach here; seeking {next}");
                 bot.not_giver.clear();
                 bot.injected.push_back(file::Act::Seek(next.into()));
