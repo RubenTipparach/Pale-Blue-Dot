@@ -19,10 +19,19 @@ use bevy::{math::DVec3, prelude::*};
 
 use crate::planet::PlanetRenderFrame;
 
-/// The grid the origin snaps to. A whole number of metres that is a power
-/// of two, so a rebase moves every coordinate by an exact f32 amount and
-/// repeated rebases never drift.
-pub const ORIGIN_CELL_M: f64 = 16.0;
+/// The grid the origin snaps to: the sim origin's cell (`world-frames`; the
+/// owner: "16 m is kinda small, 128 m probably good"). A whole number of
+/// metres that is a power of two, so a rebase moves every coordinate by an
+/// exact f32 amount and repeated rebases never drift. Each rebase moves
+/// every root and so recomputes the whole hierarchy (`river-hitches`
+/// design 4): at 16 m that was a hitch every two seconds on foot.
+pub const ORIGIN_CELL_M: f64 = pbd_core::world_frame::ORIGIN_CELL_M;
+
+/// How far the eye may be from its origin's cell, on an axis, before the
+/// origin moves: three quarters of a cell, as the sim origin, so walking
+/// along a boundary never rebases back and forth. Within it an f32 holds
+/// 7.6 µm.
+pub const REBASE_AT_M: f64 = 0.75 * ORIGIN_CELL_M;
 
 /// `--render-offset`: the render origin held this far (render space) from
 /// the camera's cell, so the planet's centre and the eye both sit away from
@@ -78,6 +87,11 @@ pub fn rebase(
     // f64, from an f32 that is already small.
     let physics_eye = eye.as_dvec3() + frame.origin;
     if !physics_eye.is_finite() {
+        return;
+    }
+    // Still within reach of the origin's cell: no rebase.
+    let off = physics_eye - (frame.origin + offset);
+    if off.abs().max_element() <= REBASE_AT_M {
         return;
     }
     let origin = origin_for(physics_eye, offset);
@@ -256,7 +270,7 @@ mod tests {
         let mut rebases = 0;
         let mut last_origin = frame.origin;
         let mut last_eye_view = None;
-        for i in 0..400 {
+        for i in 0..4000 {
             let eye = start + east * (i as f64 * 0.25);
             place_camera(&mut app, camera, eye);
             app.update();

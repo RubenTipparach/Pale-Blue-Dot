@@ -2625,11 +2625,32 @@ fn lay_tile(
         .collect();
     let anchor = tile_centre(key, radius) * sea_radius;
     let contact = laid.contact;
-    let bed = |d: Vec3| crate::vehicles::ground_under(contact, (d * sea_radius).as_dvec3()) as f32;
+    // MEASUREMENT (`memory-leak`, towns at 60 fps): a tile's build, and
+    // its seabed lookups' share, when it holds the frame up.
+    let bed_ns = std::cell::Cell::new(0u64);
+    let bed_calls = std::cell::Cell::new(0u32);
+    let bed = |d: Vec3| {
+        let t = std::time::Instant::now();
+        let r = crate::vehicles::ground_under(contact, (d * sea_radius).as_dvec3()) as f32;
+        bed_ns.set(bed_ns.get() + t.elapsed().as_nanos() as u64);
+        bed_calls.set(bed_calls.get() + 1);
+        r
+    };
+    let build_started = std::time::Instant::now();
     let seed = (key.1 as u32).wrapping_mul(73_856_093)
         ^ (key.2 as u32).wrapping_mul(19_349_663)
         ^ u32::from(key.0);
-    let built = build_tile(&pieces, packed, anchor, bed, sea_radius, under, seed);
+    let built = build_tile(&pieces, packed, anchor, &bed, sea_radius, under, seed);
+    let build_ms = build_started.elapsed().as_secs_f64() * 1e3;
+    if build_ms > 4.0 {
+        info!(
+            "SEA_TILE_BUILT {build_ms:.1} ms, seabed {:.1} ms in {} lookups, {} pieces, level {}",
+            bed_ns.get() as f64 / 1e6,
+            bed_calls.get(),
+            pieces.len(),
+            key.0
+        );
+    }
     for a in &built.ambient {
         let (Ambient::Anthias { at, .. }
         | Ambient::Clowns { at, .. }

@@ -1,0 +1,55 @@
+// MEASUREMENT (`river-hitches`): a regular playthrough, the way the owner
+// plays (owner, 2026-11-26: "maybe introduce regular playthrouhg with ui and
+// stuff", after "I started walking down a river, and the game started out
+// smooth, but quickly dipped in perf"). From a fresh world at the owner's
+// river: gather by hand with the mission tracker up, open the pack, craft,
+// chop, look at the map, then walk on down the river's country and into a
+// town, gathering on the way. Every panel is the player's own, opened by
+// its key. Run with `--frame-log` and `--frame-graph`, nothing else running.
+(
+    goal: "Goal: play from bare hands down the river to a town",
+    at: Some((19.25, -6.75)),
+    hour: 10.0,
+    shots: [
+        (
+            caption: "Gather by hand",
+            max_s: 240.0,
+            acts: [Focus("gather"), PickUp(Have("fibre", 8)), PickUp(Have("stone", 9)), Dig(Times(6), 2), Still],
+        ),
+        (
+            caption: "Open the pack, craft an axe",
+            max_s: 120.0,
+            acts: [Pack(3.0), Chop(Have("log", 1)), Craft("stone-axe", 1)],
+        ),
+        (
+            caption: "Look at the map",
+            max_s: 30.0,
+            acts: [Map(5.0)],
+        ),
+        (
+            caption: "Down the river's country (1 of 4)",
+            max_s: 300.0,
+            acts: [Away(250.0), Hand("axe"), Chop(Have("log", 4)), Pack(2.0)],
+        ),
+        (
+            caption: "Down the river's country (2 of 4)",
+            max_s: 300.0,
+            acts: [Away(250.0), Hand("hand"), PickUp(Have("stone", 14)), Missions(2.0)],
+        ),
+        (
+            caption: "Down the river's country (3 of 4)",
+            max_s: 300.0,
+            acts: [Away(250.0), Hand("axe"), Chop(Have("log", 8)), Map(3.0)],
+        ),
+        (
+            caption: "Down the river's country (4 of 4)",
+            max_s: 300.0,
+            acts: [Away(250.0), Pack(2.0)],
+        ),
+        (
+            caption: "Into the nearest town, and talk",
+            max_s: 600.0,
+            acts: [Seek("town"), Talk(1), Away(60.0), Seek("town")],
+        ),
+    ],
+)

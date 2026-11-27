@@ -53,3 +53,26 @@ other agents capture).
 - Recommendation taken (ask only with screenshots): no rain volume under
   water, rather than the rain through the window (section 3); the shots are
   in the README for the owner to judge.
+
+## 6. The splashes under a lake or river (owner, 2026-11-26)
+
+The owner, from under water in rain with a rod in hand: "rain fx underwater
+need fixin" (a scatter of white specks over the bed and bright streaks
+across the far water). The rain volume is off under water (section 2), but
+the splashes (`planet_splash.rs`, `weather-rain` 6.4) have a gate of their
+own, and it knows only the sea: `surface_height(up) < 0 && radius <
+PLANET_RADIUS`. Under a lake, a river or a pool, where the ground's height
+is above zero, the splashes still draw: every crown on the bed's column tops
+and on the water's top, seen from below. The near shower closed the same
+hole in `ocean-environments` B17 by reading the column's water at the eye
+(`EyeWaterState`); the splashes never took it.
+
+The fix is one rule for both: the splashes and the shower ask
+`audio::hooks::eye_under_water`, which already reads `EyeWaterState` (a
+river, pool or lake) and falls back to the sea's sheet, and draw nothing
+when it says the eye is under. The shower's own copy of that test goes, so
+the two cannot drift again.
+
+Still to confirm in the game once the owner's session is closed: the owner's
+place in their shot (sea or inland water), and whether the far streaks are
+the splashes or the sheet's rain rings at Snell's window (task 3.3).

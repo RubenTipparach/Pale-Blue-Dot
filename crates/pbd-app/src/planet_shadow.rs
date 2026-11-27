@@ -375,7 +375,23 @@ fn initialize_shadow_pipelines(
         fragment: Some(FragmentState {
             shader: planet.shader.clone(),
             entry_point: Some(Cow::Borrowed("shadow_fragment")),
-            shader_defs: vec!["SHADOW_CASTER".into()],
+            // A pricing instrument (`memory-leak` cut 8): it leaves parts of
+            // the cut-out test out of the casters' fragment, so a
+            // sitting can split the pass's cost between the test and the
+            // raster. It changes the shadows; never for play.
+            // `PBD_SHADOW_PRICE=flat,no_leaf,no_part` leaves the whole test,
+            // the leaves' mask, or the levels' dither out.
+            shader_defs: std::iter::once("SHADOW_CASTER".to_string())
+                .chain(
+                    std::env::var("PBD_SHADOW_PRICE")
+                        .unwrap_or_default()
+                        .split(',')
+                        .map(str::trim)
+                        .filter(|p| !p.is_empty())
+                        .map(|p| format!("SHADOW_{}", p.to_uppercase())),
+                )
+                .map(Into::into)
+                .collect(),
             targets: vec![],
         }),
         primitive,
@@ -794,25 +810,19 @@ pub(super) fn draw_cascades(
         pass.set_viewport(0.0, 0.0, side, side, 0.0, 1.0);
         let draw_span = diagnostics.pass_span(&mut pass, "draw");
         let skip = shadow_skip();
-        pass.set_pipeline(planet);
-        if !skip.contains("terrain") {
-            pass.set_bind_group(0, &*gpu.terrain[i], &[]);
-            pass.draw_indirect(&gpu.indirect, 0);
-        }
-        if !skip.contains("foliage") {
-            pass.set_bind_group(0, &*gpu.foliage[i], &[]);
-            pass.draw_indirect(&gpu.indirect, 16);
-            // The detailed near trees (`flora-v2` design 10) are foliage too.
-            pass.set_bind_group(0, &*gpu.near[i], &[]);
-            for s in 0..super::NEAR_SPECIES {
-                pass.draw_indirect(&gpu.indirect, super::NEAR_ARGS_OFFSET + 16 * s);
+        // Nearest the sun first (`memory-leak` cut 8): the towns, which
+        // have no cut-outs, then the trees' crowns, then the ground under
+        // them. A caster whose fragment can discard cannot be rejected by
+        // depth it has not written yet, but it can by depth already there:
+        // drawn after what stands over it, the ground and the lower crowns
+        // are left unshaded where they are hidden. The nearest depth wins
+        // each texel in any order, so the maps are the same.
+        // `PBD_SHADOW_ORDER_OLD` draws the ground first, as before.
+        let old_order = std::env::var_os("PBD_SHADOW_ORDER_OLD").is_some();
+        let towns = |pass: &mut wgpu::RenderPass<'_>| {
+            if skip.contains("towns") {
+                return;
             }
-        }
-        if !skip.contains("column") {
-            pass.set_bind_group(0, &*gpu.column[i], &[]);
-            pass.draw_indirect(&gpu.indirect, 64);
-        }
-        if !skip.contains("towns") {
             pass.set_pipeline(town);
             pass.set_bind_group(0, &*gpu.casters[i].1, &[]);
             // Only the chunks this cascade's box holds, and a town's dressing
@@ -829,6 +839,39 @@ pub(super) fn draw_cascades(
                     pass.draw(chunk.first..chunk.first + chunk.count, 0..1);
                 }
             }
+        };
+        let foliage = |pass: &mut wgpu::RenderPass<'_>| {
+            if skip.contains("foliage") {
+                return;
+            }
+            pass.set_bind_group(0, &*gpu.foliage[i], &[]);
+            pass.draw_indirect(&gpu.indirect, 16);
+            // The detailed near trees (`flora-v2` design 10) are foliage too.
+            pass.set_bind_group(0, &*gpu.near[i], &[]);
+            for s in 0..super::NEAR_SPECIES {
+                pass.draw_indirect(&gpu.indirect, super::NEAR_ARGS_OFFSET + 16 * s);
+            }
+        };
+        let ground = |pass: &mut wgpu::RenderPass<'_>| {
+            if !skip.contains("terrain") {
+                pass.set_bind_group(0, &*gpu.terrain[i], &[]);
+                pass.draw_indirect(&gpu.indirect, 0);
+            }
+            if !skip.contains("column") {
+                pass.set_bind_group(0, &*gpu.column[i], &[]);
+                pass.draw_indirect(&gpu.indirect, 64);
+            }
+        };
+        if old_order {
+            pass.set_pipeline(planet);
+            ground(&mut pass);
+            foliage(&mut pass);
+            towns(&mut pass);
+        } else {
+            towns(&mut pass);
+            pass.set_pipeline(planet);
+            foliage(&mut pass);
+            ground(&mut pass);
         }
         draw_span.end(&mut pass);
         drop(pass);

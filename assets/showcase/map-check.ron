@@ -1,0 +1,18 @@
+// MEASUREMENT (`memory-leak`, cut 5): the map held open, stilled at 2, 10
+// and 30 seconds, to see how long it takes to paint every tile.
+(
+    goal: "Goal: hold the map open until it has painted",
+    at: None,
+    hour: 10.0,
+    shots: [
+        (
+            caption: "Hold the map open",
+            max_s: 120.0,
+            acts: [
+                Wait(30.0),
+                Tap("M"), Wait(2.0), Still, Wait(8.0), Still, Wait(20.0), Still,
+                Tap("M"), Wait(2.0),
+            ],
+        ),
+    ],
+)

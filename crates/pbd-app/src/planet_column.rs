@@ -142,8 +142,14 @@ pub(crate) fn pack_materials(column: &Column, out: &mut [u32]) {
     for layer in 0..LAYERS {
         let shift = (layer % MATERIAL_PER_WORD) * 4;
         // As drawn: a drowned top is a bed (`flora-v2` 12.10).
-        out[layer / MATERIAL_PER_WORD] |=
-            (render_code(column.drawn_material(layer)) & 0xf) << shift;
+        // A modelled cell is air to the terrain's draw (`station-models`).
+        let drawn = column.drawn_material(layer);
+        let code = if drawn.modelled() {
+            0
+        } else {
+            render_code(drawn)
+        };
+        out[layer / MATERIAL_PER_WORD] |= (code & 0xf) << shift;
     }
 }
 
@@ -246,6 +252,10 @@ pub struct ColumnTier {
     /// burning, which light it, and the placed torches the rain put out,
     /// which do not.
     fire: TierFire,
+    /// Whether an edit has changed the columns since the light was baked:
+    /// the relight is baked off the main thread (`river-hitches` design 7,
+    /// `planet::lod::relight_edits`), and swapped in when it is done.
+    light_stale: bool,
 }
 
 /// The tier's fire (`wildfire` design 9 and 13), by cell key, in key order:
@@ -828,6 +838,13 @@ impl Grid for TierGrid<'_> {
     }
 }
 
+/// A tier's light, baked from it by [`ColumnTier::bake_relight`].
+pub struct Relit {
+    sides: Vec<[u32; 6]>,
+    lamps: Vec<LampSpot>,
+    light: light::Baked,
+}
+
 /// One emitting cell: its column's unit direction, the middle of its layer
 /// in metres above the planet's radius, and its level, 0..`light::MAX`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -853,6 +870,7 @@ impl ColumnTier {
             relit: 0,
             lamps: Vec::new(),
             fire: TierFire::default(),
+            light_stale: false,
             water: TierWater::default(),
         }
     }
@@ -1262,10 +1280,17 @@ impl ColumnTier {
     /// pass is where the reference records its own scar - a dug cell that
     /// "stayed dark forever".
     pub fn relight(&mut self) {
-        self.relit += 1;
-        self.sides = self.neighbor_slots();
+        let baked = self.bake_relight();
+        self.take_relight(baked);
+    }
+
+    /// What [`Self::relight`] computes, from the tier as it stands, without
+    /// changing it: so it can run on another thread (`river-hitches`
+    /// design 7) and be taken with [`Self::take_relight`].
+    pub fn bake_relight(&self) -> Relit {
+        let sides = self.neighbor_slots();
         let emitters = self.emitters();
-        self.lamps = emitters
+        let lamps = emitters
             .iter()
             .filter_map(|e| {
                 let direction = *self.centres.get(e.column as usize)?;
@@ -1277,13 +1302,37 @@ impl ColumnTier {
                 })
             })
             .collect();
-        self.light = light::bake(
+        let light = light::bake(
             &light::Region {
                 columns: &self.columns,
-                neighbors: &self.sides,
+                neighbors: &sides,
             },
             &emitters,
         );
+        Relit {
+            sides,
+            lamps,
+            light,
+        }
+    }
+
+    /// Take a light baked by [`Self::bake_relight`] from this same tier.
+    pub fn take_relight(&mut self, baked: Relit) {
+        self.relit += 1;
+        self.sides = baked.sides;
+        self.lamps = baked.lamps;
+        self.light = baked.light;
+        self.light_stale = false;
+    }
+
+    /// An edit changed the columns and its light is being baked elsewhere.
+    pub fn mark_light_stale(&mut self) {
+        self.light_stale = true;
+    }
+
+    /// Whether the light waits on a bake of an edit (`mark_light_stale`).
+    pub fn light_stale(&self) -> bool {
+        self.light_stale
     }
 
     /// Both channels at a point, 0..1 `(sky, block)`: what lights the things
@@ -1291,6 +1340,54 @@ impl ColumnTier {
     /// `record` is the finest record the point is over, `direction` its unit
     /// direction and `altitude` its metres above the planet's radius. Off the
     /// tier it answers the open sky and no lamp.
+    /// A digest of everything [`Self::sample`] reads at these probes, each
+    /// a finest record and the lower of the two layers a point sits
+    /// between (`memory-leak` cut 9): for the probe's column and each of
+    /// its neighbours, whether it is in the region, where its centre is,
+    /// and at both layers whether it is solid and the light it holds. Two
+    /// tiers with the same digest at a town's probes sample the same light
+    /// at every point of it, so its bake is kept.
+    pub fn light_digest(&self, probes: &[(Option<usize>, u16)]) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        for &(record, lo) in probes {
+            let slot = record
+                .and_then(|record| self.slots.get(record).copied())
+                .filter(|&slot| slot != usize::MAX && slot < self.sides.len());
+            let Some(slot) = slot else {
+                0u8.hash(&mut h);
+                continue;
+            };
+            1u8.hash(&mut h);
+            let levels = [
+                usize::from(lo).min(LAYERS - 1),
+                (usize::from(lo) + 1).min(LAYERS - 1),
+            ];
+            for cell in std::iter::once(slot as u32).chain(self.sides[slot].iter().copied()) {
+                let in_region =
+                    cell != pbd_core::light::OFF_REGION && (cell as usize) < self.centres.len();
+                in_region.hash(&mut h);
+                if !in_region {
+                    continue;
+                }
+                let c = cell as usize;
+                self.centres[c].to_array().map(f32::to_bits).hash(&mut h);
+                for level in levels {
+                    self.columns
+                        .get(c)
+                        .is_none_or(|col| col.solid(level))
+                        .hash(&mut h);
+                    self.light
+                        .get(c)
+                        .and_then(|l| l.get(level))
+                        .map(|l| l.0)
+                        .hash(&mut h);
+                }
+            }
+        }
+        h.finish()
+    }
+
     pub fn sample(&self, record: Option<usize>, direction: Vec3, altitude: f32) -> (f32, f32) {
         let slot = record
             .and_then(|record| self.slots.get(record).copied())
@@ -1421,6 +1518,7 @@ impl ColumnTier {
             relit: 0,
             lamps: Vec::new(),
             fire: TierFire::default(),
+            light_stale: false,
             water: TierWater {
                 queue: liquid::Queue::new(),
                 keys: (0..n as u32).map(|i| 100 + i).collect(),
@@ -1455,7 +1553,9 @@ pub fn reconcile_surface(
     index: usize,
     column: &Column,
 ) {
-    let Some(top) = column.surface() else {
+    // The top the terrain draws: a chest or a workbench on it is a model
+    // (`station-models` design 1), so the record's cap is the ground under it.
+    let Some(top) = column.drawn_surface() else {
         return;
     };
     let top_m = column::layer_altitude(top) + 1.0;
@@ -2202,6 +2302,7 @@ pub fn build_with(
         relit: 0,
         lamps: Vec::new(),
         fire: TierFire::default(),
+        light_stale: false,
         water: TierWater {
             queue: liquid::Queue::new(),
             keys: members.iter().map(|&i| finest[i].key()).collect(),
@@ -3471,6 +3572,7 @@ mod tests {
             relit: 0,
             lamps: Vec::new(),
             fire: TierFire::default(),
+            light_stale: false,
             water: TierWater::default(),
         };
         tier.relight();
@@ -3783,6 +3885,7 @@ mod tests {
             relit: 0,
             lamps: Vec::new(),
             fire: TierFire::default(),
+            light_stale: false,
             water: TierWater::default(),
         };
         tier.relight();
@@ -3884,6 +3987,7 @@ mod water_tier_tests {
             relit: 0,
             lamps: Vec::new(),
             fire: TierFire::default(),
+            light_stale: false,
             water: TierWater {
                 queue: liquid::Queue::new(),
                 keys: (0..N as u32).map(|i| 100 + i).collect(),
@@ -4830,6 +4934,13 @@ mod placed_block_tests {
                 let tier = ColumnTier::for_tests(vec![built.clone()], &[[NO_NEIGHBOR; 6]]);
                 let codes = tier.gpu_materials();
                 let sheets = tier.gpu_placed_sheets();
+                // A chest or a workbench is a model, not terrain
+                // (`station-models` design 1): air to the column pass, and
+                // the record's cap is the ground under it.
+                if m.modelled() {
+                    assert_eq!(nibble(&codes, layer), 0, "{what}: drawn as a model");
+                    continue;
+                }
                 assert_eq!(
                     nibble(&codes, layer),
                     render_code(m) & 0xf,

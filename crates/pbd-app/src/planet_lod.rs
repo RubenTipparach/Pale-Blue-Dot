@@ -692,6 +692,14 @@ impl FineSet {
         self.mark_sea();
     }
 
+    /// After one or more [`FineSet::apply`] on the main thread: the light is
+    /// left as it was and marked stale, and [`relight_edits`] bakes it and
+    /// marks the sea off the main thread (`river-hitches` design 7: the
+    /// whole tier's relight is 52 to 64 ms at the spawn).
+    pub fn finish_edits_later(&mut self) {
+        self.columns.mark_light_stale();
+    }
+
     /// Bring the glowing mushrooms' bits round to the picks as they stand
     /// (`glowing-mushrooms` design 4), each cell built `from_camera_m(dir)`
     /// metres from the camera: a pick taken since the set was built goes
@@ -1530,6 +1538,56 @@ pub fn switch_dusk_lamps(
             count.map_or(0, |c| c.0),
             fine.version
         );
+    }
+}
+
+/// The relight an edit left for later (`FineSet::finish_edits_later`),
+/// baking on the async pool.
+#[derive(Default)]
+pub struct EditRelighting {
+    task: Option<Task<(Arc<FineSet>, FineSet)>>,
+}
+
+/// Bakes the light of an edited set off the main thread and swaps it in
+/// (`river-hitches` design 7): the copy is relit and its sea re-marked on
+/// the async pool, and taken only if the set is still the one it copied,
+/// the way [`switch_dusk_lamps`] swaps its relit set. A set that changed
+/// meanwhile (another edit, a landing) is baked again from where it stands.
+pub fn relight_edits(
+    fine: Option<ResMut<PlanetFine>>,
+    contact: Option<ResMut<crate::planet::PlanetContact>>,
+    mut baking: Local<EditRelighting>,
+) {
+    let Some(mut fine) = fine else {
+        return;
+    };
+    if let Some(task) = baking.task.as_mut()
+        && let Some((from, relit)) = block_on(poll_once(task))
+    {
+        baking.task = None;
+        if Arc::ptr_eq(&from, &fine.set) {
+            let relit = Arc::new(relit);
+            if let Some(mut contact) = contact {
+                contact.relit(&fine.set, &relit);
+            }
+            fine.set = relit;
+            fine.version += 1;
+        }
+    }
+    if baking.task.is_none() && fine.set.columns.light_stale() {
+        let from = fine.set.clone();
+        baking.task = Some(AsyncComputeTaskPool::get().spawn(async move {
+            let started = std::time::Instant::now();
+            let mut set = (*from).clone();
+            set.finish_edits();
+            // MEASUREMENT (`river-hitches` 4.4): what an edit's relight costs
+            // the worker, off the frame.
+            debug!(
+                "EDIT_RELIGHT on the pool in {:.1} ms",
+                started.elapsed().as_secs_f64() * 1000.0
+            );
+            (from, set)
+        }));
     }
 }
 

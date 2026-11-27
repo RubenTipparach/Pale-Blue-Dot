@@ -549,6 +549,13 @@ pub fn spawn_pack_craft(
         });
 }
 
+/// The column's height for `rows` recipes: the lintel, the list, and the
+/// foot under it (the craft row and the hands' bar, placed absolutely, so
+/// the panel round it is sized from this, or the foot hangs over its rim).
+pub fn column_height(rows: usize) -> f32 {
+    5.0 + list_height(rows) + 6.0 + 3.0 + slots::SLOT + 4.0 + 10.0
+}
+
 /// The recipe list's height for `rows` recipes, native px: every row up to
 /// [`ROWS_SHOWN`], each `ROW` tall with a pixel between.
 pub fn list_height(rows: usize) -> f32 {
@@ -707,35 +714,47 @@ fn spawn_station_bench(
                     }
                 });
             craft_row(panel, kit, atlas, station, 3);
-            panel.spawn((
-                KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
-                Node {
-                    margin: UiRect::new(px(0), px(0), px(4), px(3)),
-                    ..default()
-                },
-                BenchLine,
-            ));
+            // The queue's line and its bar, centred in the space under the
+            // recipes rather than sat on the panel's bottom rim (owner,
+            // 2026-11-26: "progress bar should be a little more vertically
+            // centered").
             panel
-                .spawn((
-                    bar,
-                    Node {
-                        width: percent(100),
-                        height: px(10),
-                        flex_shrink: 0.0,
-                        padding: UiRect::new(px(5), px(5), px(3), px(4)),
-                        ..default()
-                    },
-                ))
-                .with_children(|bar| {
-                    bar.spawn((
-                        fill,
+                .spawn(Node {
+                    flex_grow: 1.0,
+                    flex_direction: FlexDirection::Column,
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                })
+                .with_children(|tail| {
+                    tail.spawn((
+                        KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
                         Node {
-                            width: percent(0),
-                            height: percent(100),
+                            margin: UiRect::new(px(0), px(0), px(4), px(3)),
                             ..default()
                         },
-                        BenchFill,
+                        BenchLine,
                     ));
+                    tail.spawn((
+                        bar,
+                        Node {
+                            width: percent(100),
+                            height: px(10),
+                            flex_shrink: 0.0,
+                            padding: UiRect::new(px(5), px(5), px(3), px(4)),
+                            ..default()
+                        },
+                    ))
+                    .with_children(|bar| {
+                        bar.spawn((
+                            fill,
+                            Node {
+                                width: percent(0),
+                                height: percent(100),
+                                ..default()
+                            },
+                            BenchFill,
+                        ));
+                    });
                 });
         });
 }

@@ -153,7 +153,7 @@ pub enum Key {
 /// is in the kit's font (`ui_kit::tests::the_kit_font_has_every_label_glyph`
 /// reads this table). A key outside it is not taken by a rebind, and a cap
 /// waits for another.
-pub const ASSIGNABLE: [KeyCode; 87] = [
+pub const ASSIGNABLE: [KeyCode; 89] = [
     KeyCode::KeyA,
     KeyCode::KeyB,
     KeyCode::KeyC,
@@ -230,6 +230,8 @@ pub const ASSIGNABLE: [KeyCode; 87] = [
     KeyCode::Comma,
     KeyCode::Period,
     KeyCode::Slash,
+    KeyCode::BracketLeft,
+    KeyCode::BracketRight,
     KeyCode::Numpad0,
     KeyCode::Numpad1,
     KeyCode::Numpad2,
@@ -339,15 +341,19 @@ pub enum Tab {
     Flying,
     Vehicles,
     Menus,
+    /// Developer keys (owner, 2026-11-25: "document key stuff under debug
+    /// inputs tab").
+    Debug,
 }
 
 impl Tab {
-    pub const ALL: [Tab; 5] = [
+    pub const ALL: [Tab; 6] = [
         Tab::OnFoot,
         Tab::Hands,
         Tab::Flying,
         Tab::Vehicles,
         Tab::Menus,
+        Tab::Debug,
     ];
 
     /// The sub-tab's label, in the kit's font.
@@ -358,6 +364,7 @@ impl Tab {
             Tab::Flying => tr("controls.tab.flying"),
             Tab::Vehicles => tr("controls.tab.vehicles"),
             Tab::Menus => tr("controls.tab.menus"),
+            Tab::Debug => tr("controls.tab.debug"),
         }
     }
 }
@@ -573,12 +580,16 @@ const AFLOAT: [Binding; 3] = [
     row(&[Key::Board(KeyCode::KeyG)], " ", "tool_wheel"),
 ];
 
-const WORLD: [Binding; 5] = [
+const WORLD: [Binding; 7] = [
     row(&[Key::Board(KeyCode::KeyM)], " ", "map"),
     row(&[Key::Board(KeyCode::KeyR)], " ", "walk_or_fly"),
     row(&[Key::Board(KeyCode::KeyH)], " ", "spawn"),
     row(&[Key::Board(KeyCode::KeyP)], " ", "weather"),
     row(&[Key::Board(KeyCode::KeyL)], " ", "noon_midnight"),
+    // With the DEBUG page's time controls on (`time-speed`); Shift held
+    // with either, a day every five seconds.
+    row(&[Key::Board(KeyCode::BracketLeft)], " ", "time_back"),
+    row(&[Key::Board(KeyCode::BracketRight)], " ", "time_forward"),
 ];
 
 /// The repro key (`repro-capture`; the owner, 2026-11-16: "add a button
@@ -590,7 +601,16 @@ const REPRO_KEYS: [Key; 3] = [
     Key::Board(KeyCode::KeyF),
 ];
 
-const SCREEN: [Binding; 9] = [
+/// The bot's hand-over (`bot-control` design 4; owner, 2026-11-25: "ctrl+shift
+/// f would be a good set of keys to do it"): in a showcase run, the player
+/// takes the controls from the bot, or gives them back.
+const TAKEOVER_KEYS: [Key; 3] = [
+    Key::Board(KeyCode::ControlLeft),
+    Key::Board(KeyCode::ShiftLeft),
+    Key::Board(KeyCode::KeyF),
+];
+
+const SCREEN: [Binding; 5] = [
     row(&[Key::Board(KeyCode::Escape)], " ", "menu"),
     row(&[Key::Board(KeyCode::KeyJ)], " ", "guide"),
     row(
@@ -600,6 +620,10 @@ const SCREEN: [Binding; 9] = [
     ),
     row(&[Key::Board(KeyCode::KeyO)], " ", "missions"),
     row(&[Key::Board(KeyCode::F12)], " ", "screenshot"),
+];
+
+/// Developer keys: the overlays, the water tools, the repro and the bot.
+const DEBUG: [Binding; 5] = [
     Binding {
         chord: true,
         ..row(&REPRO_KEYS, " + ", "repro")
@@ -607,6 +631,10 @@ const SCREEN: [Binding; 9] = [
     row(&[Key::Board(KeyCode::F3)], " ", "frame_graph"),
     row(&[Key::Board(KeyCode::F5)], " ", "flow_arrows"),
     row(&[Key::Board(KeyCode::F6)], " ", "pour_water"),
+    Binding {
+        chord: true,
+        ..row(&TAKEOVER_KEYS, " + ", "bot_takeover")
+    },
 ];
 
 const fn group(id: &'static str, tab: Tab, when: When, rows: &'static [Binding]) -> Group {
@@ -622,7 +650,7 @@ const fn group(id: &'static str, tab: Tab, when: When, rows: &'static [Binding])
 /// Flying sub-tab, went with it in `retire-kestrel`, the Tern's, TERN, in
 /// `retire-tern`, and ROWBOAT and COG in `retire-rowboat-and-cog`; a saved
 /// rebind of one of their slots is kept in the file and read by nothing.)
-pub static BINDINGS: [Group; 12] = [
+pub static BINDINGS: [Group; 13] = [
     group("on_foot", Tab::OnFoot, When::OnFoot, &ON_FOOT),
     group("interact", Tab::Hands, When::OnFootOrAboard, &INTERACT),
     group("hands", Tab::Hands, When::OnFoot, &HANDS),
@@ -635,6 +663,7 @@ pub static BINDINGS: [Group; 12] = [
     group("fishing_afloat", Tab::Vehicles, When::Paddled, &AFLOAT),
     group("world", Tab::Menus, When::Always, &WORLD),
     group("screen", Tab::Menus, When::Always, &SCREEN),
+    group("debug", Tab::Debug, When::Always, &DEBUG),
 ];
 
 /// One key of one row that a player can change: named by its group and its

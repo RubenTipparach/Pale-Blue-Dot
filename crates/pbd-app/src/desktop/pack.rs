@@ -627,7 +627,11 @@ pub fn spawn(
                         // size, not its contents'.
                         Node {
                             width: px(CRAFT_PANEL.0),
-                            height: px(CRAFT_PANEL.1),
+                            // As tall as its list and craft row need.
+                            height: px(CRAFT_PANEL.1.max(
+                                super::craft::column_height(recipes.0.at("hand").count())
+                                    + 2.0 * RIM,
+                            )),
                             flex_shrink: 0.0,
                             padding: UiRect::all(px(RIM)),
                             ..default()

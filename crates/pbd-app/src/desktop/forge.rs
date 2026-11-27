@@ -149,35 +149,47 @@ pub fn spawn(
                                 ));
                             });
                     }
-                    panel.spawn((
-                        KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
-                        Node {
-                            margin: UiRect::new(px(0), px(0), px(4), px(3)),
-                            ..default()
-                        },
-                        QueueText,
-                    ));
+                    // The queue's line and its bar, centred in the space under the
+                    // recipes rather than sat on the panel's bottom rim (owner,
+                    // 2026-11-26: "progress bar should be a little more vertically
+                    // centered").
                     panel
-                        .spawn((
-                            bar,
-                            Node {
-                                width: percent(100),
-                                height: px(10),
-                                flex_shrink: 0.0,
-                                padding: UiRect::new(px(5), px(5), px(3), px(4)),
-                                ..default()
-                            },
-                        ))
-                        .with_children(|bar| {
-                            bar.spawn((
-                                fill,
+                        .spawn(Node {
+                            flex_grow: 1.0,
+                            flex_direction: FlexDirection::Column,
+                            justify_content: JustifyContent::Center,
+                            ..default()
+                        })
+                        .with_children(|tail| {
+                            tail.spawn((
+                                KitText::new(Localized::empty(), ui_kit::TEXT).shadow(ui_kit::INK),
                                 Node {
-                                    width: percent(0),
-                                    height: percent(100),
+                                    margin: UiRect::new(px(0), px(0), px(4), px(3)),
                                     ..default()
                                 },
-                                QueueFill,
+                                QueueText,
                             ));
+                            tail.spawn((
+                                bar,
+                                Node {
+                                    width: percent(100),
+                                    height: px(10),
+                                    flex_shrink: 0.0,
+                                    padding: UiRect::new(px(5), px(5), px(3), px(4)),
+                                    ..default()
+                                },
+                            ))
+                            .with_children(|bar| {
+                                bar.spawn((
+                                    fill,
+                                    Node {
+                                        width: percent(0),
+                                        height: percent(100),
+                                        ..default()
+                                    },
+                                    QueueFill,
+                                ));
+                            });
                         });
                 });
             super::craft::spawn_bench(layer, kit, &atlas, &recipes);

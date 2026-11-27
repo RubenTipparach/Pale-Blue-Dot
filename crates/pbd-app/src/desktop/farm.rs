@@ -1131,11 +1131,10 @@ pub struct FarmLooks {
     iron: Handle<StandardMaterial>,
     flame: Handle<Mesh>,
     fire: Handle<StandardMaterial>,
-    /// The workbench's plank top and its vise (`tool-crafting` decision 5):
-    /// plain boxes in the forge's chimney's pipeline.
-    board: Handle<Mesh>,
-    vise: Handle<Mesh>,
-    oak: Handle<StandardMaterial>,
+    /// The chest and the workbench as models (`station-models` design 2):
+    /// a mesh per texture, each with its material.
+    chest_model: Vec<(Handle<Mesh>, Handle<StandardMaterial>)>,
+    workbench_model: Vec<(Handle<Mesh>, Handle<StandardMaterial>)>,
     /// The carpenter's bench's board, saw and square (`furniture` design
     /// 1), in the oak and the iron.
     carpenter_wood: Handle<Mesh>,
@@ -1149,7 +1148,41 @@ pub struct FarmLooks {
     linen_tex: Handle<StandardMaterial>,
 }
 
-/// A mesh of the faces of `polys` in textures `keep`, flat-shaded.
+/// A model as one mesh per texture, each with the town's texture at its
+/// manifest's scale (`station-models` design 2), sampled nearest.
+fn model_parts(
+    polys: &[pbd_core::furniture::model::Poly],
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    assets: &AssetServer,
+) -> Vec<(Handle<Mesh>, Handle<StandardMaterial>)> {
+    let mut names: Vec<&'static str> = polys.iter().map(|p| p.texture).collect();
+    names.sort_unstable();
+    names.dedup();
+    names
+        .into_iter()
+        .map(|name| {
+            let repeat_m = match name {
+                pbd_core::furniture::model::TOP | pbd_core::furniture::model::BOARDS => 2.0,
+                _ => 1.0,
+            };
+            let material = materials.add(StandardMaterial {
+                base_color_texture: Some(pbd_app::towns::texture(assets, name)),
+                perceptual_roughness: if name == pbd_core::furniture::model::IRON {
+                    0.6
+                } else {
+                    0.92
+                },
+                ..default()
+            });
+            (meshes.add(polys_mesh(polys, &[name], repeat_m)), material)
+        })
+        .collect()
+}
+
+/// A mesh of the faces of `polys` in textures `keep`, shaded smooth where
+/// the model says; a face with its own texture coordinates (a chest's
+/// painted bands) keeps them, the rest take the town's world mapping.
 fn polys_mesh(polys: &[pbd_core::furniture::model::Poly], keep: &[&str], repeat_m: f32) -> Mesh {
     let (mut positions, mut normals, mut uvs) = (Vec::new(), Vec::new(), Vec::new());
     for poly in polys.iter().filter(|p| keep.contains(&p.texture)) {
@@ -1169,7 +1202,10 @@ fn polys_mesh(polys: &[pbd_core::furniture::model::Poly], keep: &[&str], repeat_
                 let p = poly.points[k];
                 positions.push(p.to_array());
                 normals.push(poly.normals[k].to_array());
-                uvs.push(uv(p));
+                uvs.push(match &poly.uvs {
+                    Some(own) => own[k].to_array(),
+                    None => uv(p),
+                });
             }
         }
     }
@@ -1267,7 +1303,18 @@ pub fn make_looks(
             ..default()
         }),
         flame: meshes.add(clumps_mesh(0.45, 0.0)),
-        board: meshes.add(Cuboid::new(1.5, 0.08, 0.32)),
+        chest_model: model_parts(
+            &pbd_core::furniture::model::station_chest(),
+            &mut meshes,
+            &mut materials,
+            &assets,
+        ),
+        workbench_model: model_parts(
+            &pbd_core::furniture::model::workbench(),
+            &mut meshes,
+            &mut materials,
+            &assets,
+        ),
         carpenter_wood: meshes.add(polys_mesh(
             &pbd_core::furniture::model::carpenter_top(),
             &[
@@ -1309,12 +1356,6 @@ pub fn make_looks(
         iron_tex: materials.add(StandardMaterial {
             base_color_texture: Some(pbd_app::towns::texture(&assets, "iron")),
             perceptual_roughness: 0.6,
-            ..default()
-        }),
-        vise: meshes.add(Cuboid::new(0.22, 0.22, 0.3)),
-        oak: materials.add(StandardMaterial {
-            base_color: Color::srgb(0.55, 0.38, 0.21),
-            perceptual_roughness: 0.9,
             ..default()
         }),
         // The flame draws its own light, unlit, as a lamp's flame does.
@@ -1652,10 +1693,16 @@ pub fn show(
         let Some(transform) = standing(&fine, index, usize::from(layer), 0.0).map(drawn) else {
             continue;
         };
-        if material == Material::Chest {
-            // A chest (`storage-chests` design 1): an iron strap across the
-            // lid and a dark iron hasp at its edge, on the wood block; lit
-            // as the ground is, with no outline.
+        if material.modelled() {
+            // A chest or a workbench is a model standing on its cell's floor
+            // (`station-models` design 3); the terrain does not draw the cell.
+            let parts = if material == Material::Chest {
+                &looks.chest_model
+            } else {
+                &looks.workbench_model
+            };
+            let mut transform = transform;
+            transform.translation -= transform.rotation * Vec3::Y;
             commands
                 .spawn((
                     transform,
@@ -1670,17 +1717,10 @@ pub fn show(
                         leaving: false,
                     },
                 ))
-                .with_children(|chest| {
-                    chest.spawn((
-                        Mesh3d(looks.board.clone()),
-                        MeshMaterial3d(looks.iron.clone()),
-                        Transform::from_xyz(0.0, 0.01, 0.0).with_scale(Vec3::new(1.6, 0.5, 0.5)),
-                    ));
-                    chest.spawn((
-                        Mesh3d(looks.vise.clone()),
-                        MeshMaterial3d(looks.iron.clone()),
-                        Transform::from_xyz(1.12, 0.08, 0.0).with_scale(Vec3::new(0.8, 0.7, 1.0)),
-                    ));
+                .with_children(|piece| {
+                    for (mesh, material) in parts {
+                        piece.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone())));
+                    }
                 });
             continue;
         }
@@ -1776,39 +1816,6 @@ pub fn show(
                             MeshMaterial3d(paving.material(*stuff)),
                         ));
                     }
-                });
-            continue;
-        }
-        if material == Material::Workbench {
-            // Two planks laid across the top and an iron vise at one end,
-            // after M3's workbench icon.
-            commands
-                .spawn((
-                    transform,
-                    Visibility::default(),
-                    LitByField,
-                    LitLikeTerrain,
-                    Faded(1.0),
-                    ForgeView {
-                        cell,
-                        layer,
-                        working: false,
-                        leaving: false,
-                    },
-                ))
-                .with_children(|bench| {
-                    for z in [-0.18, 0.18] {
-                        bench.spawn((
-                            Mesh3d(looks.board.clone()),
-                            MeshMaterial3d(looks.oak.clone()),
-                            Transform::from_xyz(0.0, 0.04, z),
-                        ));
-                    }
-                    bench.spawn((
-                        Mesh3d(looks.vise.clone()),
-                        MeshMaterial3d(looks.iron.clone()),
-                        Transform::from_xyz(0.6, 0.19, 0.0),
-                    ));
                 });
             continue;
         }

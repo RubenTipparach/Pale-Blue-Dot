@@ -374,12 +374,61 @@ impl PlanetGround<'_> {
     }
 }
 
+/// MEASUREMENT (`memory-leak`, towns at 60 fps): `draw`'s time and its
+/// ground and water lookups, logged once a second as `CRITTERS_DRAW`.
+static DRAW_NS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static GROUND_CALLS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static LEVEL_CALLS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static LEVEL_NS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static DRAW_FRAMES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+struct DrawTimer(std::time::Instant);
+impl Drop for DrawTimer {
+    fn drop(&mut self) {
+        use std::sync::atomic::Ordering::Relaxed;
+        DRAW_NS.fetch_add(self.0.elapsed().as_nanos() as u64, Relaxed);
+        DRAW_FRAMES.fetch_add(1, Relaxed);
+    }
+}
+
+fn log_draw_time(now: f32, last: &mut f32) {
+    use std::sync::atomic::Ordering::Relaxed;
+    if now - *last < 1.0 {
+        return;
+    }
+    *last = now;
+    let frames = DRAW_FRAMES.swap(0, Relaxed).max(1) as f64;
+    let ms = DRAW_NS.swap(0, Relaxed) as f64 / 1e6 / frames;
+    let ground = GROUND_CALLS.swap(0, Relaxed) as f64 / frames;
+    let level = LEVEL_CALLS.swap(0, Relaxed) as f64 / frames;
+    let level_ms = LEVEL_NS.swap(0, Relaxed) as f64 / 1e6 / frames;
+    if ms > 0.5 {
+        info!(
+            "CRITTERS_DRAW {ms:.2} ms a frame, {ground:.0} ground and {level:.0} water lookups ({level_ms:.2} ms)"
+        );
+    }
+}
+
 impl Ground for PlanetGround<'_> {
     fn ground(&self, x: f32, z: f32) -> f32 {
+        GROUND_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.frame.height(self.floor(self.frame.dir(x, z)))
     }
 
     fn level(&self, x: f32, z: f32) -> Option<f32> {
+        LEVEL_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let started = std::time::Instant::now();
+        let out = self.level_inner(x, z);
+        LEVEL_NS.fetch_add(
+            started.elapsed().as_nanos() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        out
+    }
+}
+
+impl PlanetGround<'_> {
+    fn level_inner(&self, x: f32, z: f32) -> Option<f32> {
         let dir = self.frame.dir(x, z);
         let floor = self.floor(dir);
         if let Some(contact) = self.contact
@@ -423,6 +472,8 @@ struct Slot {
 pub struct Drawn {
     slots: Vec<Slot>,
     near: Vec<(f32, usize, usize)>,
+    /// When `CRITTERS_DRAW` was last logged, s.
+    logged_s: f32,
 }
 
 impl Drawn {
@@ -596,6 +647,8 @@ fn draw(
     mut lit_materials: ResMut<Assets<FieldLitMaterial>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    let _timer = DrawTimer(std::time::Instant::now());
+    log_draw_time(time.elapsed_secs(), &mut drawn.logged_s);
     let Some(kit) = kit else {
         return;
     };
