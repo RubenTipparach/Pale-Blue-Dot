@@ -1133,6 +1133,31 @@ region it has wrong and gets it right.
   snapshot makes its digest equal the server's;
 - a game that is behind in sequence does not ask.
 
+### 30. The cheat checks (task 8.7; 2026-11-27)
+
+Design 15.7's three named checks, each a flag in the server's `Cheats`,
+all off unless set. A dedicated server sets them from its flags. The host's
+in-process server never sets them, for its own player or anyone else, and
+single player never runs them.
+- **Movement** (`--max-speed <m/s>`): a pose whose distance from the last,
+  over the time between them, is faster than the limit is logged as
+  `CHEAT player N: moved X m/s` and not passed on to the others. The next
+  pose within the limit is.
+- **Reach** (`--reach <m>`): a request whose target is farther than the
+  limit from the player's last pose is refused with `Refusal::Cheat` and
+  logged. The target is the dug or placed cell's layer, the sown or
+  harvested cell, the drop picked up, or where a toss lands. A request
+  before any pose has arrived is not checked.
+- **Dig time** against the tool is not built. It needs the swing's start
+  in the request, and no request carries that yet. It stays listed here.
+
+Every failed check is kept as `(player, reason)` in `Server::cheats`, for
+the dedicated server's log and a later admin page.
+
+**Checks:** a teleporting pose is not relayed and is logged; a dig past
+reach is refused as `Cheat`, one within it is taken; with no flags set,
+nothing is checked.
+
 ## Risks / Trade-offs
 
 - **Every stateful rule moves to the server path.** This is most of the work,

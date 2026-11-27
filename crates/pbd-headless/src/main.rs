@@ -2,7 +2,7 @@
 //! (`multiplayer` design 21).
 //!
 //! ```text
-//! pbd-headless serve [--port 47124] [--bind 127.0.0.1] [--seed 77] [--clock 1200] [--kit 64] [--seconds S] [--world DIR]
+//! pbd-headless serve [--port 47124] [--bind 127.0.0.1] [--seed 77] [--clock 1200] [--kit 64] [--seconds S] [--world DIR] [--max-speed M/S] [--reach M]
 //! pbd-headless bot --join 127.0.0.1:47124 [--name bot0] [--role 0/3] [--at LAT,LON] [--stress S] [--rate HZ] [--pace S] [--kit 64]
 //! pbd-headless soak [--bots 3] [--stress S] [--kit 64]
 //! ```
@@ -47,6 +47,11 @@ fn main() {
                 kit: number(&args, "--kit", 64),
                 seconds: value(&args, "--seconds").map(|s| s.parse().expect("--seconds")),
                 world: value(&args, "--world").map(std::path::PathBuf::from),
+                cheats: pbd_server::Cheats {
+                    max_speed_mps: value(&args, "--max-speed")
+                        .map(|v| v.parse().expect("--max-speed m/s")),
+                    reach_m: value(&args, "--reach").map(|v| v.parse().expect("--reach m")),
+                },
             };
             match serve(&options, &AtomicBool::new(false), None) {
                 Ok(_) => 0,

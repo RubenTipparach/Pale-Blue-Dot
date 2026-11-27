@@ -292,8 +292,28 @@ pub struct Player {
     pub vitals: Option<pbd_core::survival::Vitals>,
     /// Seconds of play since the vitals were last journaled.
     pub since_vitals_s: f32,
-    /// Where they were last seen (design 24).
+    /// Where they were last seen (design 24), and the server's clock then.
     pub pose: Option<pbd_core::net::protocol::Pose>,
+    pub pose_s: f64,
+}
+
+/// A failed cheat check (design 30): what was seen, and the limit.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Flagged {
+    /// Moved this fast, m/s, past the limit.
+    Speed { mps: f64, limit: f32 },
+    /// Reached this far, m, past the limit.
+    Reach { m: f64, limit: f32 },
+}
+
+/// The cheat checks a dedicated server runs (design 30), each off unless
+/// set. The in-process server never sets them.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Cheats {
+    /// The fastest a player may move between poses, m/s.
+    pub max_speed_mps: Option<f32>,
+    /// The farthest a request's target may be from the player, m.
+    pub reach_m: Option<f32>,
 }
 
 /// A world's crew missions as the server counts them: the chain and the
@@ -324,6 +344,10 @@ pub struct Server {
     /// Where the digest rotation is: the next region after this one
     /// (design 29).
     digest_after: Option<u32>,
+    /// The cheat checks this server runs (design 30).
+    cheats: Cheats,
+    /// Every failed check, in order: the player and what was seen.
+    pub flagged: Vec<(u32, Flagged)>,
 }
 
 impl Server {
@@ -340,6 +364,8 @@ impl Server {
             crew: None,
             farm: pbd_core::farming::FarmSettings::default(),
             digest_after: None,
+            cheats: Cheats::default(),
+            flagged: Vec::new(),
         }
     }
 
@@ -361,6 +387,65 @@ impl Server {
             digest,
         });
         Some(next)
+    }
+
+    /// Run these cheat checks from here on (design 30): a dedicated
+    /// server's flags. Never called for the in-process server.
+    pub fn set_cheats(&mut self, cheats: Cheats) {
+        self.cheats = cheats;
+    }
+
+    fn flag(&mut self, player: u32, seen: Flagged) {
+        match seen {
+            Flagged::Speed { mps, limit } => {
+                eprintln!("CHEAT player {player}: moved {mps:.1} m/s, past {limit} m/s")
+            }
+            Flagged::Reach { m, limit } => {
+                eprintln!("CHEAT player {player}: reached {m:.1} m, past {limit} m")
+            }
+        }
+        self.flagged.push((player, seen));
+    }
+
+    /// Whether `target` (the body's frame, m) is within the reach check of
+    /// `player`'s last pose. No check set, or no pose yet: within.
+    fn within_reach(&mut self, player: u32, target: glam::DVec3) -> bool {
+        let (Some(reach), Some(pose)) = (
+            self.cheats.reach_m,
+            self.players.get(&player).and_then(|p| p.pose),
+        ) else {
+            return true;
+        };
+        let d = (target - pose.at.pos).length();
+        if d <= f64::from(reach) {
+            return true;
+        }
+        self.flag(player, Flagged::Reach { m: d, limit: reach });
+        false
+    }
+
+    /// Where a request acts, in the body's frame, if it acts somewhere.
+    fn target_of(&self, store: &impl Store, request: &Request) -> Option<glam::DVec3> {
+        let radius = f64::from(self.world.terrain.radius_m);
+        let at_cell = |cell: u32, layer: Option<u16>| {
+            let d = pbd_core::cell_key::key_direction(cell)?
+                .as_dvec3()
+                .normalize();
+            let up = layer.map_or(0.0, |l| f64::from(column::layer_altitude(usize::from(l))));
+            Some(d * (radius + up))
+        };
+        match *request {
+            Request::Dig { cell, layer } | Request::Place { cell, layer, .. } => {
+                at_cell(cell, Some(layer))
+            }
+            Request::Plant { cell, layer, .. } => at_cell(cell, Some(layer)),
+            Request::Harvest { cell } => at_cell(cell, None),
+            Request::Pick { drop } => store.drop(drop).map(|d| d.position),
+            Request::Toss { at_mm, .. } => {
+                Some(glam::DVec3::new(at_mm[0] as f64, at_mm[1] as f64, at_mm[2] as f64) / 1000.0)
+            }
+            Request::Pack(_) => None,
+        }
     }
 
     /// Farming's tuning, as the world's config has it (design 26).
@@ -452,6 +537,7 @@ impl Server {
                 vitals: None,
                 since_vitals_s: 0.0,
                 pose: None,
+                pose_s: 0.0,
             },
         );
         self.send(
@@ -509,10 +595,27 @@ impl Server {
     /// player, never back to them. The host's own player's comes this way
     /// too, so the host is seen as any player is.
     pub fn presence(&mut self, player: u32, pose: pbd_core::net::protocol::Pose) {
-        let Some(p) = self.players.get_mut(&player) else {
+        let now_s = self.clock_s;
+        let Some(p) = self.players.get(&player) else {
             return;
         };
+        if let (Some(max), Some(last)) = (self.cheats.max_speed_mps, p.pose) {
+            let dt = (now_s - p.pose_s).max(TICK_S);
+            let speed = (pose.at.pos - last.at.pos).length() / dt;
+            if speed > f64::from(max) {
+                self.flag(
+                    player,
+                    Flagged::Speed {
+                        mps: speed,
+                        limit: max,
+                    },
+                );
+                return;
+            }
+        }
+        let p = self.players.get_mut(&player).expect("checked");
         p.pose = Some(pose);
+        p.pose_s = now_s;
         let others: Vec<u32> = self
             .players
             .keys()
@@ -610,6 +713,11 @@ impl Server {
         id: u32,
         request: Request,
     ) -> Result<Decided, Refusal> {
+        if let Some(target) = self.target_of(store, &request)
+            && !self.within_reach(player, target)
+        {
+            return Err(self.refuse_hands(player, id, Refusal::Cheat));
+        }
         let (cell, layer, material, hands, slot) = match request {
             Request::Dig { cell, layer } => (cell, layer, Material::Air, Hands::Take, None),
             Request::Place { cell, layer, slot } => {

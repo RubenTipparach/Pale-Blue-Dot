@@ -1139,3 +1139,109 @@ fn the_digest_rotation_visits_every_region() {
                 && matches!(m, ToClient::Digest { .. }))
     );
 }
+
+/// Design 30: with the checks set, a teleporting pose is logged and not
+/// passed on, and a dig past reach is refused as a cheat while one within
+/// it is taken; with no checks set, nothing is checked.
+#[test]
+fn the_cheat_checks_flag_a_teleport_and_a_reach_and_are_off_by_default() {
+    use pbd_core::net::protocol::Pose;
+    use pbd_core::world_frame::{FrameId, WorldPos};
+    let (mut s, mut st) = server();
+    let players = joined(&mut s, &[1, 2], Slots::default());
+    let (cell, top) = dry_cells(&s, 1)[0];
+    let radius = f64::from(s.world.terrain.radius_m);
+    let ground = pbd_core::cell_key::key_direction(cell)
+        .unwrap()
+        .as_dvec3()
+        .normalize()
+        * (radius + f64::from(column::layer_altitude(usize::from(top))));
+    let pose = |at: glam::DVec3| Pose {
+        at: WorldPos::new(FrameId(0), at),
+        yaw: 0.0,
+        pitch: 0.0,
+    };
+    let far = ground + glam::DVec3::new(500.0, 0.0, 0.0);
+    // Off by default: a far pose is passed on and a far dig is taken.
+    s.handle(&mut st, players[1], ToServer::Presence { pose: pose(far) });
+    assert!(
+        s.drain()
+            .iter()
+            .any(|(_, m)| matches!(m, ToClient::Presence { .. }))
+    );
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Request {
+            id: 1,
+            request: Request::Dig { cell, layer: top },
+        },
+    );
+    assert!(
+        s.drain()
+            .iter()
+            .any(|(_, m)| matches!(m, ToClient::Accepted { id: 1, .. }))
+    );
+    assert!(s.flagged.is_empty());
+    // Set: 8 m/s and 6 m.
+    s.set_cheats(Cheats {
+        max_speed_mps: Some(8.0),
+        reach_m: Some(6.0),
+    });
+    s.tick(1.0);
+    s.drain();
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Presence { pose: pose(ground) },
+    );
+    assert!(
+        !s.drain()
+            .iter()
+            .any(|(_, m)| matches!(m, ToClient::Presence { .. })),
+        "500 m in a second is not passed on"
+    );
+    assert_eq!(s.flagged.len(), 1);
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Request {
+            id: 2,
+            request: Request::Dig {
+                cell,
+                layer: top - 1,
+            },
+        },
+    );
+    assert!(s.drain().iter().any(|(_, m)| *m
+        == ToClient::Refused {
+            id: 2,
+            reason: Refusal::Cheat
+        }));
+    assert_eq!(s.flagged.len(), 2);
+    // Walked back near the cell over 100 s: passed on, and the dig taken.
+    s.tick(100.0);
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Presence {
+            pose: pose(ground + glam::DVec3::new(0.0, 1.0, 0.0)),
+        },
+    );
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Request {
+            id: 3,
+            request: Request::Dig {
+                cell,
+                layer: top - 1,
+            },
+        },
+    );
+    assert!(
+        s.drain()
+            .iter()
+            .any(|(_, m)| matches!(m, ToClient::Accepted { id: 3, .. }))
+    );
+}

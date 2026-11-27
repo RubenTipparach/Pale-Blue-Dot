@@ -65,6 +65,8 @@ pub struct ServeOptions {
     /// Keep the world on disk in this folder (design 27): opened if it holds
     /// one, made with `seed` if not. `None` keeps it in memory.
     pub world: Option<std::path::PathBuf>,
+    /// The cheat checks to run (design 30), off unless given.
+    pub cheats: pbd_server::Cheats,
 }
 
 impl Default for ServeOptions {
@@ -76,6 +78,7 @@ impl Default for ServeOptions {
             kit: 64,
             seconds: None,
             world: None,
+            cheats: pbd_server::Cheats::default(),
         }
     }
 }
@@ -150,6 +153,7 @@ fn serve_on<S: pbd_server::Store>(
         },
         options.clock_s,
     );
+    server.set_cheats(options.cheats);
     let mut players: BTreeMap<u64, u32> = BTreeMap::new();
     let mut served = Served::default();
     log(
