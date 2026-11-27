@@ -28,8 +28,8 @@ Groups 1 and 2 are the dependencies, and each is its own change.
 
 ## 5. Mockups for the owner
 
-- [ ] 5.1 Mockup: host and join screens (pause menu Host, join by address or LAN, the refusal messages). Published, on the tracker. Verify: the owner approves it on the tracker.
-- [ ] 5.2 Mockup: another player in the world, by day and lit at night, near with their name and far without. Verify: the owner approves it on the tracker.
+- [ ] 5.1 (Mockup made 2026-11-27: `docs/mockups/multiplayer.html`, tabs `#host` and `#join`; waits for the owner's approval.) Mockup: host and join screens (pause menu Host, join by address or LAN, the refusal messages). Published, on the tracker. Verify: the owner approves it on the tracker.
+- [ ] 5.2 (Mockup made 2026-11-27: `docs/mockups/multiplayer.html`, tab `#player`; waits for the owner's approval.) Mockup: another player in the world, by day and lit at night, near with their name and far without. Verify: the owner approves it on the tracker.
 
 ## 6. The network
 
