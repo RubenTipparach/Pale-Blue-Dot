@@ -42,6 +42,11 @@ pub struct TrackerCheck(pub usize);
 #[derive(Component)]
 pub struct TrackerText(pub usize);
 
+/// The line under an objective that says where to go (`job-waypoints`
+/// design 8): dim and indented under its row.
+#[derive(Component)]
+pub struct TrackerHint(pub usize);
+
 /// The most objectives a mission has (the shipped tree's most is three).
 const TRACKER_ROWS: usize = 4;
 /// An icon in the tracker, UI pixels.
@@ -148,6 +153,15 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                         TrackerText(k),
                     ));
                 });
+                tracker.spawn((
+                    KitText::new(Localized::empty(), ui_kit::TEXT_DIM).shadow(ui_kit::INK),
+                    Node {
+                        display: Display::None,
+                        margin: UiRect::left(px(22)),
+                        ..default()
+                    },
+                    TrackerHint(k),
+                ));
             }
         });
     // The tabs, over whichever of the two panels is open.
@@ -235,7 +249,19 @@ pub fn show_line(
     ),
     mut title_icon: Query<&mut ImageNode, (With<TrackerTitleIcon>, Without<TrackerIcon>)>,
     mut rows: Query<(&TrackerRow, &mut Node), Without<TrackerIcon>>,
-    mut texts: Query<(&TrackerText, &mut KitText), Without<TrackerTitle>>,
+    (mut texts, mut hints): (
+        Query<(&TrackerText, &mut KitText), (Without<TrackerTitle>, Without<TrackerHint>)>,
+        Query<
+            (&TrackerHint, &mut KitText, &mut Node),
+            (
+                Without<TrackerTitle>,
+                Without<TrackerText>,
+                Without<TrackerRow>,
+                Without<TrackerIcon>,
+                Without<TrackerPath>,
+            ),
+        >,
+    ),
     mut icons: Query<
         (&TrackerIcon, &mut ImageNode, &mut Node),
         (Without<TrackerTitleIcon>, Without<TrackerRow>),
@@ -450,38 +476,64 @@ pub fn show_line(
                         "missions.objective_metres",
                         &[("label", &o.label), ("count", &n), ("total", &o.count)],
                     )
-                } else if o.kind == pbd_core::missions::Kind::Deliver
-                    && n < o.count
-                    && let Some((town, d)) = &parcel_to
-                {
-                    let to = pbd_app::compass::name_line(town, *d);
-                    Localized::verbatim(format!("{} {n}/{}  {}", o.label, o.count, to.as_str()))
-                } else if matches!(
-                    o.kind,
-                    pbd_core::missions::Kind::Deliver
-                        | pbd_core::missions::Kind::Job
-                        | pbd_core::missions::Kind::Escort
-                        | pbd_core::missions::Kind::Repair
-                        | pbd_core::missions::Kind::Light
-                        | pbd_core::missions::Kind::Goodwill
-                ) && n < o.count
-                    && let Some((town, d)) = &parcel_from
-                {
-                    tr_with(
-                        "missions.parcel_from",
-                        &[
-                            ("label", &o.label),
-                            ("count", &n),
-                            ("total", &o.count),
-                            ("town", town),
-                            ("distance", &pbd_app::compass::distance_text(*d)),
-                        ],
-                    )
                 } else {
                     Localized::verbatim(format!("{} {n}/{}", o.label, o.count))
                 },
                 c,
             );
+        }
+    }
+    // Where to go, under the line (`job-waypoints` design 8).
+    for (which, mut words, mut node) in &mut hints {
+        let hint = objective(which.0).and_then(|o| {
+            let n = counts.get(which.0).copied().unwrap_or(0);
+            if n >= o.count {
+                return None;
+            }
+            use pbd_core::missions::Kind;
+            if o.kind == Kind::Deliver
+                && let Some((town, d)) = &parcel_to
+            {
+                return Some(tr_with(
+                    "missions.parcel_to",
+                    &[
+                        ("town", town),
+                        ("distance", &pbd_app::compass::distance_text(*d)),
+                    ],
+                ));
+            }
+            if matches!(
+                o.kind,
+                Kind::Deliver
+                    | Kind::Job
+                    | Kind::Escort
+                    | Kind::Repair
+                    | Kind::Light
+                    | Kind::Goodwill
+            ) && let Some((town, d)) = &parcel_from
+            {
+                return Some(tr_with(
+                    "missions.parcel_from",
+                    &[
+                        ("town", town),
+                        ("distance", &pbd_app::compass::distance_text(*d)),
+                    ],
+                ));
+            }
+            None
+        });
+        let display = if hint.is_some() {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        if node.display != display {
+            node.display = display;
+        }
+        if let Some(hint) = hint
+            && words.text != hint
+        {
+            words.text = hint;
         }
     }
     for (which, mut image) in &mut checks {

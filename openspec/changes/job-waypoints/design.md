@@ -73,3 +73,11 @@ map. With the tracker's "Job from <town>" line, a delivery now names both
 ends: the job giver to start, the drop-off town to finish.
 `docs/screenshots/job-waypoints/giver-pin-compass.png`: the red pin by NW,
 beside Holingmouth's studs.
+
+## 8. Where to go on its own line (owner, 2026-11-27)
+
+"would place that on two lines", "maybe smaller text underneath big text".
+The kit's pixel font has one size and the tracker already uses it, so the
+hint is a second line under its objective, dim (`TEXT_DIM`) and indented past
+the check box: "Job from Holingmouth 20 m", or "Drop-off at Holbrook 1.2 km"
+with a parcel carried. The objective line keeps its count alone.
