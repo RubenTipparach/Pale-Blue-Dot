@@ -104,6 +104,23 @@ thread is `digging::apply_edit`:
 then, after it, the tier image (7 to 9 ms, `SPENT ... tier image`) and the
 field corners.
 
+**Across the whole phase-1 tree** (seven branches overnight, the frame log
+alone: a frame where the set's `fine_version` changes is an edit or a
+landing):
+
+| branch | frames | version changes | their median | of them 80 ms or more | frames over 33 ms | of those at a change |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| trunk | 25,384 | 46 | 106 ms | 44 | 107 | 46 |
+| fishing | 39,640 | 15 | 112 ms | 15 | 52 | 15 |
+| farming | 37,302 | 18 | 111 ms | 17 | 75 | 17 |
+| herding | 51,764 | 19 | 108 ms | 18 | 62 | 18 |
+| cooking | 10,161 | 8 | 115 ms | 7 | 20 | 7 |
+| mining | 43,338 | 134 | 109 ms | 134 | 219 | 138 |
+
+Every change of the set, 241 of 246, is a frame of 80 ms or more; they are
+about half of all frames over 33 ms. The rest (render-thread spikes of 30 to
+90 ms as a bounce bake lands, the river cache's save) come after.
+
 Its own timing (`edit cost: clone, repack+reconcile, relight, contact`) is
 a `debug!` and is not in the logs. **Next: that split, measured**, on the
 same trunk with the digging module at debug, before any fix is chosen. The
@@ -115,4 +132,7 @@ candidates, by what the split shows:
   shared pages, so an edit copies the pages it touches, not 37 MiB;
 - **the relight**: a bounded pass round the edit (the reference's way)
   where the whole tier has grown past "six milliseconds";
-- **the contact rebuild**: updated for the changed columns only.
+- **the contact rebuild** (`FineTier::new`): a second copy of the finest
+  level and a hash grid over its 191,000 cells, rebuilt on every edit,
+  though an edit moves no cell: the grid and the neighbours are kept from
+  the tier it replaces, and the records are read from the set, not copied.
