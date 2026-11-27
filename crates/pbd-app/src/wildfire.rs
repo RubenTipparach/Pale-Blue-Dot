@@ -263,18 +263,19 @@ fn clock(sun: &crate::sky::Sun) -> (f64, f64) {
 #[derive(Resource, Default)]
 pub struct Scars {
     pub marked: BTreeMap<u32, u32>,
-    /// What [`show`] last built from: the save's serial, the fine set's
-    /// version, and the world second.
+    /// What [`show`] last built from: the fire records' stamp, the fine
+    /// set it saw, and the world second.
     seen: (u64, u64, f64),
 }
 
 /// MEASUREMENT (capture instrument, `wildfire` 4.2's shots):
 /// `PBD_FIRE=<scene>` makes a capture's world a Survival one in a dry late
 /// summer (the weather the rule reads is held at two dry weeks, warm, with
-/// a 3 m/s wind) and sets a scene once the tier is in:
-/// - `front[:<ticks>]`: a blaze lit by a torch on the dry plant about 14 m
-///   ahead and run `<ticks>` world seconds at once (60 unset), so the shot
-///   shows its front;
+/// no wind) and sets a scene once the tier is in:
+/// - `front[:<ticks>]`: a blaze lit by a torch on the driest plant in
+///   view, 5 to 20 m ahead (24 for a scar), and run up to `<ticks>` world
+///   seconds at once (60 unset), stopped while it still burns, so the shot
+///   shows its flames;
 /// - `scar:<days>`: the same blaze run until it is out, `<days>` world days
 ///   before the clock, so the shot shows its scar;
 /// - `torch-out`: every placed torch put out by the rain.
@@ -285,7 +286,7 @@ pub fn capture_scene() -> Option<String> {
 }
 
 /// The air the rule reads under [`capture_scene`]: two dry weeks of late
-/// summer, 3 m/s of wind. `None` when no scene is set.
+/// summer, no wind. `None` when no scene is set.
 fn forced_air() -> Option<Air> {
     capture_scene()?;
     Some(Air {
@@ -318,11 +319,25 @@ pub fn instrument(
     let Some(scene) = capture_scene() else {
         return;
     };
+    let missing = [
+        save.is_none(),
+        fine.is_none(),
+        air.is_none(),
+        sun.is_none(),
+        frame.is_none(),
+    ];
     let (Some(mut save), Some(fine), Some(air), Some(sun), Some(frame)) =
         (save, fine, air, sun, frame)
     else {
+        if *done == 0 {
+            info!("FIRE_CAPTURE {scene}: waiting on {missing:?}");
+            *done = u32::MAX;
+        }
         return;
     };
+    if *done == u32::MAX {
+        *done = 0;
+    }
     if *done == 0 {
         save.identity.mode = Some(pbd_core::survival::WorldMode::Survival);
     }
@@ -352,6 +367,7 @@ pub fn instrument(
         return;
     }
     let Some((_, eye)) = cameras.iter().find(|(c, _)| c.is_active) else {
+        warn!("FIRE_CAPTURE {scene}: no camera");
         return;
     };
     let at = eye.translation().as_dvec3() - frame.center;
@@ -380,23 +396,39 @@ pub fn instrument(
         now_s: sun.clock.seconds,
         year_fraction: year,
     };
-    let Some(cell) = fine
+    let near: Vec<u32> = fine
         .set
         .finest_records()
         .iter()
+        // In view: 5 to 20 m ahead (24 for a scar), within 25 degrees of
+        // the look.
         .filter(|r| {
-            let d = Vec3::from_slice(&r.direction_height[..3]).normalize_or(Vec3::Y);
-            d.angle_between(target) * PLANET_RADIUS < 8.0
+            let d = Vec3::from_slice(&r.direction_height[..3])
+                .normalize_or(Vec3::Y)
+                .as_dvec3();
+            let mut off = d * (f64::from(PLANET_RADIUS) + f64::from(r.direction_height[3])) - at;
+            off -= up * off.dot(up);
+            let along = off.dot(ahead.normalize_or(DVec3::X));
+            let far = if scene.starts_with("scar") {
+                24.0
+            } else {
+                20.0
+            };
+            (5.0..far).contains(&along) && off.length() * 0.906 <= along
         })
         .map(|r| r.key())
         .filter(|&k| ground.land(k).is_some_and(|l| l.plant.burns()))
-        .filter(|&k| world.plant_dry(k) >= 0.6)
-        .min_by(|&a, &b| {
-            let d =
-                |k: u32| pbd_core::roads::centre(k).map_or(f32::MAX, |c| c.angle_between(target));
-            d(a).total_cmp(&d(b))
-        })
-    else {
+        .collect();
+    // The driest plant near the point ahead.
+    let best = near
+        .iter()
+        .map(|&k| (world.plant_dry(k), k))
+        .max_by(|a, b| a.0.total_cmp(&b.0));
+    info!(
+        "FIRE_CAPTURE {scene}: {} burnable cells near, the driest {best:?}",
+        near.len()
+    );
+    let Some((_, cell)) = best.filter(|(d, _)| *d >= cfg.dryness.dry_min) else {
         warn!("FIRE_CAPTURE no dry plant ahead");
         return;
     };
@@ -416,6 +448,7 @@ pub fn instrument(
     );
     info!("FIRE_CAPTURE {scene}: {lit:?} at cell {cell}");
     let mut ran = 0;
+    let mut peak = 0;
     for k in 0..ticks {
         if run_once(
             cfg,
@@ -431,6 +464,16 @@ pub fn instrument(
             break;
         }
         ran += 1;
+        // A front's shot is taken while it burns: stopped once it is past
+        // its height and before it is out.
+        let burning: usize = blaze::live(&save.records)
+            .iter()
+            .map(|(_, b)| b.burning.len())
+            .sum();
+        peak = peak.max(burning);
+        if back_days == 0.0 && ran >= 8 && burning > 0 && (burning < peak || burning <= 2) {
+            break;
+        }
     }
     info!(
         "FIRE_CAPTURE ran {ran} ticks: {} burning, {} burnt",
@@ -814,6 +857,23 @@ fn blaze_full_ds(cfg: &FireConfig, plant: Plant) -> f32 {
     (s * 10.0).max(1.0)
 }
 
+/// What changes when the fire's records do: the world's opening, how many
+/// records it holds, every blaze's ticks and every torch's counts.
+fn fire_stamp(save: &WorldSave) -> u64 {
+    let mut h = save.serial().wrapping_mul(1_000_003) ^ save.records.len() as u64;
+    for kind in [blaze::BLAZE_KIND, torch::OUT_KIND, torch::LIT_KIND] {
+        for r in save.records.of_kind(kind) {
+            h = h.wrapping_mul(31).wrapping_add(r.id ^ r.body.len() as u64);
+            h = h.wrapping_add(
+                r.body
+                    .bytes()
+                    .fold(0u64, |a, b| a.wrapping_mul(131).wrapping_add(u64::from(b))),
+            );
+        }
+    }
+    h
+}
+
 /// Bring the tier round to the fire: its light, the out torches and the
 /// scars, when the save or the tier changes and every few seconds as a scar
 /// regrows; and [`FireNow`] for the flames and the harm.
@@ -833,10 +893,24 @@ pub fn show(
     };
     let (now_s, _) = clock(&sun);
     let (serial, version, at) = scars.seen;
-    if serial == save.serial() && version == fine.version && (now_s - at).abs() < 5.0 {
+    let stamp = fire_stamp(&save);
+    // The set itself, not its version: the water's tick lands a set of its
+    // own (built from the one before this module's marks) without bumping
+    // the version when nothing of the water moved.
+    let set_id = Arc::as_ptr(&fine.set) as u64;
+    if serial == stamp && version == set_id && (now_s - at).abs() < 5.0 {
         return;
     }
     let (tier_fire, want, flames, snags) = shown(&rules.0, &save, &fine.set, now_s);
+    if !want.is_empty() || !flames.is_empty() {
+        debug!(
+            "FIRE shown: {} flames, {} snags, {} scars, {} burnt records",
+            flames.len(),
+            snags.len(),
+            want.len(),
+            save.records.of_kind(blaze::BURNT_KIND).count()
+        );
+    }
     let wind = flames
         .first()
         .zip(air.as_ref())
@@ -858,7 +932,11 @@ pub fn show(
     }
     if scars_differ(set.as_ref().unwrap_or(&*fine.set), &want, &scars.marked) {
         let mut s = set.take().unwrap_or_else(|| (*fine.set).clone());
-        apply_scars(&mut s, &want, &mut scars.marked);
+        let changed = apply_scars(&mut s, &want, &mut scars.marked);
+        info!(
+            "FIRE scars: {} cells marked, {changed} records changed",
+            want.len()
+        );
         set = Some(s);
     }
     if let Some(set) = set {
@@ -869,7 +947,7 @@ pub fn show(
         fine.set = set;
         fine.version += 1;
     }
-    scars.seen = (save.serial(), fine.version, now_s);
+    scars.seen = (stamp, Arc::as_ptr(&fine.set) as u64, now_s);
 }
 
 /// The cell spacing every body shares, m (CLAUDE.md, "Hex size is fixed").
@@ -911,7 +989,9 @@ impl Plugin for WildfirePlugin {
             .init_resource::<TorchOut>()
             .add_systems(
                 Update,
-                (tick, soak_torches, show).chain().run_if(crate::world_open),
+                (instrument, tick, soak_torches, show)
+                    .chain()
+                    .run_if(crate::world_open),
             );
         fx::build(app);
     }

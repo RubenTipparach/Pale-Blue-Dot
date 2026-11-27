@@ -2150,7 +2150,7 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     }
     // `wildfire` design 8 and 13: a burnt cell's top carries its record's
     // ash bit (`wildfire::ASH_BIT`), set while its grass has not come back.
-    if kind == 0u {
+    if kind == 0u || kind == 1u || kind == 4u {
         out.material |= cell.metadata.y & ASH_MASK;
     }
     out.height = out_height;
@@ -4114,7 +4114,8 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
     }
     // `wildfire` design 8: a burnt cell's top is ash, in its own texels'
     // grain, so the scar is pixel ground and not paint.
-    if input.kind == 0u && (input.material & ASH_MASK) != 0u {
+    if (input.kind == 0u || input.kind == 1u || input.kind == 4u)
+        && (input.material & ASH_MASK) != 0u {
         albedo = mix(albedo, vec3(0.15, 0.145, 0.14)*(0.65 + 0.7*grain), 0.85);
     }
     // Design 9.4: the year's fallen leaves, in the cap's own texels.
