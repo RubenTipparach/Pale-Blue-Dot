@@ -967,3 +967,144 @@ pub fn placed(kind: Kind, at: Vec2, y0: f32, front: Vec2) -> Vec<Poly> {
         })
         .collect()
 }
+
+/// The chest a player sets down (`station-models` design 2): the towns'
+/// chest, a quarter larger, so it reads at the size of what a cell holds.
+/// On its cell's floor, in the furniture's frame.
+pub fn station_chest() -> Vec<Poly> {
+    const SCALE: f32 = 1.25;
+    polys(Kind::Chest)
+        .into_iter()
+        .map(|p| Poly {
+            points: p.points.iter().map(|q| *q * SCALE).collect(),
+            ..p
+        })
+        .collect()
+}
+
+/// The workbench (`station-models` design 2), on its cell's floor: a thick
+/// plank top on four dressed legs that taper into it, aprons under the top
+/// and stretchers low down carrying a boards shelf, a wooden vise at the
+/// right of the front with an iron screw and a timber bar through it, and a
+/// mallet and a chisel on the top.
+pub fn workbench() -> Vec<Poly> {
+    let mut k = Kit::default();
+    let (hx, hz) = (0.8f32, 0.35f32);
+    let top_y = 0.79;
+    let face = top_y + 0.09;
+    k.block(
+        TOP,
+        FRAME,
+        Vec3::new(0.0, top_y, 0.0),
+        Vec3::new(hx * 2.0, 0.09, hz * 2.0),
+        0.02,
+    );
+    // Legs, set in from the top's corners.
+    let (lx, lz) = (hx - 0.12, hz - 0.09);
+    for (x, z) in [(-1.0f32, -1.0f32), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)] {
+        k.leg(Vec3::new(x * lx, 0.0, z * lz), top_y, 0.045, 0.06);
+    }
+    // Aprons under the top and stretchers low, front and back, then the ends.
+    for (y, h) in [(top_y - 0.12, 0.12f32), (0.14, 0.06)] {
+        for z in [-1.0f32, 1.0] {
+            k.block(
+                FRAME,
+                FRAME,
+                Vec3::new(0.0, y, z * lz),
+                Vec3::new(lx * 2.0 - 0.06, h, 0.05),
+                0.012,
+            );
+        }
+        for x in [-1.0f32, 1.0] {
+            k.block(
+                FRAME,
+                FRAME,
+                Vec3::new(x * lx, y, 0.0),
+                Vec3::new(0.05, h, lz * 2.0 - 0.06),
+                0.012,
+            );
+        }
+    }
+    // The shelf, its boards laid on the stretchers.
+    k.block(
+        BOARDS,
+        BOARDS,
+        Vec3::new(0.0, 0.2, 0.0),
+        Vec3::new(lx * 2.0 - 0.02, 0.03, lz * 2.0 + 0.02),
+        0.008,
+    );
+    // The vise: a jaw against the front of the top, its screw through the
+    // jaw into the bench, and the bar through the screw's head.
+    let (vx, vy) = (hx - 0.26, face - 0.13);
+    k.block(
+        FRAME,
+        FRAME,
+        Vec3::new(vx, face - 0.28, hz + 0.035),
+        Vec3::new(0.32, 0.28, 0.07),
+        0.015,
+    );
+    k.loft(
+        IRON,
+        Vec3::new(vx, vy, hz - 0.02),
+        Vec3::Z,
+        &[(0.0, 0.017), (0.15, 0.017), (0.155, 0.026), (0.2, 0.026)],
+        8,
+        0.0,
+    );
+    k.loft(
+        FRAME,
+        Vec3::new(vx - 0.13, vy, hz + 0.155),
+        Vec3::X,
+        &[
+            (0.0, 0.019),
+            (0.025, 0.019),
+            (0.03, 0.012),
+            (0.23, 0.012),
+            (0.235, 0.019),
+            (0.26, 0.019),
+        ],
+        8,
+        0.0,
+    );
+    // A mallet: its head on the top, its handle running down to it.
+    let (mx, mz) = (-0.38, 0.06);
+    k.block(
+        FRAME,
+        FRAME,
+        Vec3::new(mx, face, mz),
+        Vec3::new(0.1, 0.1, 0.18),
+        0.018,
+    );
+    k.loft(
+        FRAME,
+        Vec3::new(mx + 0.05, face + 0.05, mz),
+        Vec3::new(1.0, -0.13, 0.0),
+        &[
+            (0.0, 0.018),
+            (0.04, 0.015),
+            (0.24, 0.013),
+            (0.27, 0.016),
+            (0.28, 0.012),
+        ],
+        8,
+        0.0,
+    );
+    // A chisel: an iron blade and a turned handle, flat on the top.
+    let (cx, cz) = (0.02, -0.16);
+    k.block(
+        IRON,
+        IRON,
+        Vec3::new(cx, face, cz),
+        Vec3::new(0.15, 0.008, 0.026),
+        0.002,
+    );
+    k.loft(
+        FRAME,
+        Vec3::new(cx + 0.07, face + 0.016, cz),
+        Vec3::X,
+        &[(0.0, 0.011), (0.02, 0.016), (0.11, 0.015), (0.125, 0.009)],
+        8,
+        0.0,
+    );
+    k.polys
+}

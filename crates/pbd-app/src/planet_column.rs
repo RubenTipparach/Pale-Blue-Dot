@@ -142,8 +142,14 @@ pub(crate) fn pack_materials(column: &Column, out: &mut [u32]) {
     for layer in 0..LAYERS {
         let shift = (layer % MATERIAL_PER_WORD) * 4;
         // As drawn: a drowned top is a bed (`flora-v2` 12.10).
-        out[layer / MATERIAL_PER_WORD] |=
-            (render_code(column.drawn_material(layer)) & 0xf) << shift;
+        // A modelled cell is air to the terrain's draw (`station-models`).
+        let drawn = column.drawn_material(layer);
+        let code = if drawn.modelled() {
+            0
+        } else {
+            render_code(drawn)
+        };
+        out[layer / MATERIAL_PER_WORD] |= (code & 0xf) << shift;
     }
 }
 
@@ -1420,7 +1426,9 @@ pub fn reconcile_surface(
     index: usize,
     column: &Column,
 ) {
-    let Some(top) = column.surface() else {
+    // The top the terrain draws: a chest or a workbench on it is a model
+    // (`station-models` design 1), so the record's cap is the ground under it.
+    let Some(top) = column.drawn_surface() else {
         return;
     };
     let top_m = column::layer_altitude(top) + 1.0;
@@ -4791,6 +4799,13 @@ mod placed_block_tests {
                 let tier = ColumnTier::for_tests(vec![built.clone()], &[[NO_NEIGHBOR; 6]]);
                 let codes = tier.gpu_materials();
                 let sheets = tier.gpu_placed_sheets();
+                // A chest or a workbench is a model, not terrain
+                // (`station-models` design 1): air to the column pass, and
+                // the record's cap is the ground under it.
+                if m.modelled() {
+                    assert_eq!(nibble(&codes, layer), 0, "{what}: drawn as a model");
+                    continue;
+                }
                 assert_eq!(
                     nibble(&codes, layer),
                     render_code(m) & 0xf,
