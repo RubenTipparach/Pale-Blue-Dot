@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Survival Mode</title>
-<meta name="description" content="Pale Blue Dot's Survival mode: the survival HUD by day and at night beside Explorer, the stamina and food curve on sliders, a small grass fire at night in the dry season, burning by each plant's dryness, and the hunting weapons at true scale.">
+<meta name="description" content="Pale Blue Dot's Survival mode: the survival HUD by day and at night beside Explorer, the stamina and food curve on sliders, a small grass fire at night in the dry season, burning by each plant's dryness, the hunting weapons at true scale and their swings, and a predator's hunt by day and at night.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
 <style>
@@ -121,7 +121,13 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
 .key span::before { content: ""; display: inline-block; width: 14px; height: 4px; margin-right: 5px; vertical-align: middle; background: var(--c); }
 
 /* ---- 3D tabs ---- */
-#fire, #weapons { flex-direction: column; }
+#fire, #weapons, #hunt { flex-direction: column; }
+.wrow { flex: 1; min-height: 0; display: flex; }
+.wside { width: 250px; overflow: auto; padding: 8px 10px; border-right: 1px solid var(--page-line); display: flex; flex-direction: column; gap: 6px; }
+.wside[hidden], .bar[hidden], .btn[hidden] { display: none; }
+.slbl { position: absolute; left: 10px; top: 10px; font: 600 15px/1 var(--body); letter-spacing: 1px; color: var(--label); background: rgba(1,14,26,.72); padding: 5px 8px; }
+pre.ron { font: 13px/1.35 ui-monospace, Menlo, Consolas, monospace; color: var(--page-text); background: var(--well); padding: 10px; overflow: auto; white-space: pre; }
+input.scrub { width: 220px; }
 .stage { flex: 1; min-height: 0; position: relative; }
 .stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .wlabel { position: absolute; transform: translate(-50%, -100%); font: 600 14px/1 var(--body); color: var(--label); background: rgba(1,14,26,.72); padding: 3px 6px; pointer-events: none; white-space: nowrap; }
@@ -156,6 +162,7 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
   <a class="tab" role="tab" href="#stamina" data-tab="stamina">STAMINA</a>
   <a class="tab" role="tab" href="#fire" data-tab="fire">FIRE</a>
   <a class="tab" role="tab" href="#weapons" data-tab="weapons">WEAPONS</a>
+  <a class="tab" role="tab" href="#hunt" data-tab="hunt">HUNT</a>
   <a class="tab" role="tab" href="#missions" data-tab="missions">MISSIONS</a>
 </nav>
 <main>
@@ -224,14 +231,41 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
   <section class="pane" id="weapons" aria-label="Weapons">
     <div class="bar">
       <span class="lbl">TIME</span><button class="btn" data-wtime="day">Day</button><button class="btn" data-wtime="night">Night</button>
-      <span class="lbl">LOOK AT</span>
+      <span class="lbl">VIEW</span><button class="btn" data-wview="yard" aria-pressed="true">Yard</button><button class="btn" data-wview="hand" aria-pressed="false">In hand</button>
       <button class="btn" data-wlook="all">All</button>
       <button class="btn" data-wlook="spear">Spear</button>
       <button class="btn" data-wlook="bow">Bow</button>
       <button class="btn" data-wlook="axe">Hunting axe</button>
       <button class="btn" data-wlook="sword">Sword</button>
     </div>
-    <div class="stage" id="wStage"></div>
+    <div class="bar" id="wSwingBar" hidden>
+      <button class="btn" data-wswing="spear">Spear thrust</button>
+      <button class="btn" data-wswing="throw">Spear throw</button>
+      <button class="btn" data-wswing="bow">Bow</button>
+      <button class="btn" data-wswing="axe">Hunting axe</button>
+      <button class="btn" data-wswing="sword">Sword</button>
+      <span class="lbl">MOTION</span><button class="btn" data-wmotion="today">Today</button><button class="btn" data-wmotion="proposed">Proposed</button>
+      <button class="btn" id="wPlay" aria-pressed="false">Play</button>
+      <button class="btn" id="wSlow" aria-pressed="false">Slow x0.25</button>
+      <button class="btn" id="wPoses" aria-pressed="false">Show poses</button>
+      <button class="btn" id="wRon">RON</button>
+    </div>
+    <div class="wrow">
+      <div class="wside" id="wSliders" hidden></div>
+      <div class="stage" id="wStage"><span class="slbl" id="wStageLbl" hidden></span></div>
+    </div>
+  </section>
+
+  <!-- HUNT -->
+  <section class="pane" id="hunt" aria-label="A predator's hunt">
+    <div class="bar">
+      <button class="btn" id="hPlay" aria-pressed="false">Play</button>
+      <button class="btn" id="hSlow" aria-pressed="false">Slow x0.25</button>
+      <input class="scrub" type="range" id="hScrub" min="0" max="16" step="0.01" value="0" aria-label="Time">
+      <span class="lbl">TIME</span><button class="btn" data-htime="day">Day</button><button class="btn" data-htime="night">Night</button>
+      <span class="lbl">PREDATOR</span><button class="btn" data-hspecies="red-fox">Red fox</button><button class="btn" data-hspecies="dust-hound">Dust hound</button>
+    </div>
+    <div class="stage" id="hStage"><span class="slbl" id="hState">WANDER</span></div>
   </section>
 
   <!-- MISSIONS -->
@@ -246,7 +280,7 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
   <div class="mhead"><b id="infoTitle">Survival</b><button id="infoClose" aria-label="Close">✕</button></div>
   <div class="mbody">
     <section data-for="all">
-      <p>The owner, 2026-11-26: <em>"start working on phase 4, we're gonna work on survival mode which will add new branch to starter missions to handle survival."</em> This page draws <code>openspec/changes/survival-mode</code> (decisions 9 and 12 to 18) and <code>openspec/changes/wildfire</code>. Written up, not built: nothing here is in the game yet. Five tabs, each a bare <code>#anchor</code>; one 3D view at a time (Fire, Weapons), made when its tab first opens.</p>
+      <p>The owner, 2026-11-26: <em>"start working on phase 4, we're gonna work on survival mode which will add new branch to starter missions to handle survival."</em> This page draws <code>openspec/changes/survival-mode</code> (decisions 9 and 12 to 18) and <code>openspec/changes/wildfire</code>. The swings (Weapons, In hand) and the hunt are built in the game from these drafts and are retuned when the owner reviews them. Six tabs, each a bare <code>#anchor</code>; one 3D view at a time (Fire, Weapons, Hunt), made when its tab first opens.</p>
     </section>
     <section data-for="hud">
       <h3>HUD: Explorer beside Survival (version 2)</h3>
@@ -324,6 +358,33 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
         <li>Drag to turn, scroll or pinch to zoom; nothing turns on its own. "Look at" moves the camera to one weapon.</li>
         <li>The held models and their swings go through the <code>animation</code> skill (M36) before the game.</li>
       </ul>
+      <h3>In hand: the swings (task 1.6, combat C1)</h3>
+      <p>The owner, 2026-11-27: <em>"continue building all of survival phase 4"</em>. The swings are built in the game from this draft and retuned when the owner reviews it.</p>
+      <ul>
+        <li><b>Four stages</b> by the <code>animation</code> skill: windup (eased out), anticipation (a slow ease into a held pose), the hit (eased in with t cubed, fastest at contact, then a held frame) and the recoil (a quick kick with an overshoot), then the ease home. The fist moves on an arc about a virtual shoulder; the weapon's own pitch and roll ride on top.</li>
+        <li><b>The rule owns the hit.</b> A press starts a swing and its hit lands 0.45 of the weapon's time after it (<code>survival.ron</code>: spear 0.7 s, hunting axe 0.6 s, sword 0.5 s; tools and bare hands 0.55 s). Holding swings on one steady beat. The stage times are fitted so the hit lands on that moment; the hit is never shortened. The damage is tested at the hit, along the aim then.</li>
+        <li><b>Spear thrust</b>: drawn back along the shaft, then driven 0.4 m along the aim. <b>Hunting axe</b>: an overhand chop, a bigger raise than the tool stroke and faster. <b>Sword</b>: a slash from the right shoulder down across to the left. <b>Spear throw</b>: raised over the shoulder while the right button is held, thrown on release (at least 0.25 s raised). <b>Bow</b>: raised and drawn while held (0.8 s to full), loosed on release.</li>
+        <li><b>Today</b> is the tools' stroke (<code>held.ron</code> <code>stroke</code>, held-swing decisions 5 to 8) on the stone axe, redrawn in this page's pose terms; in the game today a weapon only rests in the hand.</li>
+        <li>Play loops a tap's swing (a held weapon is raised or drawn 0.9 s, then let go). Slow x0.25 and Show poses (each keyed pose in turn) judge the stages. The sliders are every tunable of the swing shown; RON prints the block they make.</li>
+        <li>At night the campfire and a lantern light what is near them; the moon stays dim.</li>
+      </ul>
+    </section>
+    <section data-for="hunt">
+      <h3>A predator's hunt (task 1.2, design 6, combat C2)</h3>
+      <p>The owner, 2026-11-27: <em>"continue building all of survival phase 4"</em>. The red fox on grass and the dust hound on desert sand, played out on the core rule's states and numbers (<code>survival.ron</code> <code>predators</code> and <code>hunt</code>), Survival only: in Explorer they never leave Wander and never attack.</p>
+      <table><tr><th>State</th><th>When</th><th>How it moves</th></tr>
+      <tr><td>Wander</td><td>it has not noticed</td><td>the herd's own pottering</td></tr>
+      <tr><td>Stalk</td><td>the player within notice (fox 14 m, hound 18 m; x1.5 at night)</td><td>low, head level with the back, at 1.4 m/s (hound 1.8)</td></tr>
+      <tr><td>Warn</td><td>within 5 m (hound 6 m)</td><td>stops, crouches, head low, growls: held 1.8 s (hound 1.5 s), never under 1.5 s before the first attack</td></tr>
+      <tr><td>Attack</td><td>the warning done and the player within the lunge (3.5 m, hound 4 m), or struck</td><td>gathers (squash), springs (stretch) at 8 m/s (hound 9), bites for 6 (hound 10) if within 1.3 m at the lunge's end, backs off and re-warns 0.8 s</td></tr>
+      <tr><td>Flee</td><td>below a third of its health, the player downed, or out of reach 8 s</td><td>runs at 7 m/s, tail down, for 10 s; then notices nothing for 30 s</td></tr></table>
+      <ul>
+        <li>The player's spear thrust is the In hand swing: each press's hit lands 0.315 s later (0.45 of 0.7 s), for 14. The fox (30) is down to 16 after one, struck it comes on again, and the second leaves it under a third, so it flees. The hound (50) takes three.</li>
+        <li>A kill drops its meat and bones at once; the carcass lies 120 s, and a blade swung at it dresses it for the hide (design 17).</li>
+        <li>The beasts are the herd's approved blocky family (M26), each in its own coat texture; they stand in for the game's own forms.</li>
+        <li>At night the campfire and four lanterns light what is near them, wherever the camera is; the moon stays dim.</li>
+        <li>Drag to turn, scroll or pinch to zoom; nothing moves until Play. The slider scrubs the hunt.</li>
+      </ul>
     </section>
     <section data-for="missions">
       <h3>The Survival branch</h3>
@@ -332,18 +393,25 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
   </div>
 </dialog>
 
+<dialog class="infomodal" id="ronModal">
+  <div class="mhead"><b>held.ron: weapon_swing</b><button id="ronClose" aria-label="Close">✕</button></div>
+  <div class="mbody"><pre class="ron" id="ronOut"></pre></div>
+</dialog>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="survival/common.js"></script>
 <script src="survival/hud.js"></script>
 <script src="survival/stamina.js"></script>
 <script src="survival/fire.js"></script>
 <script src="survival/weapons.js"></script>
+<script src="survival/hunt.js"></script>
+<script src="survival/swing.js"></script>
 <script>
 // Tabs: one pane at a time, the open one a bare #anchor; a 3D tab's view is made when it first opens and
 // its loop stopped when it closes (CLAUDE.md, "One 3D view at a time, in tabs").
 (function () {
-  const TABS = ["hud", "stamina", "fire", "weapons", "missions"];
-  const mods = { hud: window.hudTab, stamina: window.staminaTab, fire: window.fireTab, weapons: window.weaponsTab };
+  const TABS = ["hud", "stamina", "fire", "weapons", "hunt", "missions"];
+  const mods = { hud: window.hudTab, stamina: window.staminaTab, fire: window.fireTab, weapons: window.weaponsTab, hunt: window.huntTab };
   let cur = null;
   function show(t) {
     if (!TABS.includes(t)) t = "hud";

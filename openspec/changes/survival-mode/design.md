@@ -1011,6 +1011,160 @@ that makes the game do it.
 - **Meals' `fills` live in `survival.ron`**, not in `cooking.ron`, so the
   kitchen's file is unchanged in Explorer.
 
+## Combat: the swings, the hunt, the throw and the town (2026-11-27)
+
+The owner, 2026-11-27: "continue building all of survival phase 4". That is
+the request to build tasks 1.2, 1.6, 4.3, 4.4 and 4.5 after their mockups,
+so the game's motion follows the drafted mockups (`survival.html#weapons`'s
+Swing view and `survival.html#hunt`) and is retuned once the owner reviews
+them: every number below is a tunable in a validated file, and the mockups
+print the RON their sliders make. Everything here is a recommendation taken
+(ask only with screenshots) unless it quotes the owner.
+
+### C1. The swing is the rule's; the drawing follows it
+
+- **The rule.** `pbd_core::survival::melee::Swing` is one swing's clock: a
+  press starts it, its **hit lands `hit_share` of the weapon's `time_s`
+  after the press** (`weapons.hit_share`, 0.45), and holding the button
+  starts the next swing one `time_s` after the last (one steady beat, the
+  animation skill's rule). A tool or bare hands swing on `weapons.tool_swing_s`
+  (0.55 s), today's stroke period. The hit is tested **at the hit moment**,
+  along the aim then (staging: the blow lands where the player looks when
+  it lands), against what is within the weapon's reach.
+- **The drawing.** `held.ron`'s `weapon_swing` keys each swing's poses
+  (rest, top, coil, hit, recoil) on the fist's arc about the shoulder, with
+  the weapon's own pitch and roll on top, blended by the skill's curves:
+  windup eased out, anticipation a slow ease into a held pose, the hit eased
+  in (t cubed, fastest at contact), a held frame, a quick recoil with an
+  overshoot, then the ease home. The stage times are fitted to the rule:
+  windup and anticipation scale so the hit's end lands on the rule's
+  `hit_s`; the hold, recoil and recover scale into the rest of the period.
+  The hit stage is never shortened. Drawn only: nothing reads the pose.
+- **Per weapon** (the mockup's Proposed): the spear **thrusts** (drawn back
+  along the shaft, then driven forward 0.4 m along the aim); the hunting axe
+  **chops** overhand, a bigger raise than the tool stroke and faster; the
+  sword **slashes** from the right shoulder down across to the left; a
+  **thrown spear** is raised over the shoulder while the right button is
+  held and leaves the hand on release; the **bow** is raised and drawn while
+  the left button is held, and looses on release. Today's stroke (the tool's,
+  `held.stroke`) stays as it is for the tools and bare hands.
+- **Throwing and loosing** (design 16). A thrown spear leaves on release
+  after at least `throw_min_s` (0.25 s) raised: it is taken from the hotbar
+  slot and flies as a `weapons::Projectile` from the eye along the aim; it
+  lands as a drop. A bow looses the first arrow in pack order (stone, bone
+  or bronze) on release, at the share of `bow.draw_s` drawn; an arrow that
+  lands is a drop 70% of the time (`Projectile::kept`). Both fly in the
+  body's frame in f64 and are tested each step against the creatures and the
+  column tier; the game draws them at the local point the origin gives.
+
+### C2. The hunt (design 6)
+
+`pbd_core::survival::predator::Hunt` is a pure state machine stepped with
+what the predator senses (the player's distance, night, whether the player
+is downed, its own health share, whether it was just struck). **In an
+Explorer world it never leaves `Wander`**: the step returns at once.
+
+| State | Enters when | Does | Leaves when |
+| --- | --- | --- | --- |
+| Wander | start; calm again | the herd's own pottering | the player within `notice_m` (x `night_mult` at night) |
+| Stalk | noticed | walks at `stalk_mps`, low, toward the player | within `warn_m`: Warn; past `notice_m` x 1.5 for `give_up_s`: Wander |
+| Warn | close | stops, crouches, growls, for at least `warn_s` (1.5 s or more) | the hold done and the player within `lunge_m`: Attack; the player backs past `notice_m`: Wander |
+| Attack | warned, or struck | lunges at `lunge_mps`; a bite within `bite_m` at the lunge's end deals `damage`; backs off to `warn_m` and re-warns for `rewarn_s` | below a third of health: Flee |
+| Flee | below `flee_below` of health, or the player out of reach for `give_up_s` | runs away at the species' run speed for `flee_s` | then Wander, and will not notice for `calm_s` |
+
+- A predator never attacks a player who is downed (passed out or dead): it
+  leaves (Flee).
+- A struck predator with more than a third of its health goes straight to
+  Attack (it fights back); the warning before the *first* attack is never
+  skipped when it was not struck.
+- Numbers (`survival.ron` `predators`): red fox notice 14 m, warn 5 m, lunge
+  3.5 m at 8 m/s, bite 1.3 m for 6, warn 1.8 s; dust hound notice 18 m,
+  warn 6 m, lunge 4 m at 9 m/s, bite 1.4 m for 10, warn 1.5 s; night x1.5;
+  re-warn 0.8 s; flee below 1/3 for 10 s; calm 30 s; give up 8 s.
+- **Predators hunt the player only**, never the herd, in this change.
+- **Health and kills** (design 17): a wild game animal's health is
+  `hunting.game`'s, kept on the yard's animal while it is near; a strike goes
+  through `hunting::strike`. A kill drops its meat and bones at once as world
+  drops where it lies; the carcass lies `carcass_s`; a blade swung at the
+  carcass dresses it (`hunting::dress`, a hunting axe for the hide and one
+  more meat, another blade the hide half the time by the kill's hash), and
+  the hide drops. The kill writes the `hunted` record (its herd square, its
+  member, the world day), and the yard leaves that member out until
+  `herd_back_days` have passed. A kept or tamed animal is `Quarry::Kept`:
+  a strike does nothing.
+- The animation (the skill's creature rules): the stalk is the walk cycle
+  low and slow, the head down level with the back; the warn is a crouch
+  (the body down 30%, the head low and forward) with the tail held; the
+  attack is the four stages on the body (gather back, hold, spring at
+  full speed, land with a squash, recoil back); the flee is the run with the
+  tail down.
+
+### C3. Townsfolk fight back (design 7)
+
+- **In Survival**, a swing that lands on a townsperson does them no harm (the
+  townsfolk are derived from the settlement record, never killed in this
+  phase) and:
+  - drops the town's **standing** by `townsfolk.struck_standing` (10), on a
+    `standing` record per town (`pbd_core::survival::standing`, from 0,
+    clamped to -100..100, absent reads 0);
+  - a guard (a person with a spear) **fights**: it and every guard within
+    `call_m` (40 m) come at `guard_mps` (3.2 m/s) and strike within
+    `guard_reach_m` (1.8 m), a `guard_windup_s` (0.7 s) telegraph, then
+    `guard_damage` (8, `Cause::Townsfolk`), one blow every `guard_every_s`
+    (1.4 s);
+  - anyone else **flees** from the player for `flee_s` (6 s), then goes back
+    to their post.
+- The fight ends when the player is past the town's walls (`walls_m` from
+  its centre plus `leave_m`, 12 m) or is downed; the guards walk back.
+- Standing is stored and shown nowhere yet; trade by standing is a
+  follow-up (`townsfolk`'s consequences).
+- **In Explorer** a swing at a townsperson does nothing at all.
+
+### C4. No player strikes another
+
+The aim finds creatures and townsfolk only; `melee::Target::Player` is
+refused by the rule (`melee::lands`) in every mode, so no client can hurt
+another. The server (design 10) decides every strike, kill and drop; in a
+joined world the client sends nothing new yet (task 4.7 runs the
+two-machine check).
+
+### Combat as built (2026-11-27)
+
+- **The rules** are `pbd_core::survival::{melee, predator, standing}` with
+  `survival.ron`'s new `weapons.hit_share`, `tool_swing_s`, `throw_min_s`,
+  `predators`, `hunt` and `townsfolk` blocks (validated: bite < lunge <=
+  warn < notice, every warning at least `hunt.warn_min_s`, a `hunting.game`
+  row for every predator).
+- **The game** is `pbd_app::combat` (the swing's rule each frame, the claim
+  on the click, the hit at the rule's moment, the flights, the town fight,
+  the bites), `husbandry::hunt` (health, the hunt's drive, the carcass and
+  its dressing, the `hunted` record and the herd's return) and
+  `held::weapon_swing` (the drawn swings, `held.ron`'s `weapon_swing`, the
+  mockup's printout pasted in; a test holds the file to the code's
+  defaults). The digging reads `CombatClaim` and leaves a claimed click
+  alone.
+- **Where it differs from the plan** (recommendations taken, ask only with
+  screenshots):
+  - A tool's or bare hands' strike at a creature or a townsperson is drawn
+    with today's stroke at the air (`held-swing` decision 11), on its own
+    free beat; its impact lands within a frame or two of the rule's hit, not
+    on it exactly. The weapons' swings land on it exactly.
+  - The predators' growl is not yet a sound (the warning is the crouch and
+    the hold); a growl goes through the `sound-effects` skill.
+  - The attack's gather, spring and landing squash are drawn in the mockup;
+    in the game the predator crouches as it warns and lunges at its pace,
+    and a blow throws its head up. A carcass lies as a resting animal does.
+  - The bow's string is not drawn back in the hand (the bow is raised and
+    held); the mockup draws it.
+  - A thrown spear or a loosed arrow still in the air when the game closes
+    is lost: the slot it left is saved at the throw, its drop at the
+    landing.
+  - Weapons do not spend wear yet (design 11's uses for weapons wait on the
+    wear book's weapon rows).
+  - A projectile falls by the home planet's surface gravity.
+  - The bow looses the first arrow it finds in the order stone, bone,
+    bronze.
+
 ## As built: survival in the game (2026-11-27)
 
 Tasks 2.1 (its UI half), 4.1, 4.2, 4.6, 4.9 and parts of 4.8, 6.3 and 6.6.

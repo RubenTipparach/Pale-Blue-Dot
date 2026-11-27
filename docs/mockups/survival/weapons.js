@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   const S = () => window.SurvivalCommon;
-  let built = false, running = false, raf = 0, night = false, last = 0, ft = 0;
+  let built = false, running = false, raf = 0, night = false, last = 0, ft = 0, view = "yard";
   let renderer, scene, cam, st, apply, stage, sun, hemi, moon, flames, labels = [];
   const LOOKS = {
     all: { t: [1.7, 0.9, 0], r: 5.2, pol: 1.25, az: 0.25 },
@@ -178,6 +178,8 @@
     return new THREE.Mesh(geo, mat({ map: grassT(), vertexColors: true, shininess: 0, specular: 0 }));
   }
 
+  window.SurvivalWeapons = { spear, bow, huntingAxe, sword, figure, campfire, groundHex, mat, taperTube, extrude, woodT, stoneT, barkT, leatherT };
+
   function setNight(n) {
     night = n;
     document.querySelectorAll("[data-wtime]").forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.wtime === "night") === n)));
@@ -186,6 +188,7 @@
     sun.intensity = n ? 0 : 0.95; hemi.intensity = n ? 0.12 : 0.55; moon.intensity = n ? 0.12 : 0;
     hemi.color.set(n ? 0x6070a0 : 0xd8e8ff); hemi.groundColor.set(n ? 0x101418 : 0x6a5a40);
     flames.visible = n;
+    window.SurvivalSwing.set({ night: n });
   }
   function build() {
     stage = document.getElementById("wStage");
@@ -231,7 +234,17 @@
     cam.aspect = r.width / Math.max(1, r.height); cam.updateProjectionMatrix();
     flames.material.uniforms.scale.value = r.height * 0.9;
   }
-  function draw() {
+  function draw(dt) {
+    const hand = view === "hand";
+    document.getElementById("wSwingBar").hidden = !hand;
+    labels.forEach((L) => (L.el.hidden = hand));
+    if (hand) {
+      const out = window.SurvivalSwing.frame(dt || 0, renderer);
+      out.cam.aspect = cam.aspect; out.cam.updateProjectionMatrix();
+      renderer.render(out.scene, out.cam);
+      const lab = document.getElementById("wStageLbl"); if (lab) lab.textContent = out.stage.toUpperCase();
+      return out;
+    }
     cam.updateMatrixWorld();
     const U = S().fireUniforms;
     if (night) {
@@ -259,15 +272,74 @@
   function frame(now) {
     if (!running) return;
     const dt = Math.min(0.1, (now - last) / 1000 || 0); last = now; ft += dt;
-    draw();
+    draw(dt);
     raf = requestAnimationFrame(frame);
   }
   document.querySelectorAll("[data-wtime]").forEach((b) => b.addEventListener("click", () => setNight(b.dataset.wtime === "night")));
-  document.querySelectorAll("[data-wlook]").forEach((b) => b.addEventListener("click", () => built && look(b.dataset.wlook)));
+  document.querySelectorAll("[data-wlook]").forEach((b) => b.addEventListener("click", () => { setView("yard"); if (built) look(b.dataset.wlook); }));
+  // The In hand view: the swings by the animation skill (swing.js), beside today's tool stroke.
+  function setView(v) {
+    view = v;
+    document.querySelectorAll("[data-wview]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.wview === v)));
+    document.querySelectorAll("[data-wlook]").forEach((b) => (b.hidden = v === "hand"));
+    document.getElementById("wSliders").hidden = v !== "hand";
+    document.getElementById("wStageLbl").hidden = v !== "hand";
+    resize();
+    if (v === "hand") sliders();
+  }
+  const SW = () => window.SurvivalSwing;
+  function press(sel, attr, f) { document.querySelectorAll(sel).forEach((b) => b.addEventListener("click", () => { f(b.dataset[attr]); mark(); })); }
+  function mark() {
+    const o = SW().set({});
+    document.querySelectorAll("[data-wswing]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.wswing === o.weapon)));
+    document.querySelectorAll("[data-wmotion]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.wmotion === o.motion)));
+    const pl = document.getElementById("wPlay"); pl.textContent = o.playing ? "Pause" : "Play"; pl.setAttribute("aria-pressed", String(o.playing));
+    document.getElementById("wSlow").setAttribute("aria-pressed", String(o.slow));
+    document.getElementById("wPoses").setAttribute("aria-pressed", String(o.poses));
+  }
+  // Sliders on every tunable of the swing shown (its stage times, its keyed poses and exaggerate);
+  // the RON block they make is in the RON modal.
+  function sliders() {
+    const host = document.getElementById("wSliders"); if (!host) return;
+    const name = SW().current(), p = SW().P[name];
+    host.innerHTML = "";
+    const add = (label, get, set, lo, hi, step) => {
+      const l = document.createElement("label"); l.className = "sl";
+      const b = document.createElement("b"); const i = document.createElement("input");
+      i.type = "range"; i.min = lo; i.max = hi; i.step = step; i.value = get(); b.textContent = (+get()).toFixed(2);
+      i.addEventListener("input", () => { set(parseFloat(i.value)); b.textContent = (+i.value).toFixed(2); if (!running) draw(0); });
+      l.append(label, b, i); host.appendChild(l);
+    };
+    for (const k of ["windup_s", "anticipate_s", "strike_s", "impact_hold_s", "recoil_s", "recover_s"]) add(k, () => p[k], (v) => (p[k] = v), 0, k === "anticipate_s" && name === "bow" ? 1.5 : 0.5, 0.01);
+    for (const key of ["top", "coil", "hit", "recoil"]) for (const f of ["phi", "yaw", "pull", "pitch", "roll"]) add(key + "." + (f === "pull" ? "pull_m" : f), () => p[key][f], (v) => (p[key][f] = v), f === "pull" ? -0.5 : -1.6, f === "pull" ? 0.6 : 1.6, 0.01);
+    add("exaggerate", () => SW().exaggerate, (v) => SW().set({ exaggerate: v }), 0.5, 1.5, 0.05);
+  }
+  press("[data-wview]", "wview", (v) => setView(v));
+  press("[data-wswing]", "wswing", (v) => { SW().set({ weapon: v, motion: "proposed" }); sliders(); });
+  press("[data-wmotion]", "wmotion", (v) => { SW().set({ motion: v }); sliders(); });
+  document.getElementById("wPlay").addEventListener("click", () => { SW().set({ playing: !SW().set({}).playing }); mark(); });
+  document.getElementById("wSlow").addEventListener("click", () => { SW().set({ slow: !SW().set({}).slow }); mark(); });
+  document.getElementById("wPoses").addEventListener("click", () => { SW().set({ poses: !SW().set({}).poses }); mark(); });
+  document.getElementById("wRon").addEventListener("click", () => {
+    const out = document.getElementById("ronOut");
+    out.textContent = "weapon_swing: (\n" + ["spear", "axe", "sword", "throw", "bow"].map((n) => "  " + SW().ron(n).split("\n").join("\n  ")).join("\n") + "\n),\n// exaggerate: " + SW().exaggerate.toFixed(2);
+    document.getElementById("ronModal").showModal();
+  });
+  document.getElementById("ronClose").addEventListener("click", () => document.getElementById("ronModal").close());
+  document.getElementById("ronModal").addEventListener("click", (e) => { if (e.target.id === "ronModal") e.target.close(); });
   window.addEventListener("resize", resize);
   window.weaponsTab = {
     start() { if (!built) build(); running = true; resize(); last = performance.now(); raf = requestAnimationFrame(frame); },
     stop() { running = false; cancelAnimationFrame(raf); },
-    still(o) { running = false; cancelAnimationFrame(raf); if (o.night !== undefined) setNight(o.night); if (o.look) look(o.look); if (o.ft !== undefined) ft = o.ft; resize(); draw(); },
+    still(o) {
+      running = false; cancelAnimationFrame(raf); if (!built) build();
+      if (o.night !== undefined) setNight(o.night);
+      if (o.view) setView(o.view);
+      if (o.swing) { SW().set(o.swing); mark(); sliders(); }
+      if (o.look) look(o.look);
+      if (o.ft !== undefined) ft = o.ft;
+      resize();
+      return draw(0);
+    },
   };
 })();
