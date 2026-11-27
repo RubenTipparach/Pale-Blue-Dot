@@ -285,6 +285,18 @@ def stamina(d):
     poly(d, [(9, 2), (5, 8), (8, 8)], "e")
 
 
+def still(d):
+    # a stone pot over a fire, a cane spout from its lid, fresh water dripping off its end
+    poly(d, [(2, 6), (9, 6), (10, 11), (1, 11)], "s")
+    poly(d, [(2, 6), (9, 6), (9, 8), (2, 8)], "S")
+    line(d, (1, 5), (10, 5), "z")
+    line(d, (9, 4), (14, 8), "t")
+    px(d, [(14, 10), (14, 11), (13, 11)], "A")
+    px(d, [(14, 12)], "a")
+    poly(d, [(3, 12), (5, 15), (7, 12), (8, 15), (9, 12)], "o")
+    px(d, [(5, 13), (8, 13)], "O")
+
+
 ICONS = {
     "stamina": stamina,
     "stone-spear": spear,
@@ -316,6 +328,7 @@ ICONS = {
     "wool-cloak": cloak,
     "bedroll": bedroll,
     "tanning-rack": rack,
+    "still": still,
 }
 
 if __name__ == "__main__":

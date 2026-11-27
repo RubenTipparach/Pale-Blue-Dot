@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mission Tree</title>
-<meta name="description" content="Pale Blue Dot's Missions screen as trees: the starter tree that unlocks the tech, the town tree of phase 3, the starter tree with its Survival branch, the early power tree, each with a bot run, the CREW tab of crew missions with each player's share, and the MILLS tab's windmill and water mill.">
+<meta name="description" content="Pale Blue Dot's Missions screen as trees: the starter tree that unlocks the tech, the town tree of phase 3, the starter tree in a Survival world with its paths and path picker after the fire, the early power tree, each with a bot run, the CREW tab of crew missions with each player's share, and the MILLS tab's windmill and water mill.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
 <style>
@@ -264,6 +264,40 @@ body.mills #mills { display: flex; }
 .millview canvas:focus-visible { outline: 2px solid var(--rune); outline-offset: -2px; }
 .rrow small.rec, .ulist small.rec { color: var(--text-dim); }
 
+/* ---- the path picker (Survival tab, version 11): the side panel's stone frame, an oak lintel,
+   a stone card a path; the bot's choice in carved oak, as the current goal's card ---- */
+.picker { position: absolute; inset: 0; z-index: 8; display: grid; place-items: center; padding: 12px; background: rgba(1, 14, 26, .55); }
+.picker[hidden] { display: none; }
+.pkframe { width: min(900px, 100%); max-height: 100%; overflow: auto; border-style: solid; border-width: 24px; border-image: url(mission-tree/ui/stone-frame.png) 112 fill stretch;
+  image-rendering: pixelated; color: var(--text); display: flex; flex-direction: column; gap: 8px; padding: 0 4px 2px; }
+.pkhead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pkhead .lane { position: static; font-size: 19px; height: 36px; }
+.pksub { margin: 0; font: 19px/1.2 var(--body); color: var(--text-dim); }
+.pkgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
+.pcard { all: unset; box-sizing: border-box; position: relative; display: flex; gap: 8px; align-items: flex-start; min-height: 96px; cursor: pointer;
+  border-style: solid; border-width: 10px; border-image: url(mission-tree/ui/stone-tooltip-trim.png) 40 fill stretch; image-rendering: pixelated; padding: 0 2px; }
+.pcard:hover, .pcard:focus-visible { border-image-source: url(mission-tree/ui/oak-tooltip-trim.png); }
+.pcard:focus-visible { outline: 2px solid var(--rune); outline-offset: 2px; }
+.pcard.bot { border-image-source: url(mission-tree/ui/oak-tooltip-trim.png); box-shadow: 0 0 0 3px var(--title), 0 0 22px 4px rgba(250, 175, 92, .4); }
+.pcard.wait { cursor: default; opacity: .78; }
+.pcard .pct { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.pcard .pct b { font: 700 19px/1.1 var(--display); color: var(--title); text-shadow: 0 2px 0 var(--ink); }
+.pcard.wait .pct b { color: var(--label-dim); }
+.pcard .pct span { font: 17px/1.15 var(--body); color: var(--text); }
+.pcard .pct small { font: 16px/1.1 var(--body); color: var(--rune); }
+.pcard.wait .pct small { color: var(--label-dim); }
+.pcard .pth { display: flex; align-items: baseline; gap: 8px; }
+.pcard .pth b { flex: 1; min-width: 0; }
+.pcard em { font: 16px/1 var(--body); font-style: normal; color: var(--label-dim); white-space: nowrap; }
+.pkfoot { display: flex; justify-content: flex-end; }
+.lane.chosen { box-shadow: 0 0 0 3px var(--title), 0 0 18px 4px rgba(250, 175, 92, .45); }
+#world.pan { transition: transform .45s ease-out; }
+@media (prefers-reduced-motion: reduce) { #world.pan { transition: none; } }
+.hud small { display: block; font: 16px/1 var(--body); color: var(--title); margin-bottom: 3px; }
+.hud.warn { color: var(--new); }
+.log .w { color: var(--new); }
+@media (max-width: 640px) { .pkgrid { grid-template-columns: 1fr; } .pcard { min-height: 0; } .pkframe { border-width: 16px; } }
+
 /* ---- the info modal ---- */
 dialog.infomodal { max-width: min(760px, 94vw); max-height: 86vh; max-height: 86dvh; padding: 0; border: 4px solid var(--stone-2); outline: 2px solid var(--ink); background: var(--page-2); color: var(--page-text); }
 dialog.infomodal::backdrop { background: rgba(1, 14, 26, .72); }
@@ -316,7 +350,7 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
     </select>
     <span class="stepno" id="stepNo"></span>
   </div>
-  <div class="grp"><button class="btn" id="recipesBtn">Recipes</button></div>
+  <div class="grp"><button class="btn" id="recipesBtn">Recipes</button><button class="btn" id="pathsBtn" hidden>Paths</button></div>
 </div>
 <div class="stage tree">
   <div id="view"><div id="world"><svg id="edges"></svg></div></div>
@@ -332,6 +366,13 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
     </div>
     <div class="pbody" id="pbody"></div>
   </aside>
+  <div class="picker" id="picker" hidden role="dialog" aria-modal="false" aria-labelledby="pkTitle">
+    <div class="pkframe">
+      <div class="pkhead"><span class="lane" id="pkTitle">CHOOSE A PATH</span><p class="pksub" id="pkSub"></p></div>
+      <div class="pkgrid" id="pkGrid"></div>
+      <div class="pkfoot"><button class="btn oak" id="pkLater">Later</button></div>
+    </div>
+  </div>
 </div>
 
 <section id="crew" aria-label="Crew missions"></section>
@@ -340,8 +381,8 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
 <dialog class="infomodal" id="info">
   <div class="mhead"><b>The mission tree</b><button id="infoClose" aria-label="Close">✕</button></div>
   <div class="mbody">
-    <p>Six tabs: a tree each on <b>Starter</b> (<code>#starter</code>), <b>Town</b> (<code>#town</code>) and <b>Power</b> (<code>#power</code>), as the game's Missions screen will have them; <b>Survival</b> (<code>#survival</code>), the starter tree as a Survival world shows it; <b>Crew</b> (<code>#crew</code>), the crew missions of multiplayer; and <b>Mills</b> (<code>#mills</code>), the power tree's windmill and water mill in 3D.</p>
-    <h3>The POWER tab (version 10) <span class="nw">NEW</span></h3>
+    <p>Six tabs: a tree each on <b>Starter</b> (<code>#starter</code>), <b>Town</b> (<code>#town</code>) and <b>Power</b> (<code>#power</code>), as the game's Missions screen will have them; <b>Survival</b> (<code>#survival</code>), the starter tree as a Survival world shows it, with the path picker after the fire; <b>Crew</b> (<code>#crew</code>), the crew missions of multiplayer; and <b>Mills</b> (<code>#mills</code>), the power tree's windmill and water mill in 3D.</p>
+    <h3>The POWER tab (version 10)</h3>
     <p>The owner, 2026-11-26: <em>"draft up a reasearch tree mockup (addon to current research tree mockups) for power generation: windmills - for processing food; water mills for generating hydro power - this can power some appliances once they are built; power lines to carry electricity, no battery storage for awhile"</em>. The tab draws <code>early-power</code> design 2 and 3, phase 4's infrastructure part. Written up, not built.</p>
     <ul>
       <li><b>A tree of its own</b>, like the town tree: its own file and saved record. It opens when the starter tree's "The iron age" is done, because the first mission needs an iron axle; opening it unlocks the wooden gear and the axle.</li>
@@ -355,11 +396,26 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
       <li>The tab opens with the bot partway through "String a line". The cross-tree needs (the grinder and the mixer from the town tree) are hidden gates, named in the help lines.</li>
       <li><b>Icons</b> for the new goods are stand-ins from <code>tools/art/early_power_icons.py</code>.</li>
     </ul>
-    <h3>The MILLS tab (version 10) <span class="nw">NEW</span></h3>
+    <h3>The MILLS tab (version 10)</h3>
     <p>A windmill on its rise and a water mill on the river, joined by a pole line, as <code>early-power</code> design 12 draws them. One 3D view, made when the tab first opens. Built of the game's settlement textures (plank, timber, fieldstone, thatch, iron, poles, grass, dirt, stone), sampled nearest; the sails, the wheel's boards, the river and the wire are new 32 px textures from <code>tools/art/early_power_art.py</code>. At night the line's lamps, the mill's windows and an oil lantern at the windmill's door light what is near them; the moon stays dim. Nothing turns until <b>Turn</b> is pressed. <b>Shut sluice</b> lifts the wheel out of the race: the line's lamps go dark at once, since nothing stores power; the windmill's lantern, not on the line, stays lit. Drag to turn, wheel or pinch to zoom, arrow keys and + and - from the keyboard.</p>
-    <h3>The SURVIVAL tab, version 10: fishing and farming under Survival <span class="nw">NEW</span></h3>
+    <h3>The SURVIVAL tab (version 11) <span class="nw">NEW</span></h3>
+    <p>The owner, 2026-11-27: <em>"Survival: consist of the starter tree today then (in the game) then branch off to all survival stuff like eating and drinking, hunting etc."</em>, and <em>"Important note: after making a fire present players with the tree and show them options on what branch to take. Then when they click on that topic show them the tree branch, then the tree continues along their chosen path"</em>. The tab draws <code>survival-mode</code> design 18 as rewritten that day. Written up, not built.</p>
+    <ul>
+      <li><b>The trunk is the game's</b> (<code>missions.ron</code> today): gather by hand, open your pack, craft an axe, gather wood, planks and rope, the crafting bench, stone tools, make a fire, and after the fire the trunk's own "A chest". Nothing survival hangs off "Open the pack" any more (that was G11's answer of 2026-11-26, superseded by these words).</li>
+      <li><b>After "Make a fire" the tree branches into paths</b>: <b>Eat and drink</b> (drink water, something to eat, a hot meal, a cactus straw, cactus juice, water from the sea), <b>Hunting</b> (a spear, hunt, cook meat, dress a kill, tan a hide, bow and arrows, a long shot, a hunting axe, a sword, drive off a predator), <b>Fishing</b> and <b>Farming</b> (the starter tree's own), <b>Shelter and weather</b> (the first night, warm by the fire, dress for the weather, out of the heat, relight a torch, put out a fire), <b>In the water</b> (a long swim, hold your breath, into the water), and the starter tree's <b>Herding</b>, <b>Mining and smelting</b> and <b>Light and building</b>. <b>Cooking</b> and <b>Getting about</b> open later, after "Go fishing", as they do today.</li>
+      <li><b>The picker.</b> When the fire is done the Missions screen opens with <b>Choose a path</b> over the tree: a card a path, with its icon, its name, one plain line and its first mission. A click picks it: the picker closes, the tree pans to that path with its lane lit, its first mission is Now, and the HUD's mission line follows it (the path's name over the goal). <b>Later</b> closes the picker; the HUD then says "Choose a path" and the picker is there the next time the screen opens.</li>
+      <li><b>The other paths stay open</b>: their missions count whenever their work is done. The choice only sets which one is Now. A path can be changed from the picker at any time (the <b>Paths</b> button on the Missions screen).</li>
+      <li><b>When the path is done</b>, or its next mission waits on another path (Hunting's hunting axe waits on Smelt bronze; Shelter's relit torch on Light the night), the picker shows again with the paths left. A waiting path keeps its card, greyed, with "Waits on" and what it needs.</li>
+      <li><b>Water before the fire.</b> Water and food drain from the start, but there is no mission for them before the fire: the water bar shows at half with "Thirsty" above the hotbar. On a coastal start the bot tries the sea first and gets the note "Salt water" and nothing else (the owner, 2026-11-27: <em>"Keep in mind salt water is undrinkable"</em>, <em>"So that should be one way to test water salinity"</em>), then drinks at a river. Every drink mission counts fresh water only.</li>
+      <li><b>Water from the sea</b> (proposal): a still set beside a lit campfire, filled at the sea, gives fresh water while the fire burns; rain fills it too. For a start on a coast or an island with little fresh water.</li>
+      <li><b>The bot</b> picks Eat and drink first, then Hunting, Shelter and weather, In the water, Fishing, Cooking, Farming, Herding, Mining and smelting (which opens the hunting axe), back to Hunting, Light and building, back to Shelter, Getting about, then the chest. Step and Play run it; nothing moves on its own. At a picker its choice is outlined; click any other card to pick that path instead, and the run goes on from there.</li>
+      <li><b>Paths</b> (the button in the bar) opens the picker for review: the next time the bot is shown it, or the last.</li>
+      <li>The tab opens with the fire just lit and the picker open. The stone frame, the lintel and the cards are the side panel's kit; a card picked or hovered turns to carved oak, as the Now card does.</li>
+      <li>Icons for things the game does not have yet are stand-ins from <code>tools/mockup_survival_icons.py</code> (the still is new in this version).</li>
+    </ul>
+    <h3>The SURVIVAL tab, version 10: fishing and farming under Survival (replaced by version 11)</h3>
     <p>The owner, 2026-11-26: <em>"can you move farming and fishing under the survival tree too?"</em>, <em>"it seems more logical to make it a follow up after making a fire"</em>, <em>"so the player has all basic tools first"</em>. In a Survival world the Fishing and Farming branches are drawn under the Survival branch as <b>8 · SURVIVAL · FISHING</b> and <b>8 · SURVIVAL · FARMING</b>, each a follow-up to <b>Make a fire</b>. "Make a fire" comes after "Stone tools", so the axe, pickaxe and shovel are all made by then: no extra gate is needed. The bot plays them right after "The first night". The Starter tab (Explorer worlds) is unchanged.</p>
-    <h3>The SURVIVAL tab (version 8) <span class="nw">NEW</span></h3>
+    <h3>The SURVIVAL tab (version 8; its shape replaced by version 11)</h3>
     <p>The owner, 2026-11-26: <em>"start working on phase 4, we're gonna work on survival mode which will add new branch to starter missions to handle survival"</em>. The tab draws <code>survival-mode</code> design 18: the starter tree with one more branch, <b>8 · SURVIVAL</b>, shown only in Survival worlds. Written up, not built.</p>
     <ul>
       <li><b>One more branch, not a third tree</b>: the survival loop is the starter loop with its pressures on. Every mission in it is marked <code>mode: survival</code> and never shown or counted in an Explorer world.</li>
@@ -373,7 +429,7 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
       <li>The tab opens with the bot partway through "Hunt": the trunk, drinking, eating and the spear done.</li>
       <li>Icons on this tab for things the game does not have yet (spears, bow, arrows, hunting axe, sword, straw, hide, the marks for heat, cold, breath and the moon) are stand-ins from <code>tools/mockup_survival_icons.py</code>.</li>
     </ul>
-    <h3>The CREW tab (version 7) <span class="nw">NEW</span></h3>
+    <h3>The CREW tab (version 7)</h3>
     <p>The crew missions of <code>coop-missions</code> (design 7: "The panel shows the crew and each share"). A crew is whoever is in the world; its progress is the world's, counted by the server, so a player who joins halfway sees it as it stands and adds to it. Each objective shows the crew's total and a short bar per player in their colour, so nobody carries the crew unseen.</p>
     <ul>
       <li><b>Raise a house together</b>, H1 to H7: clear the site, gather timber, lay the floor, raise the walls, set the ridge beam, roof it, light the hearth. When the hearth is lit the house belongs to everyone who built it.</li>
@@ -439,6 +495,7 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
       <li><b>Version 8</b> (2026-11-26): the Survival tab, the starter tree's Survival branch (<code>survival-mode</code> design 18).</li>
       <li><b>Version 9</b> (2026-11-26): the Survival tab's bot goes to "Drink water" and "Something to eat" right after "Open the pack" (survey G11).</li>
       <li><b>Version 10</b> (2026-11-26): the Power and Mills tabs (<code>early-power</code>); on the Survival tab, fishing and farming under the Survival branch, after "Make a fire".</li>
+      <li><b>Version 11</b> (2026-11-27): the Survival tab is the game's starter trunk to "Make a fire", then paths the player picks in the path picker (<code>survival-mode</code> design 18 rewritten); salt water is undrinkable.</li>
     </ul>
     <h3>Art</h3>
     <p>Panels, plaques, slots, checks and bars are the game's own stone-and-carved-wood kit (<code>assets/ui/stone</code>, <code>assets/ui/oak</code>); item icons are the game's (<code>assets/items</code>), kept with their 1 px UI outline. The yard hen is the husbandry mockup's sprite and the map glyph the UI mockup's, since the game has no item icon for either. Where a mission has no icon of its own (a rowboat, a town), it borrows the nearest good. Help lines for missions that exist today are the game's (<code>missions.ron</code>); the others are drafted for this mockup.</p>

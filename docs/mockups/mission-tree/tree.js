@@ -1,8 +1,9 @@
 // Mission Tree mockup: the starter-missions tree (openspec/changes/starter-missions/design.md,
 // "Missions are a tree that unlocks the tech" and "The full tree") and, on the Town tab, the town
 // tree (openspec/changes/town-missions-tree/design.md, decision 2), each drawn as the game's
-// Missions screen; on the Survival tab, the starter tree as a Survival world shows it, with its
-// SURVIVAL branch (openspec/changes/survival-mode/design.md, decision 18); on the Power tab, the
+// Missions screen; on the Survival tab, the starter tree as a Survival world shows it: the game's
+// trunk to the fire, then the paths a player picks in the path picker
+// (openspec/changes/survival-mode/design.md, decision 18); on the Power tab, the
 // POWER tree (openspec/changes/early-power/design.md, decision 2). The open tree is the
 // page's #anchor (#starter, #town, #survival, #power). Nothing moves until the
 // viewer drags, zooms, steps or presses Play.
@@ -327,14 +328,19 @@
       help: "Open a chest in a town house and take something." },
   ];
 
-  // ---- the Survival tab (survival-mode design 18): the starter tree as a Survival world shows it.
-  // The trunk gains the game's "Open the pack" (missions.ron), whose child the branch is; every
-  // Survival mission is marked mode: survival and is never shown in an Explorer world. Its
-  // unlocks are recipes the game does not have yet (NEW). Icons are stand-ins
+  // ---- the Survival tab (survival-mode design 18, version 11): the starter tree as a Survival
+  // world shows it. The owner, 2026-11-27: "Survival: consist of the starter tree today then (in the
+  // game) then branch off to all survival stuff like eating and drinking, hunting etc.", and "after
+  // making a fire present players with the tree and show them options on what branch to take. Then
+  // when they click on that topic show them the tree branch, then the tree continues along their
+  // chosen path". So the trunk is the game's (missions.ron: gather, pack, axe, wood, planks and
+  // rope, the bench, stone tools, the fire, the chest), and every branch after "Make a fire" is a
+  // path the player picks. Survival missions are marked mode: survival and never shown in an
+  // Explorer world. Unlocks marked NEW are recipes the game does not have yet. Icons are stand-ins
   // (tools/mockup_survival_icons.py).
   const SV_U = Object.assign({}, S_U, {
     straw: { name: "Straw", icon: "straw", kind: "recipe", new: true },
-    "stone-spear": { name: "Stone spear", icon: "stone-spear", kind: "recipe", new: true },
+    still: { name: "Still", icon: "still", kind: "station", new: true },
     "meat-stew": { name: "Meat stew", icon: "meat-stew", kind: "recipe", new: true },
     bedroll: { name: "Bedroll", icon: "bedroll", kind: "recipe", new: true },
     "tanning-rack": { name: "Tanning rack", icon: "tanning-rack", kind: "station", new: true },
@@ -349,72 +355,91 @@
     "straw-hat": { name: "Straw hat", icon: "straw-hat", kind: "recipe", new: true },
     "wool-cloak": { name: "Wool cloak", icon: "wool-cloak", kind: "recipe", new: true },
   });
-  // Fishing and farming sit under the Survival branch in a Survival world (owner, 2026-11-26: "can you
-  // move farming and fishing under the survival tree too?", "it seems more logical to make it a follow
-  // up after making a fire", "so the player has all basic tools first"): their parent stays "Make a
-  // fire", whose own parent is "Stone tools", so the axe, pickaxe and shovel are all made by then.
-  const SV_BRANCHES = [S_BRANCHES[0], { key: "survival", name: "8 · SURVIVAL" },
-    { key: "fishing", name: "8 · SURVIVAL · FISHING" }, { key: "farming", name: "8 · SURVIVAL · FARMING" }]
-    .concat(S_BRANCHES.slice(3));
+  // The paths after the fire, in the order the picker lays them out. icon and line are the
+  // picker's card: the line is game text, short and plain.
+  const SV_BRANCHES = [
+    { key: "trunk", name: "0 · HANDS TO TOOLS" },
+    { key: "eat-drink", name: "1 · EAT AND DRINK", icon: "water-drop", line: "Fresh water, wild food and a hot meal." },
+    { key: "hunting", name: "2 · HUNTING", icon: "stone-spear", line: "A spear and a hunt, then a bow and blades." },
+    { key: "fishing", name: "3 · FISHING", icon: "rod", line: "A rod, bait and fish." },
+    { key: "farming", name: "4 · FARMING", icon: "wheat", line: "Seeds, a field and bread." },
+    { key: "shelter", name: "5 · SHELTER AND WEATHER", icon: "moon", line: "The night, the heat and the cold." },
+    { key: "water", name: "6 · IN THE WATER", icon: "breath", line: "Swim far and hold your breath." },
+    { key: "herding", name: "7 · HERDING", icon: "yard_hen", line: "Fences, a tame animal and eggs." },
+    { key: "mining", name: "8 · MINING & SMELTING", icon: "bronze-ingot", line: "Ore, a forge and bronze." },
+    { key: "light", name: "9 · LIGHT & BUILDING", icon: "torch", line: "Walls, a roof and torches." },
+    { key: "cooking", name: "10 · COOKING", icon: "grilled-fish", line: "Cook what you catch." },
+    { key: "about", name: "11 · GETTING ABOUT", icon: "icon-map", line: "The map, a reef, a town and a boat." },
+  ];
   const SV_ONLY = [
-    { id: "drink", b: "survival", icon: "water-drop", title: "Drink water", needs: [["pack"]],
-      obj: [o("drink", 3, "drink 3 sips of fresh water", true)], unl: ["straw"], help: "Crouch at a river or lake and hold use." },
-    { id: "forage", b: "survival", icon: "fruit", title: "Something to eat", needs: [["drink"]],
-      obj: [o("eat raw food", 2, "eat 2 raw foods: fruit or an egg")], unl: ["stone-spear"], help: "Pick fruit from a tree, or take an egg from a nest." },
-    { id: "spear", b: "survival", icon: "stone-spear", title: "Make a spear", needs: [["forage"]],
+    // 1. Eat and drink: fresh water only (owner, 2026-11-27: "Keep in mind salt water is undrinkable")
+    { id: "drink", b: "eat-drink", icon: "water-drop", title: "Drink water", needs: [["fire"]],
+      obj: [o("drink fresh water", 3, "drink 3 sips of fresh water: a river, a lake, rain or a still", true)], unl: ["straw", "still"],
+      help: "Crouch at a river or lake and hold use. Sea water is salt." },
+    { id: "forage", b: "eat-drink", icon: "fruit", title: "Something to eat", needs: [["drink"]],
+      obj: [o("eat raw food", 2, "eat 2 raw foods: fruit or an egg")], unl: [], help: "Pick fruit from a tree, or take an egg from a nest." },
+    { id: "cook-meal", b: "eat-drink", icon: "fried-egg", title: "A hot meal", needs: [["forage"]],
+      obj: [o("cook a dish", 1, "cook 1 dish at the campfire"), o("eat it", 1, "eat it")], unl: [], help: "Fry an egg or grill fish at the campfire." },
+    { id: "straw", b: "eat-drink", icon: "straw", title: "A cactus straw", needs: [["drink"]],
+      obj: [o("craft a straw", 1, "craft a straw (in the pack)")], unl: [], help: "Two fibre make a straw." },
+    { id: "cactus", b: "eat-drink", icon: "cactus", title: "Cactus juice", needs: [["straw"]],
+      obj: [o("sip a cactus", 3, "drink 3 sips from a cactus", true)], unl: ["straw-hat"], help: "Hold the straw to a desert cactus." },
+    { id: "still", b: "eat-drink", icon: "still", title: "Water from the sea", needs: [["drink"]],
+      obj: [o("set a still by a fire", 1, "set a still beside a lit campfire", true), o("drink from it", 3, "drink 3 sips from the still", true)], unl: [],
+      help: "Fill the still at the sea. The fire boils the salt out." },
+    // 2. Hunting: the spear needs a log, so it is open from the start of a Survival world
+    { id: "spear", b: "hunting", icon: "stone-spear", title: "Make a spear", needs: [["fire"]],
       obj: [o("craft a stone spear", 1, "craft a stone spear (in the pack)")], unl: [], help: "In the pack, the Craft row makes a spear from a log, stone and fibre." },
-    { id: "hunt", b: "survival", icon: "hare", title: "Hunt", needs: [["spear"]],
+    { id: "hunt", b: "hunting", icon: "hare", title: "Hunt", needs: [["spear"]],
       obj: [o("kill", 1, "kill a wild hen, hare or goat", true)], unl: [], help: "Hunt with the spear. Thrown, it hits harder." },
-    { id: "cook-meat", b: "survival", icon: "roast-meat", title: "Cook meat", needs: [["hunt"]], after: ["fire"],
+    { id: "cook-meat", b: "hunting", icon: "roast-meat", title: "Cook meat", needs: [["hunt"]],
       obj: [o("cook roast meat", 2, "cook 2 roast meat at the campfire")], unl: ["meat-stew"], help: "Put raw meat on the campfire." },
-    { id: "first-night", b: "survival", icon: "moon", title: "The first night", needs: [["cook-meat"]],
-      obj: [o("see the dawn", 1, "be out past 20:00 and alive at 06:00", true)], unl: ["bedroll"], help: "Keep warm, fed and watered until morning." },
-    // hunting and weapons
-    { id: "dress", b: "survival", icon: "hide", title: "Dress a kill", needs: [["hunt"]],
+    { id: "dress", b: "hunting", icon: "hide", title: "Dress a kill", needs: [["hunt"]],
       obj: [o("take a hide", 1, "take 1 hide from a kill", true)], unl: ["tanning-rack"], help: "Use a blade on the kill before it is gone." },
-    { id: "tan", b: "survival", icon: "tanning-rack", title: "Tan a hide", needs: [["dress"]],
+    { id: "tan", b: "hunting", icon: "tanning-rack", title: "Tan a hide", needs: [["dress"]],
       obj: [o("make leather", 1, "make 1 leather at the tanning rack")], unl: ["bow", "stone-arrows"], help: "Hang a hide on the tanning rack." },
-    { id: "bow", b: "survival", icon: "bow", title: "Bow and arrows", needs: [["tan"]],
+    { id: "bow", b: "hunting", icon: "bow", title: "Bow and arrows", needs: [["tan"]],
       obj: [o("craft a bow", 1, "craft a bow"), o("craft arrows", 8, "craft 8 arrows")], unl: ["bone-arrows"], help: "Make the bow at the workbench." },
-    { id: "long-shot", b: "survival", icon: "arrows", title: "A long shot", needs: [["bow"]],
+    { id: "long-shot", b: "hunting", icon: "arrows", title: "A long shot", needs: [["bow"]],
       obj: [o("kill from 20 m", 1, "kill an animal with an arrow from 20 m or more", true)], unl: ["bronze-hunting-axe"], help: "Draw fully and aim above it." },
-    { id: "hunting-axe", b: "survival", icon: "hunting-axe", title: "A hunting axe", needs: [["long-shot"]], after: ["smelt"],
+    { id: "hunting-axe", b: "hunting", icon: "hunting-axe", title: "A hunting axe", needs: [["long-shot"]], after: ["smelt"],
       obj: [o("craft it", 1, "craft a bronze hunting axe"), o("dress a kill", 1, "dress a kill with it", true)],
       unl: ["bronze-sword", "bronze-spear", "bronze-arrows"], help: "A kill dressed with it gives its hide and more meat." },
-    { id: "sword", b: "survival", icon: "sword", title: "A sword", needs: [["hunting-axe"]],
+    { id: "sword", b: "hunting", icon: "sword", title: "A sword", needs: [["hunting-axe"]],
       obj: [o("craft a sword", 1, "craft a bronze sword")], unl: ["iron-sword"], help: "Make it at the workbench from bronze." },
-    { id: "fend-off", b: "survival", icon: "fox", title: "Drive off a predator", needs: [["sword"]],
+    { id: "fend-off", b: "hunting", icon: "fox", title: "Drive off a predator", needs: [["sword"]],
       obj: [o("drive off", 1, "make a predator flee, or kill it", true)], unl: [], help: "Foxes come at night. Strike back." },
-    // heat and cold
-    { id: "straw", b: "survival", icon: "straw", title: "A cactus straw", needs: [["drink"]],
-      obj: [o("craft a straw", 1, "craft a straw (in the pack)")], unl: [], help: "Two fibre make a straw." },
-    { id: "cactus", b: "survival", icon: "cactus", title: "Cactus juice", needs: [["straw"]],
-      obj: [o("sip a cactus", 3, "drink 3 sips from a cactus", true)], unl: ["straw-hat"], help: "Hold the straw to a desert cactus." },
-    { id: "cool-down", b: "survival", icon: "sun", title: "Out of the heat", needs: [["cactus"]],
-      obj: [o("cool down", 1, "cool from hot to fine", true)], unl: [], help: "Stand in the shade or get in the water." },
-    { id: "warm-up", b: "survival", icon: "snowflake", title: "Warm by the fire", needs: [["cool-down"]], after: ["fire"],
+    // 5. Shelter and weather: the night, heat and cold, and fire (wildfire)
+    { id: "first-night", b: "shelter", icon: "moon", title: "The first night", needs: [["fire"]],
+      obj: [o("see the dawn", 1, "be out past 20:00 and alive at 06:00", true)], unl: ["bedroll"], help: "Keep warm, fed and watered until morning." },
+    { id: "warm-up", b: "shelter", icon: "snowflake", title: "Warm by the fire", needs: [["first-night"]],
       obj: [o("warm up", 1, "warm from cold to fine by a fire", true)], unl: ["wool-cloak"], help: "Stand close to a campfire." },
-    { id: "dress-weather", b: "survival", icon: "wool-cloak", title: "Dress for the weather", needs: [["warm-up"]],
+    { id: "dress-weather", b: "shelter", icon: "wool-cloak", title: "Dress for the weather", needs: [["warm-up"]],
       obj: [o("wear", 1, "wear a straw hat or a wool cloak", true)], unl: [], help: "Put it on in the pack." },
-    // the body in water
-    { id: "long-swim", b: "survival", icon: "water-bucket", title: "A long swim", needs: [["forage"]],
-      obj: [o("swim 100 m", 100, "swim 100 m without being winded")], unl: [], help: "Swim steady. Sprinting tires you fast." },
-    { id: "hold-breath", b: "survival", icon: "breath", title: "Hold your breath", needs: [["long-swim"]],
-      obj: [o("stay under 15 s", 1, "stay under for 15 s and surface", true)], unl: [], help: "Dive and come up before your breath runs out." },
-    { id: "soft-landing", b: "survival", icon: "splash", title: "Into the water", needs: [["hold-breath"]],
-      obj: [o("fall into water", 1, "fall 10 layers or more into deep water", true)], unl: [], help: "Deep water breaks a fall." },
-    // fire (wildfire)
-    { id: "relight", b: "survival", icon: "torch-out", title: "Relight a torch", needs: [["cook-meat"]], after: ["torch"],
+    { id: "cool-down", b: "shelter", icon: "sun", title: "Out of the heat", needs: [["first-night"]],
+      obj: [o("cool down", 1, "cool from hot to fine", true)], unl: [], help: "Stand in the shade or get in the water." },
+    { id: "relight", b: "shelter", icon: "torch-out", title: "Relight a torch", needs: [["first-night"]], after: ["torch"],
       obj: [o("relight", 1, "relight a torch the rain put out", true)], unl: [], help: "Touch it to a fire." },
-    { id: "put-out", b: "survival", icon: "water-bucket", title: "Put out a fire", needs: [["relight"]],
+    { id: "put-out", b: "shelter", icon: "water-bucket", title: "Put out a fire", needs: [["relight"]],
       obj: [o("put out", 3, "put out 3 burning cells with water", true)], unl: [], help: "Fires start in the dry season." },
+    // 6. In the water
+    { id: "long-swim", b: "water", icon: "water-bucket", title: "A long swim", needs: [["fire"]],
+      obj: [o("swim 100 m", 100, "swim 100 m without being winded")], unl: [], help: "Swim steady. Sprinting tires you fast." },
+    { id: "hold-breath", b: "water", icon: "breath", title: "Hold your breath", needs: [["long-swim"]],
+      obj: [o("stay under 15 s", 1, "stay under for 15 s and surface", true)], unl: [], help: "Dive and come up before your breath runs out." },
+    { id: "soft-landing", b: "water", icon: "splash", title: "Into the water", needs: [["hold-breath"]],
+      obj: [o("fall into water", 1, "fall 10 layers or more into deep water", true)], unl: [], help: "Deep water breaks a fall." },
   ];
   const SV_M = TREE === "survival" ? (() => {
     const copy = S_M.map((m) => Object.assign({}, m));
-    const pack = { id: "pack", b: "trunk", icon: "chest", title: "Open the pack", needs: [["gather"]],
-      obj: [o("open the pack", 1, "open the pack (I)")], unl: [], help: "Press I to open the pack." };
+    const pack = { id: "pack", b: "trunk", icon: "chest", title: "Open your pack", needs: [["gather"]],
+      obj: [o("open the pack", 1)], unl: [], help: "Press Tab to open your pack and craft with what you gathered." };
+    const storage = { id: "storage", b: "trunk", icon: "chest", title: "A chest", needs: [["fire"]],
+      obj: [o("make a chest", 1), o("set it down", 1), o("store a stack", 1)], unl: [],
+      help: "At the workbench (F), make a chest from eight planks. Set it down, open it with F and put a stack in it." };
     copy.splice(1, 0, pack);
     copy.find((m) => m.id === "axe").needs = [["pack"]];
+    copy.splice(copy.findIndex((m) => m.id === "fire") + 1, 0, storage);
     return copy.concat(SV_ONLY);
   })() : [];
 
@@ -509,44 +534,92 @@
   const byId = Object.fromEntries(M.map((m) => [m.id, m]));
   const byIdRaw = byId;
   let order = BRANCHES.flatMap((b) => M.filter((m) => m.b === b.key).map((m) => m.id));
-  // On the Survival tab some missions wait on another branch (after: fire, smelt, torch): the bot
-  // plays each mission once everything it waits on is done, in branch order otherwise.
-  // In a Survival world "Drink water" is the goal the moment the pack is open, then "Something to
-  // eat", before the starter trunk's axe (owner, 2026-11-26, survey G11: "Go right into survival
-  // after pack is opened (if survival mode is active)"); the spear waits on a log, so on the axe.
-  if (TREE === "survival") {
-    const first = ["drink", "forage"];
-    order = order.filter((x) => !first.includes(x));
-    order.splice(order.indexOf("pack") + 1, 0, ...first);
-    // after the survival trunk (to "The first night"), fishing and farming: the follow-up to the fire
-    const fol = order.filter((x) => byId[x].b === "fishing" || byId[x].b === "farming");
-    order = order.filter((x) => !fol.includes(x));
-    order.splice(order.indexOf("first-night") + 1, 0, ...fol);
-    const placed = new Set(), out = [];
-    while (out.length < order.length) {
-      const id = order.find((x) => !placed.has(x) && byId[x].needs.flat().concat(byId[x].after || []).every((y) => placed.has(y)));
-      placed.add(id); out.push(id);
-    }
-    order = out;
-  }
   const unlockedBy = {};
   M.forEach((m) => m.unl.forEach((u) => (unlockedBy[u] = m.id)));
+  const isOpen = (m, done) => m.needs.every((g) => g.some((id) => done.has(id))) && (m.after || []).every((id) => done.has(id));
+  const unlName = (u) => U[u].name.replace(/ \(.*\)$/, "");
 
   // ---- the bot's steps: Now, each objective filling (a count of 3 or more fills in two steps), Done.
   const steps = [];
-  order.forEach((id) => {
+  const playMission = (id, nowDone) => {
     const m = byId[id];
-    if (m.pend) return; // a mission this build cannot count yet: the bot leaves it
-    steps.push({ t: "now", m: id });
+    if (!nowDone) steps.push({ t: "now", m: id });
     m.obj.forEach((ob, i) => {
       if (ob.n >= 3) steps.push({ t: "obj", m: id, i, v: Math.floor(ob.n / 2) });
       steps.push({ t: "obj", m: id, i, v: ob.n });
     });
     steps.push({ t: "done", m: id });
-  });
+  };
 
-  const isOpen = (m, done) => m.needs.every((g) => g.some((id) => done.has(id))) && (m.after || []).every((id) => done.has(id));
-  const unlName = (u) => U[u].name.replace(/ \(.*\)$/, "");
+  // ---- the Survival tab's paths (survival-mode design 18, version 11). When "Make a fire" is done
+  // the picker shows every path that has a mission open; the one picked is the current path, and
+  // its first open mission (file order) is Now. The other paths stay open and count. When the path
+  // has nothing open (done, or its next mission waits on another branch) the picker shows again.
+  const PATHS = TREE === "survival" ? SV_BRANCHES.slice(1).map((b) => b.key) : [];
+  const pathBranch = (key) => BRANCHES.find((b) => b.key === key);
+  const pathMissions = (key) => M.filter((m) => m.b === key && !m.pend);
+  const pathGoal = (key, done) => pathMissions(key).find((m) => !done.has(m.id) && isOpen(m, done));
+  function offers(done) {
+    const out = [];
+    PATHS.forEach((key) => {
+      const ms = pathMissions(key);
+      const left = ms.filter((m) => !done.has(m.id));
+      if (!left.length) return;
+      const next = left.find((m) => isOpen(m, done));
+      const n = ms.length - left.length;
+      if (next) { out.push({ key, next: next.id, n, of: ms.length }); return; }
+      if (!n) return; // not reached yet
+      const w = left.find((m) => m.needs.every((g) => g.some((id) => done.has(id))));
+      out.push({ key, wait: w ? (w.after || []).filter((id) => !done.has(id)).map((id) => byId[id].title).join(", ") : "", n, of: ms.length });
+    });
+    return out;
+  }
+  // The bot's own order of paths; a viewer's click at a pick replaces the bot's choice there.
+  const BOT_PLAN = ["eat-drink", "hunting", "shelter", "water", "fishing", "cooking", "farming", "herding", "mining", "light", "about"];
+  const forced = {};
+  function buildSteps() {
+    steps.length = 0;
+    if (TREE !== "survival") {
+      order.forEach((id) => { if (!byId[id].pend) playMission(id); });
+      return;
+    }
+    const done = new Set();
+    let picked = false; // the path step has already made its first mission Now
+    const finish = (id) => { playMission(id, picked); picked = false; done.add(id); };
+    // the trunk, as the game has it, to the fire; the water bar warns on the way (no mission)
+    const trunk = M.filter((m) => m.b === "trunk" && m.id !== "storage").map((m) => m.id);
+    trunk.forEach((id) => {
+      finish(id);
+      if (id === "wood") {
+        steps.push({ t: "note", warn: "Thirsty", log: "Water at half: Thirsty" });
+        steps.push({ t: "note", warn: "Salt water", log: "Tried the sea: Salt water, nothing taken" });
+        steps.push({ t: "note", log: "Drank at a river: water full" });
+      }
+    });
+    let picks = 0, path = null, last = null;
+    for (let guard = 0; guard < 400; guard++) {
+      const g = path && pathGoal(path, done);
+      if (g) { finish(g.id); continue; }
+      const off = offers(done);
+      const live = off.filter((x) => x.next);
+      if (live.length) {
+        const want = forced[picks];
+        const pick = live.find((x) => x.key === want) || BOT_PLAN.map((k) => live.find((x) => x.key === k)).find(Boolean) || live[0];
+        steps.push({ t: "pick", n: picks, choose: pick.key, after: last });
+        steps.push({ t: "path", n: picks, b: pick.key, m: pathGoal(pick.key, done).id });
+        picked = true;
+        picks++;
+        last = path = pick.key;
+        continue;
+      }
+      // no path has anything open: the trunk's tail, then whatever is left, in file order
+      const rest = M.find((m) => !m.pend && !done.has(m.id) && isOpen(m, done));
+      if (!rest) break;
+      path = null;
+      finish(rest.id);
+    }
+  }
+  buildSteps();
 
   function stateAt(k) {
     const done = new Set();
@@ -556,12 +629,28 @@
     let fresh = [];
     let lit = null;
     let coins = 0;
+    let path = null, picker = null, warn = null;
     for (let i = 0; i < k; i++) {
       const s = steps[i];
       const m = byId[s.m];
       fresh = [];
       lit = null;
-      if (s.t === "now") {
+      picker = null;
+      warn = null;
+      if (s.t === "note") {
+        warn = s.warn || null;
+        log.push({ text: s.log, w: !!s.warn });
+      } else if (s.t === "pick") {
+        path = null;
+        picker = { n: s.n, sel: s.choose, after: s.after, offers: offers(done) };
+        const waits = s.after && picker.offers.some((x) => x.key === s.after && !x.next);
+        log.push({ text: s.after ? (waits ? "PATH WAITS: " : "PATH DONE: ") + pathBranch(s.after).name.replace(/^\d+ · /, "") + " · choose a path" : "THE FIRE IS LIT · choose a path" });
+      } else if (s.t === "path") {
+        path = s.b;
+        cur = s.m;
+        prog[s.m] = m.obj.map(() => 0);
+        log.push({ text: "PATH: " + pathBranch(s.b).name.replace(/^\d+ · /, "") + " · NOW: " + m.title });
+      } else if (s.t === "now") {
         cur = s.m;
         prog[s.m] = m.obj.map(() => 0);
         log.push({ text: "NOW: " + m.title });
@@ -580,7 +669,7 @@
         if (fresh.length) log.push({ text: "OPEN: " + fresh.map((id) => byId[id].title).join(", ") });
       }
     }
-    return { k, coins, done, prog, cur, log, fresh: k > 0 && steps[k - 1].t === "done" ? fresh : [], lit };
+    return { k, coins, done, prog, cur, log, fresh: k > 0 && steps[k - 1].t === "done" ? fresh : [], lit, path, picker, warn };
   }
 
   function standing(id, st) {
@@ -616,8 +705,7 @@
     // the same branch's child first, so a branch reads as one straight line
     Object.entries(kids).forEach(([pid, list]) => {
       const pb = byIdRaw[pid].b;
-      const sv = (m) => (TREE === "survival" && m.b === "survival" ? 1 : 0);
-      list.sort((a, b) => sv(b) - sv(a) || (b.b === pb) - (a.b === pb) || rank(a) - rank(b));
+      list.sort((a, b) => (b.b === pb) - (a.b === pb) || rank(a) - rank(b));
     });
     let next = 0;
     const place = (m, depth) => {
@@ -669,7 +757,7 @@
     el.className = "lane";
     el.textContent = b.name;
     world.appendChild(el);
-    return { el, first };
+    return { el, first, key: b.key };
   });
 
   // edges
@@ -734,7 +822,7 @@
   const icon = (name, cls) => `<img src="${IMG}${name}.png" alt="" class="${cls || ""}">`;
   const check = (on, cls) => `<img src="${UI}stone-check-${on ? "on" : "off"}.png" alt="${on ? "done" : ""}" class="ck ${cls || ""}">`;
   const needText = (m) => "after " + [...m.needs.flat(), ...(m.after || [])].map((id) => byId[id].title).join(" + ");
-  const branchName = (m) => BRANCHES.find((b) => b.key === m.b).name.replace(/^\d · /, "");
+  const branchName = (m) => BRANCHES.find((b) => b.key === m.b).name.replace(/^\d+ · /, "");
   const WORD = { done: "DONE", now: "NOW", open: "OPEN", locked: "LOCKED", pending: "NOT YET" };
   const coinChip = (m) => m.coins ? `<span class="coins" title="${m.coins} coins">${icon("coin", "ci")}${m.coins}</span>` : "";
 
@@ -787,13 +875,23 @@
 
   function renderHud() {
     const hud = $("#hud");
-    const last = st.log[st.log.length - 1];
-    if (st.cur) {
+    let last = st.log[st.log.length - 1];
+    // the Survival tab: the HUD line names what was done, not the list of what opened
+    if (TREE === "survival" && last && /^OPEN: /.test(last.text) && st.log.length > 1) last = st.log[st.log.length - 2];
+    // the Survival tab: the chosen path over the mission line, a need's warning, the picker's ask
+    const pathLine = st.path ? `<small>${esc(pathBranch(st.path).name.replace(/^\d+ · /, ""))}</small>` : "";
+    if (st.warn) {
+      hud.textContent = st.warn;
+      hud.className = "hud warn";
+    } else if (st.picker) {
+      hud.textContent = "Choose a path";
+      hud.className = "hud";
+    } else if (st.cur) {
       const m = byId[st.cur];
       const c = st.prog[m.id];
       const i = m.obj.findIndex((ob, j) => c[j] < ob.n);
       const ob = m.obj[i < 0 ? m.obj.length - 1 : i];
-      hud.textContent = `${ob.s} ${c[i < 0 ? m.obj.length - 1 : i]}/${ob.n}`;
+      hud.innerHTML = pathLine + esc(`${ob.s} ${c[i < 0 ? m.obj.length - 1 : i]}/${ob.n}`);
       hud.className = "hud";
     } else if (last && last.d) {
       hud.textContent = last.text.split(" · ")[0];
@@ -803,7 +901,7 @@
       hud.className = "hud";
     } else hud.textContent = "";
     const lines = st.log.slice(-5);
-    $("#log").innerHTML = lines.map((l) => `<div class="${l.d ? "d" : ""}">${esc(l.text)}</div>`).join("");
+    $("#log").innerHTML = lines.map((l) => `<div class="${l.d ? "d" : l.w ? "w" : ""}">${esc(l.text)}</div>`).join("");
     $("#stepNo").textContent = `step ${st.k}/${steps.length}` + (TREE === "town" ? ` · ${st.coins} coins` : "");
     $("#stepBtn").disabled = st.k >= steps.length;
   }
@@ -872,16 +970,43 @@
       .join("");
   }
 
+  // ---- the path picker (Survival tab): the stone frame and oak trim of the side panel, a card a
+  // path. The bot's choice is marked; a click picks that path instead.
+  let pickerHidden = false;
+  function renderPicker() {
+    const el = $("#picker");
+    if (!el) return;
+    const p = TREE === "survival" && st.picker && !pickerHidden ? st.picker : null;
+    el.hidden = !p;
+    lanes.forEach((l) => l.el.classList.toggle("chosen", !!st.path && l.key === st.path));
+    if (!p) return;
+    const said = (key) => { const t = pathBranch(key).name.replace(/^\d+ · /, "").toLowerCase(); return t[0].toUpperCase() + t.slice(1); };
+    const waits = p.after && p.offers.find((x) => x.key === p.after && !x.next);
+    $("#pkSub").textContent = !p.after ? "The fire is lit." : waits ? said(p.after) + " waits on " + waits.wait + "." : said(p.after) + " is done.";
+    $("#pkGrid").innerHTML = p.offers.map((x) => {
+      const b = pathBranch(x.key);
+      const foot = x.next ? (x.n ? "Next: " : "First: ") + byId[x.next].title : "Waits on " + x.wait;
+      return `<button class="pcard${x.key === p.sel ? " bot" : ""}${x.next ? "" : " wait"}" data-path="${x.key}"${x.next ? "" : " disabled"}>` +
+        `<span class="slot">${icon(b.icon, x.next ? "" : "sil")}</span>` +
+        `<span class="pct"><span class="pth"><b>${esc(b.name.replace(/^\d+ · /, ""))}</b><em>${x.n}/${x.of}</em></span><span>${esc(b.line)}</span><small>${esc(foot)}</small></span>` +
+        `</button>`;
+    }).join("");
+  }
+
   function render() {
     M.forEach(renderCard);
     renderEdges();
     renderHud();
     renderPanel();
+    renderPicker();
   }
 
-  function setStep(k) {
+  function setStep(k, follow) {
     st = stateAt(Math.max(0, Math.min(steps.length, k)));
+    pickerHidden = false;
     render();
+    // stepping into a picked path pans the tree to it (never on its own: only Step, Play or a click)
+    if (follow && st.k > 0 && steps[st.k - 1].t === "path") focusPath(st.path);
   }
 
   function select(id) {
@@ -1059,7 +1184,7 @@
     clearInterval(timer);
     timer = setInterval(() => {
       if (st.k >= steps.length) { stop(); return; }
-      setStep(st.k + 1);
+      setStep(st.k + 1, true);
     }, +speedSel.value);
     playBtn.textContent = "Pause";
     playBtn.setAttribute("aria-pressed", "true");
@@ -1069,7 +1194,7 @@
     if (+speedSel.value === 0) stop();
     else if (timer) play();
   });
-  $("#stepBtn").addEventListener("click", () => { stop(); setStep(st.k + 1); });
+  $("#stepBtn").addEventListener("click", () => { stop(); setStep(st.k + 1, true); });
   $("#resetBtn").addEventListener("click", () => { stop(); setStep(0); });
 
   // ---- the info modal
@@ -1083,8 +1208,9 @@
 
   // ---- a world partway through: the bot in the middle of "Go fishing" (cast, one fish of three), or on
   // the Town tab in the middle of "Mark a road" (both stakes driven, four cells of eight marked)
-  const SAMPLE = TREE === "town" ? { m: "mark", i: 1 } : TREE === "survival" ? { m: "hunt", i: 0 } : TREE === "power" ? { m: "line", i: 0 } : { m: "go-fishing", i: 1 };
-  const sample = steps.findIndex((s) => s.t === "obj" && s.m === SAMPLE.m && s.i === SAMPLE.i) + 1;
+  const SAMPLE = TREE === "town" ? { m: "mark", i: 1 } : TREE === "survival" ? { m: "fire", pick: true } : TREE === "power" ? { m: "line", i: 0 } : { m: "go-fishing", i: 1 };
+  // the Survival tab opens on the picker, the moment the fire is lit
+  const sample = SAMPLE.pick ? steps.findIndex((s) => s.t === "pick") + 1 : steps.findIndex((s) => s.t === "obj" && s.m === SAMPLE.m && s.i === SAMPLE.i) + 1;
   // centre a mission at a level (used by the stills; the page never calls it on its own)
   function focus(id, level) {
     if (level !== undefined) { setLevel(Math.max(0, Math.min(LEVELS.length - 1, level))); relayout(); }
@@ -1094,8 +1220,71 @@
     ty = r.height / 2 - (py(m.row) + CH / 2) * q;
     apply();
   }
+  // Pan (eased, about half a second) to a picked path: its next mission at a level where the branch
+  // reads, with its lane lit. Only ever called from a click, Step or Play.
+  function focusPath(key) {
+    if (!key) return;
+    const g = pathGoal(key, st.done) || pathMissions(key)[0];
+    world.classList.add("pan");
+    // the whole branch in view at the largest level that holds it (full cards from 0.8 up), else
+    // its next mission at 0.8
+    const ms = pathMissions(key);
+    const c0 = Math.min(...ms.map((m) => m.col)), c1 = Math.max(...ms.map((m) => m.col));
+    const r0 = Math.min(...ms.map((m) => m.row)), r1 = Math.max(...ms.map((m) => m.row));
+    const r = view.getBoundingClientRect();
+    let n = 6;
+    for (let k = LEVELS.length - 1; k >= 6; k--) {
+      const q = SCALES[k] * Math.max(1, Math.round(2 * dpr())) / (2 * dpr());
+      const w = (c1 - c0 + 1) * (CARD.cw + CARD.gx) * q, h = ((r1 - r0 + 1) * (CARD.ch + CARD.gy) + 60) * q;
+      if (w <= r.width - 40 && h <= r.height - 150) { n = k; break; }
+    }
+    setLevel(n); relayout();
+    const q = unit();
+    const bw = (c1 - c0 + 1) * (CW + GX) - GX, bh = (r1 - r0 + 1) * (CH + GY) - GY;
+    if (bw * q <= r.width - 40 && bh * q <= r.height - 150) {
+      tx = r.width / 2 - (px(c0) + bw / 2) * q;
+      ty = (r.height - 130) / 2 + 10 - (py(r0) - 46 + (bh + 46) / 2) * q;
+      apply();
+    } else {
+      // too big for one view: its first column at the left and its lane at the top, so the
+      // branch runs on to the right and down
+      tx = 60 - px(c0) * q;
+      tx = Math.min(tx, r.width - 60 - (px(g.col) + CW) * q);
+      ty = 24 - (py(r0) - 46) * q;
+      ty = Math.min(ty, r.height - 150 - (py(g.row) + CH) * q);
+      apply();
+    }
+    clearTimeout(focusPath.t);
+    focusPath.t = setTimeout(() => world.classList.remove("pan"), 520);
+  }
+  if (TREE === "survival") {
+    $("#pathsBtn").hidden = false;
+    $("#pkGrid").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-path]");
+      if (!b || !st.picker || b.disabled) return;
+      stop();
+      const n = st.picker.n, k = st.k;
+      if (b.dataset.path !== st.picker.sel) { forced[n] = b.dataset.path; buildSteps(); }
+      setStep(k + 1, true);
+    });
+    $("#pkLater").addEventListener("click", () => { pickerHidden = true; render(); });
+    // the Paths button opens the picker for review: the next time the bot is shown it, or the last
+    $("#pathsBtn").addEventListener("click", () => {
+      stop();
+      if (st.picker) { pickerHidden = false; render(); return; }
+      let i = steps.findIndex((s, j) => j >= st.k && s.t === "pick");
+      if (i < 0) i = steps.map((s) => s.t).lastIndexOf("pick");
+      setStep(i + 1);
+      fit();
+    });
+  }
   // test hooks for the stills
-  window.missionTree = { tree: TREE, steps: steps.length, missions: M.length, unlocks: M.reduce((n, m) => n + m.unl.length, 0), setStep, select, fit, focus, sample, levels: LEVELS.length, level: () => lv };
+  const pickAt = (n) => steps.findIndex((s) => s.t === "pick" && s.n === n) + 1;
+  const stepOf = (t, m) => steps.findIndex((s) => s.t === t && s.m === m) + 1;
+  window.missionTree = { tree: TREE, get steps() { return steps.length; }, missions: M.length, unlocks: M.reduce((n, m) => n + m.unl.length, 0), setStep, select, fit, focus, focusPath, pickAt, stepOf,
+    pick: (key) => { const b = document.querySelector(`#pkGrid [data-path="${key}"]`); if (b) b.click(); return !!b; },
+    state: () => ({ k: st.k, path: st.path, cur: st.cur, picker: st.picker && st.picker.offers.map((x) => x.key + (x.next ? "" : "(waits)")) }),
+    stepList: () => steps.map((s) => s.t + ":" + (s.m || s.b || s.choose || s.log || "")), sample, levels: LEVELS.length, level: () => lv };
   setStep(sample);
   // Open at full size on the mission the bot is playing; Fit shows the whole tree.
   focus(SAMPLE.m, OPEN);

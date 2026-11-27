@@ -69,13 +69,48 @@ const want = (k) => !only || only.includes(k);
     await p.evaluate((o) => window.weaponsTab.still(o), o); await shot(n);
   }
   }
-  // M33's Survival tab
+  // M33's Survival tab, version 11: the starter trunk to the fire, then the path picker
+  // (survival-mode design 18), at deviceScaleFactor 2
   if (want("m33")) {
-  await p.goto("file://" + path.join(ROOT, "docs/mockups/mission-tree.html#survival")); await p.waitForTimeout(1500);
-  await shot("m33-survival-hunt");
-  await p.evaluate(() => window.missionTree.fit()); await shot("m33-survival-fit");
-  await p.evaluate(() => window.missionTree.focus("long-shot", 5)); await shot("m33-survival-hunting");
-  await p.evaluate(() => window.missionTree.focus("cool-down", 5)); await shot("m33-survival-heat");
+  const q = await b.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 2 });
+  q.setDefaultTimeout(300000);
+  q.on("pageerror", (e) => errs.push(e.message));
+  const qs = async (n) => { await q.waitForTimeout(700); await q.screenshot({ path: path.join(OUT, n + ".png") }); console.log(n, JSON.stringify(await q.evaluate(() => window.missionTree.state()))); };
+  await q.goto("file://" + path.join(ROOT, "docs/mockups/mission-tree.html#survival")); await q.waitForTimeout(1500);
+  const T = (f, a) => q.evaluate(f, a);
+  // the tree up to the fire: the trunk done, the paths open
+  await T(() => { const m = window.missionTree; m.setStep(m.pickAt(0) - 1); m.focus("fire", 4); });
+  await qs("m33-survival-v11-fire");
+  // the whole tree at the fire
+  await T(() => { const m = window.missionTree; m.setStep(m.pickAt(0) - 1); m.fit(); });
+  await qs("m33-survival-v11-fit");
+  // the salt water note on the way to the fire (a coastal start)
+  await T(() => { const m = window.missionTree; m.setStep(m.stepList().findIndex((x) => x.startsWith("note:Tried the sea")) + 1); m.focus("planks-rope", 6); });
+  await qs("m33-survival-v11-salt");
+  // the picker as the fire is lit, the bot's choice marked
+  await T(() => { const m = window.missionTree; m.setStep(m.pickAt(0)); m.fit(); });
+  await qs("m33-survival-v11-picker");
+  // a click on Eat and drink: the tree pans to that path, its first mission Now
+  await T(() => window.missionTree.pick("eat-drink"));
+  await qs("m33-survival-v11-picked");
+  // the bot partway along the path: cactus juice, two sips of three... the straw made
+  await T(() => { const m = window.missionTree; const i = m.stepList().findIndex((x) => x === "obj:cactus"); m.setStep(i + 1); m.focusPath("eat-drink"); });
+  await qs("m33-survival-v11-along");
+  // the path done: the picker again with what is left
+  await T(() => { const m = window.missionTree; m.setStep(m.pickAt(1)); });
+  await qs("m33-survival-v11-reoffer");
+  // later: Hunting waits on Smelt bronze, shown on its card
+  await T(() => { const m = window.missionTree; m.setStep(m.pickAt(2)); });
+  await qs("m33-survival-v11-waits");
+  // the viewer picks another path than the bot's: Hunting first
+  await T(() => { const m = window.missionTree; m.setStep(m.pickAt(0)); m.pick("hunting"); });
+  await qs("m33-survival-v11-hunting");
+  // the picker at phone width
+  await q.setViewportSize({ width: 390, height: 844 });
+  await q.goto("file://" + path.join(ROOT, "docs/mockups/mission-tree.html?phone#survival")); await q.waitForTimeout(1500);
+  await T(() => { const m = window.missionTree; m.setStep(m.pickAt(0)); m.fit(); });
+  await qs("m33-survival-v11-picker-phone");
+  await q.close();
   }
   console.log(errs.length ? "ERRORS " + errs.join(" | ") : "no page errors");
   await b.close();
