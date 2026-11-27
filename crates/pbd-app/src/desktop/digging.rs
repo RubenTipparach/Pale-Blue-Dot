@@ -1053,9 +1053,12 @@ pub fn dig_and_place(
         // The wooden bucket (`water-flow` E11): an empty one takes the
         // source the eye meets, a full one pours where a block would go.
         if let Some(Item::Good(good)) = slots.held().map(|stack| stack.item)
-            && (good == Good::BUCKET || good == Good::WATER_BUCKET)
+            && (good == Good::BUCKET || good == Good::WATER_BUCKET || good == Good::SEA_BUCKET)
         {
-            let full = good == Good::WATER_BUCKET;
+            let full = good == Good::WATER_BUCKET || good == Good::SEA_BUCKET;
+            // Where the empty bucket meets the water, for its salt
+            // (`survival-mode` design 15): the sea's fills a sea bucket.
+            let mut met: Option<Vec3> = None;
             let at = if full {
                 Some((place.cell, place.layer))
             } else {
@@ -1069,7 +1072,10 @@ pub fn dig_and_place(
                         s
                     })
                 })
-                .map(|t| (t.dig.cell, t.dig.layer))
+                .map(|t| {
+                    met = Some(eye + look * t.distance);
+                    (t.dig.cell, t.dig.layer)
+                })
             };
             let Some((cell, layer)) = at else {
                 info!("PLACE refused: the bucket found no water or cell along the ray");
@@ -1081,8 +1087,14 @@ pub fn dig_and_place(
                 info!("PLACE refused: the bucket has nothing to take or nowhere to pour");
                 return;
             };
+            let sea = met.is_some_and(|p| {
+                pbd_app::survival::water_source(p, p.length() - PLANET_RADIUS)
+                    == pbd_core::survival::WaterSource::Sea
+            });
             let swapped = if full {
                 Good::BUCKET
+            } else if sea {
+                Good::SEA_BUCKET
             } else {
                 Good::WATER_BUCKET
             };

@@ -14,6 +14,9 @@
 //!   whole ([`pick_bag`]); waking puts the player back at their bedroll or
 //!   the spawn (the desktop's).
 //! - **Wear** is a record of the uses each tool has left ([`WearBook`]).
+//! - **Water and places** ([`places`]): the still, a bucket's sips, the
+//!   cactus and the straw, the river mouth's salt, the spawn near fresh
+//!   water, the laid bedroll, and a town's repair.
 //!
 //! None of it runs in an Explorer world: [`WorldSave::survive`] answers
 //! `None` there, and nothing else is shown or spent.
@@ -30,7 +33,7 @@ use pbd_core::survival::passout::Control;
 use pbd_core::survival::stamina::{Burst, Effort, Limits};
 use pbd_core::survival::temperature::{Exposure, FireNear, Worn};
 use pbd_core::survival::wear::{Spend, Wear, Wearer};
-use pbd_core::survival::{Conditions, Event, SurvivalConfig, Vitals, WaterSource};
+use pbd_core::survival::{Conditions, Event, SurvivalConfig, Vitals};
 use pbd_core::world_frame::WorldPos;
 use pbd_server::survival::Act;
 use serde::{Deserialize, Serialize};
@@ -433,23 +436,8 @@ pub fn pick_bag(save: &mut WorldSave, carried: &mut Slots, id: u64) -> bool {
 
 // ------------------------------------------------------- water (task 6.6)
 
-/// What water at a planet point is to drink (design 15): the sea, fresh
-/// (a river, a lake, a swamp pool, rain gathered in a hole), or brackish
-/// (a river where it stands level with the sea, at its mouth).
-pub fn water_source(point: Vec3, top_m: f32) -> WaterSource {
-    let cfg = crate::planet::terrain_config();
-    let direction = point.normalize_or(Vec3::Y);
-    let at_sea_level = (top_m - cfg.sea_level_m).abs() < 0.6;
-    let fresh = pbd_core::planet_gen::fresh_water_at(cfg, direction);
-    match (fresh, at_sea_level) {
-        (true, true) => WaterSource::Brackish,
-        (true, false) => WaterSource::Fresh,
-        (false, true) => WaterSource::Sea,
-        // Water off the sea's level that the generator did not make is
-        // water that gathered: a pool, a flooded hole above the sea.
-        (false, false) => WaterSource::Fresh,
-    }
-}
+/// What water at a planet point is to drink: [`places::water_source`].
+pub use places::water_source;
 
 // ------------------------------------------------------------- the tick
 
@@ -730,14 +718,16 @@ pub struct SurvivalTick;
 pub const SPAWN_KIND: &str = "spawn";
 pub const SPAWN_SCHEMA: u32 = 1;
 
-/// The laid bedroll's place, where there is one. Nothing lays one yet: the
-/// bedroll is a good in this build, and laying it waits for its laid model
-/// (`survival-mode` task 6.3); this is the hook the wake reads.
+/// Where a death wakes: the laid bedroll (`places::lay_bedroll`, task 6.3),
+/// else a `spawn` record, else `None` for the world's spawn.
 pub fn spawn_point(save: &WorldSave) -> Option<WorldPos> {
+    if let Some(laid) = places::bedroll(save) {
+        return laid.at;
+    }
     save.records.get(SPAWN_KIND, 0).and_then(|r| r.read())
 }
 
-/// Set the spawn a death wakes at: what laying a bedroll will call.
+/// Set a spawn a death wakes at, under any laid bedroll.
 pub fn set_spawn(save: &mut WorldSave, at: WorldPos) -> bool {
     let record = StoredRecord::of(SPAWN_KIND, 0, SPAWN_SCHEMA, &at);
     let kept = save
@@ -762,6 +752,8 @@ impl Plugin for SurvivalPlugin {
             .add_systems(Update, tick.in_set(SurvivalTick).run_if(crate::world_open));
     }
 }
+
+pub mod places;
 
 #[cfg(test)]
 mod tests;

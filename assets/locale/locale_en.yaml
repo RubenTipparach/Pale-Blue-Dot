@@ -428,6 +428,7 @@ craft:
   queue: "QUEUE"
   queue_full: "The {station}'s queue is full"
   queue_more: "QUEUE +{count}"
+  repair: REPAIR
   title: CRAFT
   waiting: "{recipe}  +{waiting} WAITING"
   workbench: WORKBENCH
@@ -723,6 +724,7 @@ interact:
   act:
     fertilize: "Fertilize {thing}"
     gather_sea: "Gather {thing}"
+    sip: "Sip {thing}"
     take_ornament: "Take up {thing}"
     board: "Board {thing}"
     build: "Build {thing}"
@@ -763,6 +765,7 @@ interact:
     talk: "Talk to {thing}"
     till: "Till {thing}"
     unhitch: "Unhitch {thing}"
+    use_still: "Use {thing}"
   key: F
 inventory:
   fish: fish
@@ -775,6 +778,8 @@ item:
     name: bone
   feather:
     name: feather
+  sea-bucket:
+    name: bucket of sea water
   straw:
     name: straw
   stone-spear:
@@ -1493,6 +1498,7 @@ pack:
   hold: HOLD
   hotbar: HOTBAR
   pack: PACK
+  stats: STATS
 planner:
   adopted: Your house
   bill: Materials
@@ -2025,6 +2031,7 @@ station:
     name: workbench
 survival:
   broke: "{tool} broke"
+  cactus: cactus
   hud:
     body_c: "{c} C"
     heat_stroke: Heat stroke
@@ -2034,11 +2041,14 @@ survival:
     explorer: Explorer
     survival: Survival
   note:
+    empty: Empty
+    needs_fire: Needs a fire
     salt_water: Salt water
     dry: Dry
     thirsty: Thirsty
     very_thirsty: Very thirsty
     protected: Protected
+  repaired: "{tool} repaired"
   water: water
 talk:
   back: BACK
@@ -2495,7 +2505,7 @@ world_map:
       "0": Wear a hat or cloak
     title: Dress for the weather
   drink:
-    help: Crouch at a river or lake and hold use. Sea water is salt.
+    help: Press F at a river or lake. Sea water is salt.
     objective:
       "0": Drink fresh water
     title: Drink water

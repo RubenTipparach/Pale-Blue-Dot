@@ -3539,5 +3539,29 @@
   "hp": 90,
   "peak_db": -3.0,
   "edits": "four windows of two or three chews, about 1.2 s each, from a set of close chewing recordings (707806 twice, 707807, 707808); 90 Hz high pass for handling rumble; faded out over 0.25 s; the third take written 6 dB lower so its louder chewing sits with the others"
+ },
+ "tool_break": {
+  "group": "Body",
+  "what": "A worn tool breaking in the hand (`survival-mode` design 11): a short dry crack of its wooden haft and a snap.",
+  "layers": [
+   {
+    "src": "freesound/177045:177045.mp3",
+    "dur": 0.35,
+    "pitch": 1.3,
+    "fadeout": 0.15
+   },
+   {
+    "src": "freesound/537084:537084.mp3",
+    "shot": 1,
+    "dur": 0.3,
+    "gain": -12,
+    "lp": 3000,
+    "fadeout": 0.15
+   }
+  ],
+  "len": 0.4,
+  "hp": 120,
+  "peak_db": -2.0,
+  "edits": "the first 0.35 s of a log split (177045) sped up 1.3 times to a haft's size, and a string snap (537084) 12 dB down under 3 kHz for the break's edge; 120 Hz high pass"
  }
 }

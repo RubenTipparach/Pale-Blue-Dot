@@ -127,5 +127,8 @@
     (name: "weapon_blade_bronze", width: 16, height: 16, repeat_m: 0.0),
     (name: "weapon_blade_iron", width: 16, height: 16, repeat_m: 0.0),
     (name: "hide", width: 32, height: 32, repeat_m: 0.6),
+    // `survival-mode` 6.3: the laid bedroll's wool and hide, mapped once
+    // across and twice along; drawn by tools/art/bedroll_texture.py.
+    (name: "bedroll", width: 32, height: 32, repeat_m: 0.0),
   ],
 )

@@ -547,6 +547,9 @@ pub fn spawn(
                     ..default()
                 })
                 .with_children(|pair| {
+                    // Survival's stats, left of the pack (`survival-mode`
+                    // design 9, survey G7): hidden in Explorer.
+                    super::survival_panels::spawn_stats(pair, kit, PACK_PANEL.1);
                     pair.spawn((
                         kit.nine(pbd_app::ui_kit::Set::Stone, "frame"),
                         PackPanel,
@@ -1066,9 +1069,10 @@ mod tests {
             .find(|(p, _)| p.0 == Screen::Pack)
             .expect("the pack's panel");
         // Two panels side by side (`mission-playthrough` 4.4): the pack and
-        // the craft column, each on the stone frame.
+        // the craft column, each on the stone frame; and Survival's stats
+        // left of them (`survival-mode` design 9), hidden in Explorer.
         let pair = world.get::<Children>(children[0]).unwrap().to_vec();
-        assert_eq!(pair.len(), 2, "the pack and the craft panel");
+        assert_eq!(pair.len(), 3, "the stats, the pack and the craft panel");
         for frame in pair {
             let image = world.get::<ImageNode>(frame).unwrap();
             assert_eq!(image.image, rock);
@@ -1088,8 +1092,8 @@ mod tests {
         let mut images = world.query::<&ImageNode>();
         assert_eq!(
             images.iter(world).filter(|i| i.image == lintel).count(),
-            4,
-            "an oak lintel over each column, PACK and CRAFT, over a raft's HOLD and over a chest"
+            5,
+            "an oak lintel over each column, STATS, PACK and CRAFT, over a raft's HOLD and over a chest"
         );
         let mut cells = world.query_filtered::<&ImageNode, With<PackCell>>();
         let n = cells.iter(world).count();

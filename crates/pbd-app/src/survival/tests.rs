@@ -6,7 +6,7 @@ use crate::saves::{self, WorldSave};
 use pbd_core::inventory::{Item, Stack, Tier};
 use pbd_core::survival::temperature::{Exposure, feel};
 use pbd_core::survival::water::sip;
-use pbd_core::survival::{Note, WorldMode};
+use pbd_core::survival::{Note, WaterSource, WorldMode};
 use pbd_core::terrain::Material;
 use std::path::PathBuf;
 
@@ -404,4 +404,323 @@ fn a_smith_repairs_for_the_share_worn() {
         pbd_core::survival::wear::Wear::full(cfg, &wearer)
     );
     let _ = Stack::new(Item::Block(Material::Dirt), 1);
+}
+
+// ------------------------------------------------ water and places (6.3, 6.6)
+
+fn survival_memory() -> WorldSave {
+    let mut save = WorldSave::memory_only();
+    save.identity.mode = Some(WorldMode::Survival);
+    save.survive(&Conditions::default(), 0.0);
+    save
+}
+
+fn held(good: &str) -> Slots {
+    let mut carried = Slots::new();
+    carried.give(Item::Good(pbd_core::goods::Good::by_code(good).unwrap()), 1);
+    carried
+}
+
+#[test]
+fn the_still_makes_fresh_water_only_beside_a_lit_fire() {
+    let mut save = survival_memory();
+    let cfg = rules();
+    let at = (77, 12);
+    let mut carried = held("sea-bucket");
+    assert_eq!(
+        places::use_still(&mut save, &mut carried, at, 40.0),
+        Some(places::StillUse::Poured)
+    );
+    assert_eq!(
+        carried.held().map(|s| s.item),
+        Some(Item::Good(pbd_core::goods::Good::BUCKET)),
+        "the bucket comes back empty"
+    );
+    assert_eq!(places::still_at(&save, at.0, at.1).salt_sips, 4);
+    // Nothing to drink yet, and no fire: it says so.
+    let mut hands = Slots::new();
+    assert_eq!(
+        places::use_still(&mut save, &mut hands, at, 40.0),
+        Some(places::StillUse::NeedsFire)
+    );
+    // Long without a fire boils nothing.
+    let mut still = places::still_at(&save, at.0, at.1);
+    for _ in 0..600 {
+        places::step_still(&mut save, at, &mut still, false, false, 1.0);
+    }
+    assert_eq!(places::still_at(&save, at.0, at.1).fresh_sips, 0);
+    // Beside a lit fire, one sip a boil.
+    let boil = cfg.still.boil_s_per_sip as usize;
+    for _ in 0..boil {
+        places::step_still(&mut save, at, &mut still, true, false, 1.0);
+    }
+    assert_eq!(places::still_at(&save, at.0, at.1).fresh_sips, 1);
+    match places::use_still(&mut save, &mut hands, at, 40.0) {
+        Some(places::StillUse::Drank(sipped)) => {
+            assert!(sipped.water > 0.0 && sipped.counts && sipped.note.is_none());
+        }
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(places::still_at(&save, at.0, at.1).fresh_sips, 0);
+    // Explorer has no still to use.
+    let mut explorer = WorldSave::memory_only();
+    assert_eq!(
+        places::use_still(&mut explorer, &mut held("sea-bucket"), at, 40.0),
+        None
+    );
+}
+
+#[test]
+fn a_bucket_filled_at_the_sea_says_salt_water_and_a_fresh_one_empties_in_four_sips() {
+    let mut save = survival_memory();
+    let mut sea = held("sea-bucket");
+    let sipped = places::drink_bucket(&mut save, &mut sea, 40.0).unwrap();
+    assert_eq!(sipped.water, 0.0);
+    assert_eq!(sipped.note, Some(Note::SaltWater));
+    assert!(!sipped.counts);
+    let mut fresh = held("water-bucket");
+    let sips = rules().drinks.bucket.sips;
+    for k in 0..sips {
+        let sipped = places::drink_bucket(&mut save, &mut fresh, 40.0).unwrap();
+        assert!(sipped.water > 0.0 && sipped.counts, "sip {k}");
+    }
+    assert_eq!(
+        fresh.held().map(|s| s.item),
+        Some(Item::Good(pbd_core::goods::Good::BUCKET)),
+        "the last sip leaves an empty bucket"
+    );
+    assert_eq!(save.carried.as_ref(), Some(&fresh), "saved with the hands");
+}
+
+#[test]
+fn a_cactus_gives_three_sips_through_a_straw_and_is_dry_after() {
+    let mut save = survival_memory();
+    let mut carried = Slots::new();
+    carried.give(Item::Good(pbd_core::goods::Good::STRAW), 3);
+    for k in 0..rules().drinks.cactus.sips {
+        let (sipped, broke) = places::sip_cactus(&mut save, &mut carried, 9, 2.0, 40.0).unwrap();
+        assert!(sipped.water > 0.0 && sipped.counts, "sip {k}");
+        assert!(!broke);
+    }
+    let (dry, _) = places::sip_cactus(&mut save, &mut carried, 9, 2.0, 40.0).unwrap();
+    assert_eq!(dry.note, Some(Note::Dry));
+    assert_eq!(dry.water, 0.0);
+    // A day on, a sip is back.
+    let (back, _) = places::sip_cactus(&mut save, &mut carried, 9, 3.1, 40.0).unwrap();
+    assert!(back.water > 0.0);
+    // No straw, no sip.
+    assert!(places::sip_cactus(&mut save, &mut Slots::new(), 9, 9.0, 40.0).is_none());
+    // A straw wears a use a sip.
+    let worn = WearBook::of(&save)
+        .tools
+        .get(places::STRAW_WEAR)
+        .copied()
+        .unwrap();
+    assert_eq!(worn.uses_left, rules().wear.straw_uses - 4);
+}
+
+#[test]
+fn a_death_wakes_the_player_at_a_laid_bedroll() {
+    let (root, slot) = survival_world("bedroll");
+    let at = WorldPos::new(
+        crate::sim_origin::HOME,
+        bevy::math::DVec3::new(0.0, 4801.0, 0.0),
+    );
+    {
+        let mut save = WorldSave::open(root.clone(), slot);
+        save.survive(&Conditions::default(), 0.0);
+        assert_eq!(
+            spawn_point(&save),
+            None,
+            "the world's spawn until one is laid"
+        );
+        let mut carried = held("bedroll");
+        assert!(places::lay_bedroll(&mut save, &mut carried, at, Vec3::X));
+        assert!(carried.held().is_none(), "the bedroll left the hand");
+        assert_eq!(spawn_point(&save), Some(at));
+        // A death: the wake reads the bedroll.
+        let died = save.survival_act(Act::Hit(Cause::Fall, 500.0)).unwrap();
+        assert!(died.events.contains(&Event::Died(Cause::Fall)));
+        save.survival_act(Act::WakeUp);
+        save.drain();
+    }
+    let mut save = reopen(&root);
+    assert_eq!(spawn_point(&save), Some(at), "laid across a reload");
+    assert_eq!(save.vitals().unwrap().health, rules().health.max_pts);
+    // Taken up, the wake is the world's spawn again.
+    let mut hands = Slots::new();
+    assert!(places::take_up_bedroll(&mut save, &mut hands));
+    assert_eq!(hands.count(Item::Good(pbd_core::goods::Good::BEDROLL)), 1);
+    assert_eq!(spawn_point(&save), None);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_new_survival_start_goes_near_fresh_water_and_a_watered_one_stays() {
+    let r = 4800.0;
+    let start = Vec3::Y;
+    // Water 600 m off along x: the start moves to land within 150 m of it.
+    let water = (Vec3::Y * (600.0f32 / r).cos() + Vec3::X * (600.0f32 / r).sin()).normalize();
+    let fresh = |d: Vec3| d.angle_between(water) * r < 20.0;
+    let moved = places::start_near_fresh_water(
+        start,
+        r,
+        fresh,
+        |d| (d + Vec3::Z * (60.0 / r)).normalize(),
+        |d| d,
+    );
+    assert!(moved != start);
+    assert!(moved.angle_between(water) * r <= places::FRESH_WITHIN_M);
+    // Water already in reach: the start stands.
+    let near = (Vec3::Y + Vec3::X * (100.0 / r)).normalize();
+    let kept = places::start_near_fresh_water(
+        start,
+        r,
+        |d| d.angle_between(near) * r < 20.0,
+        |d| d,
+        |d| d,
+    );
+    assert_eq!(kept, start);
+    // No fresh water anywhere: the start stands.
+    assert_eq!(
+        places::start_near_fresh_water(start, r, |_| false, |d| d, |d| d),
+        start
+    );
+}
+
+#[test]
+fn a_river_is_brackish_only_within_six_cells_of_the_sea_along_its_flow() {
+    let cfg = crate::planet::terrain_config();
+    let settings = cfg
+        .rivers
+        .as_ref()
+        .expect("the shipped generator has rivers");
+    let map = pbd_core::rivers::map(cfg, settings);
+    // A river that reaches the sea: walk up from its sea cell's centre
+    // toward its last river cell, a metre at a time, to the mouth.
+    let mut checked = 0;
+    for k in map.rivers().step_by(97) {
+        let (centre, ..) = map.describe(k);
+        let course = map.course(centre, 0);
+        let (Some(sea), Some(last)) = (
+            course.iter().rev().find(|s| !s.river),
+            course.iter().rev().find(|s| s.river),
+        ) else {
+            continue;
+        };
+        let gap = sea.centre.angle_between(last.centre) * cfg.radius_m;
+        let mouth = (0..gap as i32).find_map(|m| {
+            let t = m as f32 / gap;
+            let d = sea.centre.lerp(last.centre, t).normalize();
+            (pbd_core::planet_gen::fresh_water_at(cfg, d) && pbd_core::rivers::at(cfg, d).is_some())
+                .then_some(d)
+        });
+        let Some(mouth) = mouth else { continue };
+        assert!(
+            places::brackish_at(cfg, mouth),
+            "the river's first fresh metre from the sea is brackish"
+        );
+        // Far up the river (its source end), the water is fresh.
+        let up = course[0].centre;
+        if pbd_core::planet_gen::fresh_water_at(cfg, up)
+            && up.angle_between(mouth) * cfg.radius_m > 100.0
+        {
+            assert!(!places::brackish_at(cfg, up), "a river's spring is fresh");
+            assert_eq!(
+                places::water_source(up * (cfg.radius_m + 30.0), 30.0),
+                WaterSource::Fresh
+            );
+        }
+        checked += 1;
+        if checked >= 3 {
+            break;
+        }
+    }
+    assert!(checked > 0, "no river mouth found to check");
+}
+
+#[test]
+fn a_town_repair_takes_coins_and_restores_the_tool() {
+    let mut save = survival_memory();
+    let tier = Tier::Stone;
+    for _ in 0..30 {
+        spend_wear(
+            &mut save,
+            Tool::Axe,
+            tier,
+            pbd_core::survival::wear::Action::TreeFelled,
+        );
+    }
+    let coins = places::repair_coins_for(&save, Tool::Axe, tier, 12);
+    assert!(coins > 0);
+    let mut poor = pbd_core::economy::coins::Purse::new(u64::from(coins) - 1);
+    assert!(places::repair_for_coins(&mut save, &mut poor, Tool::Axe, tier, coins).is_err());
+    assert!(WearBook::of(&save).wear(Tool::Axe, tier).uses_left < full_uses(Tool::Axe, tier));
+    let mut purse = pbd_core::economy::coins::Purse::new(50);
+    places::repair_for_coins(&mut save, &mut purse, Tool::Axe, tier, coins).unwrap();
+    assert_eq!(purse.coins, 50 - u64::from(coins));
+    assert_eq!(
+        WearBook::of(&save).wear(Tool::Axe, tier).uses_left,
+        full_uses(Tool::Axe, tier)
+    );
+    let saved: pbd_core::economy::coins::Purse = save
+        .records
+        .get(pbd_core::economy::coins::PURSE_KIND, 0)
+        .and_then(|r| r.read())
+        .unwrap();
+    assert_eq!(saved, purse, "the purse is saved with the repair");
+}
+
+fn full_uses(tool: Tool, tier: Tier) -> u32 {
+    pbd_core::survival::wear::Wearer::Tool(tool, tier).max_uses(rules())
+}
+
+#[test]
+fn a_workbench_repair_takes_half_the_head_of_the_tools_recipe() {
+    let file: pbd_core::station::RecipeFile =
+        ron::from_str(include_str!("../../../../assets/config/recipes.ron")).unwrap();
+    let book = file.resolve().unwrap().for_mode(true);
+    let price = places::repair_price(&book, rules(), Tool::Pickaxe, Tier::Stone).unwrap();
+    assert!(!price.is_empty(), "a stone pickaxe's head has a price");
+    for &(item, _) in &price {
+        if let Item::Good(g) = item {
+            assert!(
+                !rules().wear.handle_goods.iter().any(|h| h == g.code()),
+                "no handle in the price: {}",
+                g.code()
+            );
+        }
+    }
+    let mut save = survival_memory();
+    let full = full_uses(Tool::Pickaxe, Tier::Stone);
+    for _ in 0..full {
+        spend_wear(
+            &mut save,
+            Tool::Pickaxe,
+            Tier::Stone,
+            pbd_core::survival::wear::Action::BlockBroken { block_tier: None },
+        );
+    }
+    assert!(WearBook::of(&save).broken(Tool::Pickaxe, Tier::Stone));
+    let mut short = Slots::new();
+    assert!(!places::repair_at_bench(
+        &mut save,
+        &mut short,
+        Tool::Pickaxe,
+        Tier::Stone,
+        &price
+    ));
+    let mut carried = Slots::new();
+    for &(item, n) in &price {
+        carried.give(item, n);
+    }
+    assert!(places::repair_at_bench(
+        &mut save,
+        &mut carried,
+        Tool::Pickaxe,
+        Tier::Stone,
+        &price
+    ));
+    assert_eq!(carried, Slots::new(), "the price left the hands");
+    assert!(!WearBook::of(&save).broken(Tool::Pickaxe, Tier::Stone));
 }

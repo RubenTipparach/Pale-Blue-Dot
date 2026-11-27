@@ -40,6 +40,8 @@ mod slots;
 mod sounds;
 mod survival_kit;
 // Survival's HUD, death, drinking and wear (`survival-mode`).
+mod survival_panels;
+mod survival_places;
 mod survival_play;
 mod talk;
 mod time_ui;

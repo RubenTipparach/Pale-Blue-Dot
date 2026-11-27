@@ -202,6 +202,32 @@ ICONS.update({
         "...kWwWwWwWwk...", "...kIiiiiiiIk...", "...kWwWwWwWwk...", "....kWwWwWwk....",
         "....kIiiiiIk....", "....kWwWwWwk....", ".....kkkkkk.....", "................",
     ], BUCKET),
+    # `survival-mode` design 15: a bucket filled at the sea, its water the
+    # sea's own grey-green with a pale rime of salt at the brim.
+    "goods/sea-bucket": ([
+        "................", ".....krrrrk.....", "....r......r....", "...r........r...",
+        "..kkkkkkkkkkkk..", "..ksSssSsSssSk..", "..kIiiiiiiiiIk..", "...kWwWwWwWwk...",
+        "...kWwWwWwWwk...", "...kIiiiiiiIk...", "...kWwWwWwWwk...", "....kWwWwWwk....",
+        "....kIiiiiIk....", "....kWwWwWwk....", ".....kkkkkk.....", "................",
+    ], dict(BUCKET, **{"s": "#3f6f6a", "S": "#d8e2d6"})),
+})
+
+
+# The dropped pack (`survival-mode` design 8): a leather sack tied at the
+# neck with a rope, its flap and a strap in the hide's browns, standing on
+# the ground where the player fell (a dropped item in the world is its icon).
+SACK = {
+    "k": "#2a1a10", "l": "#8a5a32", "L": "#b07a46", "d": "#5e3a1e",
+    "r": "#c9a46a", "R": "#8a6a3a", "h": "#d8b07a",
+}
+
+ICONS.update({
+    "ui/pack-bag": ([
+        "................", "......krrk......", ".....kRrrRk.....", "......krrk......",
+        ".....kllllk.....", "....kLlllldk....", "...kLhLllllldk..", "..kLLlllllllldk.",
+        "..kLlddddddlldk.", "..kLlkrrrrkldk..", "..kLllkrrklldk..", "..kLlllllllldk..",
+        "..kLlllllllldk..", "...kdlllllldk...", "....kkkkkkkk....", "................",
+    ], SACK),
 })
 
 

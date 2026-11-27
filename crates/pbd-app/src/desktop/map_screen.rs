@@ -384,12 +384,17 @@ pub enum MapMarker {
     /// A taken escort job's trader, by its place in the taken jobs
     /// (`townsfolk` design 42o).
     Trader(usize),
+    /// A dropped pack lying in the world, newest first (`survival-mode`
+    /// design 8).
+    Bag(usize),
 }
 
 /// How many lost villagers the map marks at once.
 pub const LOST_MARKERS: usize = 2;
 /// How many parcels' towns the map marks at once.
 pub const PARCEL_MARKERS: usize = 2;
+/// How many dropped packs the map marks at once (`survival-mode` design 8).
+pub const BAG_MARKERS: usize = 2;
 /// How many escort jobs' traders the map marks at once.
 pub const TRADER_MARKERS: usize = 2;
 /// The label beside a waypoint's pin, "W1" ..., by the pin's place in the
@@ -829,8 +834,13 @@ pub fn spawn(
     launch: Option<Res<MapLaunch>>,
     kit: Res<UiKit>,
     husbandry: Option<Res<pbd_app::config::HusbandryConfig>>,
+    assets: Option<Res<AssetServer>>,
 ) {
     let kit = &*kit;
+    // A dropped pack's marker: the pack's own icon (`survival-mode` design 8).
+    let bag_icon: Handle<Image> = assets
+        .map(|a| a.load("items/ui/pack-bag.png"))
+        .unwrap_or_default();
     // The legend's Herds row: each tameable species' name and colour.
     let herd_key: Vec<(Localized, Color)> = husbandry
         .as_deref()
@@ -987,6 +997,18 @@ pub fn spawn(
                                         },
                                     ));
                                 });
+                        }
+                        for k in 0..BAG_MARKERS {
+                            markers.spawn((
+                                MapMarker::Bag(k),
+                                ImageNode::new(bag_icon.clone()),
+                                hidden(Node {
+                                    position_type: PositionType::Absolute,
+                                    width: px(16),
+                                    height: px(16),
+                                    ..default()
+                                }),
+                            ));
                         }
                         markers.spawn((
                             MapMarker::Ship,
@@ -1984,6 +2006,17 @@ pub fn markers(
         (Some(eco), Some(towns)) => pbd_app::economy::parcel_directions(eco, towns),
         _ => Vec::new(),
     };
+    // The dropped packs, newest first, as planet points.
+    let bags: Vec<Vec3> = save
+        .as_deref()
+        .map(|save| {
+            let mut all = pbd_app::survival::bags(save);
+            all.sort_by_key(|b| std::cmp::Reverse(b.0));
+            all.into_iter()
+                .map(|(_, bag)| bag.at.pos.as_vec3())
+                .collect()
+        })
+        .unwrap_or_default();
     for (label, mut text) in &mut labels {
         let want = waypoints
             .get(label.0)
@@ -2028,6 +2061,7 @@ pub fn markers(
                 parcels.get(k).map(|d| *d * pbd_app::planet::PLANET_RADIUS),
                 None,
             ),
+            MapMarker::Bag(k) => (bags.get(k).copied(), None),
             MapMarker::Craft(craft) => {
                 seen_crafts.push(craft);
                 match crafts.get(craft) {

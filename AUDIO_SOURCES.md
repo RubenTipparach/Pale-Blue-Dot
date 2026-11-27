@@ -14,7 +14,7 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [Rain from inside.wav](https://freesound.org/people/allrealsound/sounds/161705/) | Freesound | allrealsound | CC0 | `amb_rain_roof` |
 | [AMBIENCE NIGHT FIELD CRICKET 01.wav](https://freesound.org/people/sengjinn/sounds/175020/) | Freesound | sengjinn | CC0 | `amb_night_crickets` |
 | [Droplets in a cave](https://freesound.org/people/iampagan/sounds/177031/) | Freesound | iampagan | CC0 | `amb_cave` |
-| [Log Split](https://freesound.org/people/Veridiansunrise/sounds/177045/) | Freesound | Veridiansunrise | CC0 | `break_wood`, `strike_hit_tree` |
+| [Log Split](https://freesound.org/people/Veridiansunrise/sounds/177045/) | Freesound | Veridiansunrise | CC0 | `break_wood`, `strike_hit_tree`, `tool_break` |
 | [Water Dripping in Cave.wav](https://freesound.org/people/Sclolex/sounds/177958/) | Freesound | Sclolex | CC0 | `amb_cave` |
 | [Fire Crackling 01.wav](https://freesound.org/people/kingsrow/sounds/181563/) | Freesound | kingsrow | CC0 | `fire_crackle`, `fire_out` |
 | [Rain heavy 2 (rural)](https://freesound.org/people/jmbphilmes/sounds/200272/) | Freesound | jmbphilmes | CC0 | `amb_rain_heavy` |
@@ -77,7 +77,7 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [Footsteps_Boots_Gritty_Ground_(Gravel).wav](https://freesound.org/people/Nox_Sound/sounds/530589/) | Freesound | Nox_Sound | CC0 | `step_stone` |
 | [Ocean Waves.wav](https://freesound.org/people/Noted451/sounds/531015/) | Freesound | Noted451 | CC0 | `amb_gulls` |
 | [Thunderclap](https://freesound.org/people/Fission9/sounds/534023/) | Freesound | Fission9 | CC0 | `thunder_close` |
-| [Guitar string snap or breaks - various sounds](https://freesound.org/people/khenshom/sounds/537084/) | Freesound | khenshom | CC0 | `line_snap` |
+| [Guitar string snap or breaks - various sounds](https://freesound.org/people/khenshom/sounds/537084/) | Freesound | khenshom | CC0 | `line_snap`, `tool_break` |
 | [Seagulls distant.wav](https://freesound.org/people/Ambientsoundapp/sounds/537854/) | Freesound | Ambientsoundapp | CC0 | `amb_gulls` |
 | [Bubbles 001.wav](https://freesound.org/people/ristooooo1/sounds/539823/) | Freesound | ristooooo1 | CC0 | `bubbles` |
 | [distant_dog.wav](https://freesound.org/people/Heigh-hoo/sounds/54545/) | Freesound | Heigh-hoo | CC0 | `amb_town_night`, `dog_far` |

@@ -189,6 +189,9 @@ pub const GOODS: &[GoodRow] = &[
     row("wool-cloak", 1, "items/goods/wool-cloak.png"),
     row("bedroll", 1, "items/goods/bedroll.png"),
     row("meat-stew", 16, "items/goods/meat-stew.png"),
+    // survival-mode design 15: a bucket filled at the sea (salt, undrinkable);
+    // every `water-bucket` an older save holds stays fresh.
+    row("sea-bucket", 1, "items/goods/sea-bucket.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the
@@ -288,6 +291,7 @@ impl Good {
     pub const WOOL_CLOAK: Good = by_code_const("wool-cloak");
     pub const BEDROLL: Good = by_code_const("bedroll");
     pub const MEAT_STEW: Good = by_code_const("meat-stew");
+    pub const SEA_BUCKET: Good = by_code_const("sea-bucket");
 
     /// Every good, in table order.
     pub fn all() -> impl Iterator<Item = Good> {
@@ -400,6 +404,7 @@ mod tests {
             "wool-cloak",
             "bedroll",
             "meat-stew",
+            "sea-bucket",
         ] {
             let good = Good::by_code(code).unwrap_or_else(|| panic!("{code}"));
             assert!(good.index() > last_old, "{code} is appended");

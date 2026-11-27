@@ -522,6 +522,11 @@ impl FarmAct {
     /// Its row of `interact::ACTS` and what it is done to.
     pub fn offer(&self) -> Offer {
         match *self {
+            // The still is survival's to use, not a panel to open
+            // (`survival-mode` design 15, 18).
+            FarmAct::Open { row, .. } if row.material == Some(Material::Still) => {
+                Offer::new(Act::UseStill, row.name())
+            }
             FarmAct::Open { row, .. } => Offer::new(Act::Open, row.name()),
             FarmAct::Crop { crop, ripe, .. } => Offer::new(
                 if ripe { Act::Harvest } else { Act::Check },

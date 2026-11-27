@@ -47,6 +47,9 @@ pub const NAMED: &[&str] = &[
     "bite_splash",
     "reel_loop",
     "line_snap",
+    // A worn tool breaking (`survival-mode` design 11), played by the
+    // desktop's wear.
+    "tool_break",
     "catch_splash",
     "catch_chime",
     "mission_done",

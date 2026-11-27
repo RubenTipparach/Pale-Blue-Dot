@@ -101,6 +101,7 @@
         "thunder_close": (takes: 2, volume_db: -4.0, cap: 3, full_within_m: 150.0, audible_m: 9000.0, stream: true),
         "thunder_crack": (takes: 2, volume_db: -4.0, cap: 3, full_within_m: 150.0, audible_m: 9000.0, stream: true),
         "thunder_roll": (takes: 3, volume_db: -5.0, cap: 3, full_within_m: 150.0, audible_m: 9000.0, stream: true),
+        "tool_break": (volume_db: -4.0, cap: 1),
         "ui_back": (volume_db: -9.0, cap: 2, bus: Menus),
         "ui_click": (volume_db: -9.0, cap: 2, bus: Menus),
         "ui_hover": (volume_db: -20.0, cap: 2, bus: Menus),

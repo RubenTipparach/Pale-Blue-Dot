@@ -106,7 +106,7 @@ pub struct SurvivalIcons {
 }
 
 impl SurvivalIcons {
-    fn cause(&self, cause: TempCause) -> Handle<Image> {
+    pub fn cause(&self, cause: TempCause) -> Handle<Image> {
         match cause {
             TempCause::Sun => self.sun.clone(),
             TempCause::Snow => self.snow.clone(),
@@ -123,6 +123,8 @@ pub struct SurvivalPlayPlugin;
 impl Plugin for SurvivalPlayPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(pbd_app::survival::SurvivalPlugin)
+            .add_plugins(super::survival_places::SurvivalPlacesPlugin)
+            .add_plugins(super::survival_panels::SurvivalPanelsPlugin)
             .add_systems(PostStartup, spawn_hud)
             .add_systems(
                 Update,
@@ -805,22 +807,24 @@ fn pick_bags(
     }
 }
 
-/// Every bag lying in the world, drawn as the card of its first stack (a
-/// dropped item in the world is its icon), upright and turned to the eye as
-/// a drop's card is, lit by the field as the ground. Placed in the render
-/// frame from its body-relative f64 point, as a drop is.
+/// Every bag lying in the world, drawn as the pack's own icon (a dropped
+/// item in the world is its icon): a sack on a card that stands upright on
+/// the ground, its foot on it, and turns to the eye, lit by the field as the
+/// ground. Placed in the render frame from its body-relative f64 point, as a
+/// drop is.
 #[allow(clippy::too_many_arguments)]
 fn draw_bags(
     mut commands: Commands,
     save: Res<WorldSave>,
-    looks: Option<Res<pbd_app::drops::DropLooks>>,
     frame: Option<Res<pbd_app::planet::PlanetRenderFrame>>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    assets: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut card: Local<Option<Handle<Mesh>>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut card: Local<Option<(Handle<Mesh>, Handle<StandardMaterial>)>>,
     mut shown: Query<(Entity, &BagShown, &mut Transform)>,
 ) {
-    let (Some(looks), Some(frame)) = (looks, frame) else {
+    let Some(frame) = frame else {
         return;
     };
     let bags = play::bags(&save);
@@ -833,14 +837,34 @@ fn draw_bags(
         .iter()
         .find(|(_, camera)| camera.is_active)
         .map(|(transform, _)| transform.translation());
-    // Twice a drop's card: a whole pack.
-    let mesh = card
-        .get_or_insert_with(|| meshes.add(Rectangle::new(0.56, 0.56)))
+    // Twice a drop's card: a whole pack, standing on its foot.
+    let (mesh, material) = card
+        .get_or_insert_with(|| {
+            let icon = assets.load_with_settings(
+                "items/ui/pack-bag.png",
+                |s: &mut bevy::image::ImageLoaderSettings| {
+                    s.sampler = bevy::image::ImageSampler::nearest();
+                },
+            );
+            (
+                meshes.add(Rectangle::new(0.62, 0.62)),
+                materials.add(StandardMaterial {
+                    base_color_texture: Some(icon),
+                    alpha_mode: AlphaMode::Mask(0.5),
+                    double_sided: true,
+                    cull_mode: None,
+                    perceptual_roughness: 0.9,
+                    ..default()
+                }),
+            )
+        })
         .clone();
     for (id, bag) in bags {
         let up64 = bag.at.pos.normalize_or(bevy::math::DVec3::Y);
         let up = up64.as_vec3();
-        let at = (frame.center + bag.at.pos + up64 * 0.35).as_vec3();
+        // The card's foot on the ground: the icon's sack stands on its
+        // bottom row of pixels (one in sixteen is empty under it).
+        let at = (frame.center + bag.at.pos + up64 * 0.29).as_vec3();
         let facing = eye
             .map(|eye| eye - at)
             .map(|toward| toward - up * toward.dot(up))
@@ -855,16 +879,10 @@ fn draw_bags(
             *t = transform;
             continue;
         }
-        let Some(item) = bag.slots().get(0).map(|s| s.item) else {
-            continue;
-        };
-        let Some(material) = looks.cards.get(&item).cloned() else {
-            continue;
-        };
         info!("SURVIVAL bag {id} drawn");
         commands.spawn((
             Mesh3d(mesh.clone()),
-            MeshMaterial3d(material),
+            MeshMaterial3d(material.clone()),
             transform,
             BagShown(id),
             pbd_app::field_light::LitByField,
@@ -972,6 +990,14 @@ fn drink(
         return;
     }
     if !save.mode().is_survival() || !pbd_app::interact::may(interact.as_deref(), Reader::Survival)
+    {
+        return;
+    }
+    // The still, the cactus and the bedroll are the places' to answer.
+    if interact
+        .as_deref()
+        .and_then(|i| i.now.as_ref())
+        .is_some_and(|o| o.act != Verb::Drink)
     {
         return;
     }
@@ -1174,7 +1200,12 @@ fn wear_from_deeds(
     mut save: ResMut<WorldSave>,
     tools: Res<pbd_app::fish::ToolSlot>,
     mut survival: ResMut<Survival>,
+    (sfx, listener): (
+        Option<ResMut<pbd_app::audio::Sfx>>,
+        Option<Res<pbd_app::audio::Listener>>,
+    ),
 ) {
+    let mut sfx = sfx;
     let deeds: Vec<_> = deeds.read().cloned().collect();
     if !save.mode().is_survival() {
         return;
@@ -1205,6 +1236,13 @@ fn wear_from_deeds(
                 &[("tool", &pbd_core::inventory::tool_title(tool, tier))],
             ));
             info!("SURVIVAL the {tool:?} broke");
+            // The crack, in the hand (design 11).
+            if let (Some(sfx), Some(listener)) = (sfx.as_deref_mut(), listener.as_deref()) {
+                sfx.play(
+                    "tool_break",
+                    pbd_app::audio::Where::At(listener.eye + listener.forward * 0.6),
+                );
+            }
         }
     }
 }
@@ -1345,7 +1383,11 @@ fn recipes_for_mode(save: Res<WorldSave>, recipes: Option<ResMut<pbd_app::config
 /// and its bars set to a HUD state of the approved mockup, so each state's
 /// `--capture` shot shows it: `full`, `thirsty50`, `thirsty25`, `winded`,
 /// `hot` (the heat stroke warning), `under` (breath), `dead` (the pack
-/// dropped), `worn` (a worn and then a broken pickaxe). Once, at the start.
+/// dropped), `worn` (a worn and then a broken pickaxe), `bag` (the pack
+/// dropped a step ahead with the player alive, for its look and its map
+/// marker), `bedroll` (a bedroll laid a step ahead), `still` (every still
+/// placed by `--place-row` given four sips of sea water to boil). Once, at
+/// the start.
 fn instrument(
     mut commands: Commands,
     mut save: ResMut<WorldSave>,
@@ -1363,16 +1405,74 @@ fn instrument(
     // A moment in, once the server has the player; then held there each
     // frame, so a state the rules would move (a winded bar refills) is the
     // one the shot shows. A death and a broken tool happen once.
-    if time.elapsed_secs() < 1.0 {
+    // A still is placed by `--place-row` a few seconds in: fill it after.
+    let after_s = if state == "still" { 7.0 } else { 1.0 };
+    if time.elapsed_secs() < after_s {
         return;
     }
-    let once = state == "dead";
+    let once = matches!(state.as_str(), "dead" | "bag" | "bedroll" | "still");
     if once && *done >= 2 {
         return;
     }
     let first = *done == 1;
     *done = 2;
     commands.queue(move |world: &mut World| set_state(world, &state, first));
+}
+
+/// The capture's bag or bedroll, a step ahead of the walker.
+fn place_ahead(world: &mut World, state: &str) {
+    let space_origin = pbd_app::sim_origin::origin_of(world);
+    let Some(position) = world
+        .query_filtered::<&avian3d::prelude::Position, With<Walker>>()
+        .iter(world)
+        .next()
+        .map(|p| p.0)
+    else {
+        return;
+    };
+    let up = space_origin.up_at(position);
+    let heading = world.resource::<WalkingState>().view().0;
+    let ground = {
+        let contact = world.resource::<pbd_app::planet::PlanetContact>();
+        let mut down = 0.0;
+        let start = position - up * HALF_HEIGHT + heading * 2.6 + up * 1.2;
+        let mut found = None;
+        while down < 3.0 {
+            let p = start - up * down;
+            if play::solid_at(contact, space_origin.query_point(p)) {
+                found = Some(p + up * 0.04);
+                break;
+            }
+            down += 0.02;
+        }
+        found
+    };
+    let Some(ground) = ground else {
+        warn!("PBD_SURVIVAL_STATE {state}: no ground ahead");
+        return;
+    };
+    let at = space_origin.to_world(ground);
+    let mut hotbar = world.resource::<Hotbar>().0.clone();
+    let mut save = world.resource_mut::<WorldSave>();
+    if state == "bedroll" {
+        hotbar.give(
+            pbd_core::inventory::Item::Good(pbd_core::goods::Good::BEDROLL),
+            1,
+        );
+        let at_bedroll = (0..pbd_core::inventory::CARRIED).find(|&i| {
+            hotbar.get(i).map(|s| s.item)
+                == Some(pbd_core::inventory::Item::Good(
+                    pbd_core::goods::Good::BEDROLL,
+                ))
+        });
+        if let Some(i) = at_bedroll {
+            hotbar.select(i);
+        }
+        play::places::lay_bedroll(&mut save, &mut hotbar, at, heading);
+    } else {
+        play::drop_pack(&mut save, &mut hotbar, at);
+    }
+    world.resource_mut::<Hotbar>().0 = hotbar;
 }
 
 fn set_state(world: &mut World, state: &str, first: bool) {
@@ -1415,6 +1515,25 @@ fn set_state(world: &mut World, state: &str, first: bool) {
         }
         "dead" => die = true,
         "salt" => line = Some(pbd_core::survival::Note::SaltWater),
+        "bag" | "bedroll" => place_ahead(world, state),
+        "still" => {
+            let mut save = world.resource_mut::<WorldSave>();
+            let stills: Vec<_> = save
+                .edits
+                .all()
+                .into_iter()
+                .filter(|e| e.material == Material::Still)
+                .map(|e| (e.cell, e.layer))
+                .collect();
+            for at in stills {
+                let mut hands = pbd_core::inventory::Slots::new();
+                hands.give(
+                    pbd_core::inventory::Item::Good(pbd_core::goods::Good::SEA_BUCKET),
+                    1,
+                );
+                play::places::use_still(&mut save, &mut hands, at, 50.0);
+            }
+        }
         "worn" => {
             // Each tool at the tier the slot holds (once the launch has
             // given it): the pickaxe to a quarter of its uses, the axe to

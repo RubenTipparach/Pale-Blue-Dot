@@ -194,5 +194,6 @@
         ("meat-stew", 18, dish),
         ("block:tanning rack", 20, goods),
         ("block:still", 20, goods),
+        ("sea-bucket", 6, goods),
     ],
 )

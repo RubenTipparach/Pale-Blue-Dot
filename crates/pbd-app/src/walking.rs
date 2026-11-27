@@ -1074,9 +1074,34 @@ pub fn arrive_new(world: &mut World, direction: Vec3) {
     let sea = world
         .get_resource::<crate::sea::Sea>()
         .map_or(crate::planet::terrain::PLANET_RADIUS, |sea| sea.radius);
-    let up = new_world_up(world.resource::<PlanetContact>(), sea, direction, exact);
+    let mut up = new_world_up(world.resource::<PlanetContact>(), sea, direction, exact);
+    // A new Survival world starts near fresh water (`survival-mode` design
+    // 15): its first arrival only, so no spawn a world has had ever moves.
+    let survival = world
+        .get_resource::<crate::saves::WorldSave>()
+        .is_some_and(|save| save.mode().is_survival());
+    if survival && !exact {
+        up = survival_start(world.resource::<PlanetContact>(), sea, up);
+    }
     world.resource_mut::<WalkingState>().spawn_direction = up;
     place_walker(world, up, None);
+}
+
+/// A new Survival world's start from today's `start`: near fresh water
+/// where any lies within reach (`survival::places::start_near_fresh_water`).
+pub fn survival_start(ground: &PlanetContact, sea_radius: f32, start: Vec3) -> Vec3 {
+    let cfg = crate::planet::terrain_config();
+    let found = crate::survival::places::start_near_fresh_water(
+        start,
+        cfg.radius_m,
+        |d| pbd_core::planet_gen::fresh_water_at(cfg, d),
+        |d| new_world_up(ground, sea_radius, d, false),
+        |d| ground.find_land_near(d),
+    );
+    if found != start {
+        info!("SURVIVAL_START moved near fresh water");
+    }
+    found
 }
 
 /// Put the walker on the nearest dry land to `direction` (body-local),
@@ -2538,6 +2563,76 @@ mod tests {
         assert!(
             spawn_now.angle_between(fresh.world().resource::<WalkingState>().spawn_direction)
                 < 1e-5
+        );
+    }
+
+    /// `survival-mode` design 15: a NEW Survival world's first arrival
+    /// starts near fresh water where any is in reach; an Explorer world's
+    /// does not move; and a world already played reopens at its own saved
+    /// pose, its spawn untouched, whatever its mode.
+    #[test]
+    fn a_new_survival_world_starts_near_fresh_water_and_an_old_worlds_spawn_never_moves() {
+        let spawn = FlightViewConfig::default().spawn_direction;
+        let explorer = {
+            let mut app = app_with_terrain_at(PlanetContact::test_planet(5), spawn);
+            app.insert_resource(crate::saves::WorldSave::memory_only());
+            arrive_new(app.world_mut(), spawn);
+            app.world().resource::<WalkingState>().spawn_direction
+        };
+        let plain = {
+            let app = app_with_terrain_at(PlanetContact::test_planet(5), spawn);
+            let ground = app.world().resource::<PlanetContact>();
+            new_world_up(ground, PLANET_RADIUS, spawn, false)
+        };
+        assert!(
+            explorer.angle_between(plain) < 1e-5,
+            "Explorer's start is today's"
+        );
+        let mut app = app_with_terrain_at(PlanetContact::test_planet(5), spawn);
+        let mut save = crate::saves::WorldSave::memory_only();
+        save.identity.mode = Some(pbd_core::survival::WorldMode::Survival);
+        app.insert_resource(save);
+        // A world already played: its saved pose, and its spawn, stand.
+        let body = app.world().resource::<WalkingState>().body;
+        let spawn_was = app.world().resource::<WalkingState>().spawn_direction;
+        let pose_at = plain * (PLANET_RADIUS + 40.0);
+        restore(
+            app.world_mut(),
+            RestoredPose {
+                position: pose_at,
+                heading: Vec3::Z,
+                pitch: 0.0,
+            },
+        );
+        assert_eq!(
+            app.world().resource::<WalkingState>().spawn_direction,
+            spawn_was,
+            "reopening never moves a spawn"
+        );
+        let o = crate::sim_origin::origin_of(app.world());
+        let stood = o.query_point(app.world().entity(body).get::<Position>().unwrap().0);
+        assert!(
+            stood.normalize().angle_between(plain) < 1e-4,
+            "at its own pose"
+        );
+        // A new Survival world: near fresh water, or today's start where
+        // none is in reach.
+        arrive_new(app.world_mut(), spawn);
+        let started = app.world().resource::<WalkingState>().spawn_direction;
+        let cfg = crate::planet::terrain_config();
+        let fresh = |d: Vec3| pbd_core::planet_gen::fresh_water_at(cfg, d);
+        let near = (0..=10).any(|k| {
+            let r = k as f32 * 15.0 / cfg.radius_m;
+            (0..24).any(|i| {
+                let t = i as f32 / 24.0 * std::f32::consts::TAU;
+                let a = started.any_orthonormal_vector();
+                let b = started.cross(a);
+                fresh((started * r.cos() + (a * t.cos() + b * t.sin()) * r.sin()).normalize())
+            })
+        });
+        assert!(
+            near || started.angle_between(plain) < 1e-5,
+            "{started} {plain}"
         );
     }
 
