@@ -19,6 +19,7 @@ use crate::planet::{Applied, PlanetContact, PlanetFine};
 use crate::saves::WorldSave;
 use bevy::prelude::*;
 use pbd_core::edits::Edit;
+use pbd_core::inventory::Slots;
 use pbd_core::net::protocol::{Change, ToClient, ToServer};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -148,7 +149,10 @@ pub fn play(
     fine: Option<ResMut<PlanetFine>>,
     contact: Option<ResMut<PlanetContact>>,
     walkers: Query<&Transform, With<crate::walking::Walker>>,
+    hotbar: Option<ResMut<crate::hotbar::Hotbar>>,
+    drops: Option<ResMut<crate::drops::Drops>>,
 ) {
+    let mut drops = drops;
     let Some(mut net) = net else {
         // Single player: nobody to send to.
         if save.bypass_change_detection().has_outbox() {
@@ -212,6 +216,11 @@ pub fn play(
             for (to, message) in save.take_outbox() {
                 match to {
                     pbd_server::To::Player(0) => {
+                        // A guest's drop, or a pickup by anyone: the host's
+                        // own live drops follow (design 23).
+                        if let Some(drops) = drops.as_mut() {
+                            apply_drop_news(drops, &message);
+                        }
                         // The host's own player: its own edits are applied
                         // already; a remote player's reach its tier here.
                         if let ToClient::Change {
@@ -255,6 +264,14 @@ pub fn play(
                 match message {
                     Ok(message) => receive(*player, message, &mut save, pending),
                     Err(why) => warn!("the host's message could not be read: {why:?}"),
+                }
+            }
+            if let (Some(slots), Some(mut hotbar)) = (save.remote_slots(), hotbar) {
+                follow(&mut hotbar.0, slots);
+            }
+            if let Some(drops) = drops.as_mut() {
+                for news in save.drop_news() {
+                    apply_drop_news(drops, &news);
                 }
             }
             // Given to the tier once there is one.
@@ -305,10 +322,41 @@ pub fn receive(player: u32, message: ToClient, save: &mut WorldSave, applied: &m
             info!("the host refused request {id}: {reason:?}");
         }
         ToClient::Accepted { .. } => save.answered(),
+        ToClient::Slots { slots } => save.take_remote_slots(slots),
+        news @ (ToClient::Drop { .. } | ToClient::DropLeft { .. }) => save.take_drop_news(news),
         ToClient::Clock { .. } => {}
         ToClient::Rejected { reason } => warn!("the host closed the game: {reason:?}"),
         other => debug!("player {player}: from the host, not used yet: {other:?}"),
     }
+}
+
+/// Apply news of a drop to the live drops (design 23): a drop made is added
+/// unless it is already held (the host's own dig), and a pickup sets what is
+/// left, taking it away at 0. Anything else is ignored.
+pub fn apply_drop_news(drops: &mut crate::drops::Drops, news: &ToClient) {
+    match *news {
+        ToClient::Drop { drop } => {
+            if !drops.live.iter().any(|d| d.id == drop.id) {
+                drops.live.push(drop);
+            }
+        }
+        ToClient::DropLeft { id, left } => {
+            if left == 0 {
+                drops.live.retain(|d| d.id != id);
+            } else if let Some(d) = drops.live.iter_mut().find(|d| d.id == id) {
+                d.count = left;
+            }
+        }
+        _ => {}
+    }
+}
+
+/// The hotbar takes the slots the server holds for this player (design 22),
+/// keeping its own selected slot: the hand is the player's, not the server's.
+pub fn follow(hotbar: &mut Slots, from_server: Slots) {
+    let selected = hotbar.selected();
+    *hotbar = from_server;
+    hotbar.select(selected);
 }
 
 /// Bring the tier round to edits the server sent: the one APPLY, then one
@@ -338,4 +386,47 @@ fn apply_to_tier(
         "{written} of {} edits from the network applied to the tier",
         edits.len()
     );
+}
+
+#[cfg(test)]
+mod follow_tests {
+    use super::*;
+    use pbd_core::inventory::{Item, Stack};
+    use pbd_core::terrain::Material;
+
+    /// Design 22: the joined game's hotbar takes the server's slots whole
+    /// and keeps the slot its player has selected.
+    #[test]
+    fn the_hotbar_takes_the_servers_slots_and_keeps_its_selection() {
+        let mut hotbar = Slots::new();
+        hotbar.set(1, Some(Stack::new(Item::Block(Material::Dirt), 4)));
+        hotbar.select(6);
+        let mut from_server = Slots::new();
+        from_server.set(0, Some(Stack::new(Item::Block(Material::Stone), 3)));
+        follow(&mut hotbar, from_server.clone());
+        assert_eq!(hotbar.selected(), 6);
+        assert_eq!(hotbar.get(0), from_server.get(0));
+        assert_eq!(hotbar.get(1), None);
+    }
+
+    /// Design 23: a drop the host already holds is not added twice, and a
+    /// pickup sets what is left, taking the drop away at 0.
+    #[test]
+    fn drop_news_adds_a_drop_once_and_a_pickup_sets_what_is_left() {
+        let drop = pbd_core::drops::ItemDrop {
+            id: 3,
+            item: Item::Block(Material::Dirt),
+            count: 2,
+            position: bevy::math::DVec3::new(1.0, 2.0, 3.0),
+            made_s: 4.0,
+        };
+        let mut drops = crate::drops::Drops::default();
+        apply_drop_news(&mut drops, &ToClient::Drop { drop });
+        apply_drop_news(&mut drops, &ToClient::Drop { drop });
+        assert_eq!(drops.live, vec![drop]);
+        apply_drop_news(&mut drops, &ToClient::DropLeft { id: 3, left: 1 });
+        assert_eq!(drops.live[0].count, 1);
+        apply_drop_news(&mut drops, &ToClient::DropLeft { id: 3, left: 0 });
+        assert!(drops.live.is_empty());
+    }
 }

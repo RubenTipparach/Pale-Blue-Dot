@@ -360,6 +360,12 @@ fn next_serial() -> u64 {
 struct Outgoing {
     queued: Vec<pbd_core::net::protocol::Request>,
     waiting: Vec<pbd_core::net::protocol::Request>,
+    /// The player's own slots, as the server last sent them and the hotbar
+    /// has not yet taken (design 22).
+    slots: Option<Slots>,
+    /// Drops made and picked, as the server told it, not yet applied to
+    /// the live drops (design 23).
+    drop_news: Vec<pbd_core::net::protocol::ToClient>,
 }
 
 /// The save as the in-process server's store (`multiplayer` design 18):
@@ -367,7 +373,23 @@ struct Outgoing {
 /// [`WorldSave::accept`] writes, the drop the app made included.
 struct SaveStore<'a> {
     save: &'a mut WorldSave,
-    drop: Option<&'a ItemDrop>,
+    /// The drop the next commit writes: the app's, made before it asked, or
+    /// one made here for a remote player's dig (design 23).
+    drop: Option<ItemDrop>,
+}
+
+impl SaveStore<'_> {
+    /// The slots a line carries for `author`'s deed. A line has no author
+    /// token: every player line is player 0's, the host's (`world-persistence`
+    /// decision 11). So a guest's deed is written with the host's own slots
+    /// as they stand, never the guest's (`multiplayer` design 22).
+    fn own(&self, author: &Author, carried: &Slots) -> Slots {
+        if *author == Author::Player(0) {
+            carried.clone()
+        } else {
+            self.save.carried.clone().unwrap_or_default()
+        }
+    }
 }
 
 impl pbd_server::Store for SaveStore<'_> {
@@ -378,21 +400,57 @@ impl pbd_server::Store for SaveStore<'_> {
         &self.save.ledger
     }
     fn commit(&mut self, author: &Author, edit: Edit, carried: &Slots) -> Option<Sequenced> {
-        // A player's line carries no author token, and single player is
-        // player 0 (`world-persistence` decision 11).
-        debug_assert_eq!(*author, Author::Player(0));
-        self.save.accept_sequenced(edit, self.drop, carried)
+        let own = self.own(author, carried);
+        let drop = self.drop.take();
+        self.save.accept_sequenced(edit, drop.as_ref(), &own)
+    }
+    fn floating(
+        &mut self,
+        author: &Author,
+        item: pbd_core::inventory::Item,
+        cell: u32,
+        layer: u16,
+        made_s: f64,
+    ) -> Option<ItemDrop> {
+        if *author == Author::Player(0) {
+            // The host's own dig: the app made its drop before it asked, and
+            // single player's lines stay what they were.
+            return self.drop;
+        }
+        // A remote player's: the drop `Drops::make` makes for a dig, at the
+        // cell half a metre up, in the body's frame (`world-frames` 10.4).
+        let direction = pbd_core::cell_key::key_direction(cell)?
+            .as_dvec3()
+            .normalize();
+        let centre = direction
+            * (f64::from(crate::planet::PLANET_RADIUS)
+                + f64::from(pbd_core::column::layer_altitude(usize::from(layer)))
+                + 0.5);
+        let id = self.save.next_drop_id();
+        let drop = ItemDrop {
+            id,
+            item,
+            count: 1,
+            position: pbd_core::drops::scattered(centre, id),
+            made_s,
+        };
+        self.drop = Some(drop);
+        Some(drop)
     }
     fn commit_pack(&mut self, author: &Author, carried: &Slots) -> bool {
-        debug_assert_eq!(*author, Author::Player(0));
+        if *author != Author::Player(0) {
+            // Only the guest's own slots changed: the server holds them, and
+            // the save keeps nothing of a guest's until its player record.
+            return true;
+        }
         self.save.record_pack(carried)
     }
     fn drop(&self, id: u64) -> Option<ItemDrop> {
         self.save.live_drops.get(&id).copied()
     }
     fn commit_pick(&mut self, author: &Author, id: u64, left: u16, carried: &Slots) -> bool {
-        debug_assert_eq!(*author, Author::Player(0));
-        self.save.record_pick(id, left, carried)
+        let own = self.own(author, carried);
+        self.save.record_pick(id, left, &own)
     }
     fn commit_record(&mut self, author: &Author, record: StoredRecord) -> bool {
         self.save.store(author, vec![record]).is_some()
@@ -646,7 +704,10 @@ impl WorldSave {
             .take()
             .unwrap_or_else(|| self.local_server(carried));
         let decided = {
-            let mut store = SaveStore { save: self, drop };
+            let mut store = SaveStore {
+                save: self,
+                drop: drop.copied(),
+            };
             decide(&mut server, &mut store)
         };
         self.local = Some(server);
@@ -741,6 +802,34 @@ impl WorldSave {
         let sent = std::mem::take(&mut out.queued);
         out.waiting.extend(sent.iter().copied());
         sent
+    }
+
+    /// The player's own slots, sent by the server (design 22), for the
+    /// hotbar to take.
+    pub fn take_remote_slots(&mut self, slots: Slots) {
+        if let Some(out) = self.outgoing.as_mut() {
+            out.slots = Some(slots);
+        }
+    }
+
+    /// News of a drop from the server (design 23), for the live drops.
+    pub fn take_drop_news(&mut self, news: pbd_core::net::protocol::ToClient) {
+        if let Some(out) = self.outgoing.as_mut() {
+            out.drop_news.push(news);
+        }
+    }
+
+    /// The drop news the server sent since last asked.
+    pub fn drop_news(&mut self) -> Vec<pbd_core::net::protocol::ToClient> {
+        self.outgoing
+            .as_mut()
+            .map(|out| std::mem::take(&mut out.drop_news))
+            .unwrap_or_default()
+    }
+
+    /// The slots the server sent last, once: the hotbar follows them.
+    pub fn remote_slots(&mut self) -> Option<Slots> {
+        self.outgoing.as_mut().and_then(|out| out.slots.take())
     }
 
     /// The server answered the oldest request waiting (it answers in order).
@@ -1443,6 +1532,108 @@ mod tests {
         let log = |slot: &Slot| std::fs::read(root.join(&slot.id).join(LOG)).unwrap();
         assert!(!log(&a).is_empty());
         assert_eq!(log(&a), log(&b), "byte for byte");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// `multiplayer` design 22: on a hosted world a guest's place and pack
+    /// move are decided against the guest's slots, but the host's save, whose
+    /// lines are all player 0's, keeps the host's own slots, in memory and
+    /// after a reload.
+    #[test]
+    fn a_guests_hands_never_become_the_hosts_slots() {
+        use pbd_core::accept::PackMove;
+        use pbd_core::net::protocol::{PROTOCOL, PROTOCOL_MIN, Request, ToServer, Versions};
+        let root = temporary("guest-hands");
+        let slot = create(&root, "Hosted", 11).unwrap();
+        let mut host = Slots::new();
+        host.give(Item::Block(Material::Dirt), 7);
+        let mut guest = Slots::new();
+        guest.give(Item::Block(Material::Stone), 4);
+        let (cell, top) = dry_tops(1)[0];
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            assert!(save.record_pack(&host));
+            let hello = ToServer::Hello {
+                versions: Versions {
+                    protocol: PROTOCOL,
+                    protocol_min: PROTOCOL_MIN,
+                    topology: pbd_core::terrain::TOPOLOGY_VERSION,
+                    generator: 0,
+                    content: 0,
+                    world: 0,
+                },
+                key: [9; 16],
+                name: String::new(),
+            };
+            let player = save.serve_join(7, &hello, &guest, None).expect("joined");
+            assert_ne!(player, 0);
+            save.serve(
+                player,
+                ToServer::Request {
+                    id: 1,
+                    request: Request::Place {
+                        cell,
+                        layer: top + 1,
+                        slot: 0,
+                    },
+                },
+            );
+            save.serve(
+                player,
+                ToServer::Request {
+                    id: 2,
+                    request: Request::Pack(PackMove::Send { index: 0 }),
+                },
+            );
+            let sent = save.take_outbox();
+            assert!(
+                sent.iter().any(|(_, m)| matches!(
+                    m,
+                    pbd_core::net::protocol::ToClient::Accepted { id: 1, .. }
+                )),
+                "the guest's place is taken: {sent:?}"
+            );
+            assert_eq!(save.carried.as_ref(), Some(&host), "in memory");
+            // The guest digs the block back up: its drop is made by the
+            // store, written with the dig, and told to everyone (design 23).
+            save.serve(
+                player,
+                ToServer::Request {
+                    id: 3,
+                    request: Request::Dig {
+                        cell,
+                        layer: top + 1,
+                    },
+                },
+            );
+            let made: Vec<_> = save
+                .take_outbox()
+                .into_iter()
+                .filter_map(|(_, m)| match m {
+                    pbd_core::net::protocol::ToClient::Drop { drop } => Some(drop),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(made.len(), 2, "the host and the guest are told");
+            assert_eq!(made[0].item, Item::Block(Material::Stone));
+            let radius = made[0].position.length();
+            assert!(
+                (radius - f64::from(crate::planet::PLANET_RADIUS)).abs() < 200.0,
+                "at the cell, in the body's frame: {radius}"
+            );
+            assert_eq!(save.carried.as_ref(), Some(&host), "still the host's");
+
+            save.drain();
+        }
+        let again = WorldSave::open(root.clone(), slot);
+        assert_eq!(again.carried.as_ref(), Some(&host), "after a reload");
+        assert!(
+            again
+                .drops
+                .iter()
+                .any(|d| d.item == Item::Block(Material::Stone)),
+            "the guest's drop is in the save"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 

@@ -111,16 +111,19 @@ fn requests_are_journaled_in_order_and_sent_to_everyone() {
             Material::Air
         );
     }
-    // Each request: Accepted to its player, then the change to both.
+    // Each request: Accepted to its player, then the change to both, then
+    // the dug block's drop to both (design 23).
     let out = s.drain();
-    assert_eq!(out.len(), 6 * 3);
-    for chunk in out.chunks(3) {
+    assert_eq!(out.len(), 6 * 5);
+    for chunk in out.chunks(5) {
         assert!(matches!(
             chunk[0],
             (To::Player(0), ToClient::Accepted { .. })
         ));
         assert!(matches!(chunk[1], (To::Player(0), ToClient::Change { .. })));
         assert!(matches!(chunk[2], (To::Player(1), ToClient::Change { .. })));
+        assert!(matches!(chunk[3], (To::Player(0), ToClient::Drop { .. })));
+        assert!(matches!(chunk[4], (To::Player(1), ToClient::Drop { .. })));
     }
     // The ledger is the world's: its digest is a recompute of the edits.
     for (_, sequenced, _) in &st.entries {
@@ -524,6 +527,16 @@ impl Store for NoRecords {
     fn commit(&mut self, author: &Author, edit: Edit, carried: &Slots) -> Option<Sequenced> {
         self.0.commit(author, edit, carried)
     }
+    fn floating(
+        &mut self,
+        author: &Author,
+        item: Item,
+        cell: u32,
+        layer: u16,
+        made_s: f64,
+    ) -> Option<ItemDrop> {
+        self.0.floating(author, item, cell, layer, made_s)
+    }
     fn commit_pack(&mut self, author: &Author, carried: &Slots) -> bool {
         self.0.commit_pack(author, carried)
     }
@@ -678,4 +691,196 @@ fn vitals_are_journaled_on_a_hit_and_every_few_seconds_and_read_back() {
         .unwrap();
     assert_eq!(saved.health, cfg.health.max_pts);
     assert_eq!(saved.food_fp as f32, cfg.food.wake_fp);
+}
+
+/// The messages queued for `player`, in order.
+fn to_player(s: &mut Server, player: u32) -> Vec<ToClient> {
+    s.drain()
+        .into_iter()
+        .filter(|(to, _)| *to == To::Player(player))
+        .map(|(_, m)| m)
+        .collect()
+}
+
+/// Design 22: a remote player is sent their slots after the welcome, and a
+/// place is answered, then followed by their slots with the block spent.
+#[test]
+fn a_remote_players_place_is_followed_by_their_slots() {
+    use pbd_core::inventory::Stack;
+    let (mut s, mut st) = server();
+    let mut carried = Slots::default();
+    carried.set(0, Some(Stack::new(Item::Block(Material::Stone), 3)));
+    let host = s.join(0, &hello(1), carried.clone()).unwrap();
+    let guest = s.join(1, &hello(2), carried).unwrap();
+    assert_eq!((host, guest), (0, 1));
+    let sent = s.drain();
+    // The host's own player is never sent slots; the guest is, after its
+    // welcome.
+    let slots_to = |p: u32| {
+        sent.iter()
+            .filter(|(to, m)| *to == To::Player(p) && matches!(m, ToClient::Slots { .. }))
+            .count()
+    };
+    assert_eq!((slots_to(0), slots_to(1)), (0, 1));
+    let (cell, top) = dry_cells(&s, 1)[0];
+    s.handle(
+        &mut st,
+        guest,
+        ToServer::Request {
+            id: 4,
+            request: Request::Place {
+                cell,
+                layer: top + 1,
+                slot: 0,
+            },
+        },
+    );
+    let got = to_player(&mut s, guest);
+    let accepted = got
+        .iter()
+        .position(|m| matches!(m, ToClient::Accepted { id: 4, .. }))
+        .unwrap_or_else(|| panic!("accepted: {got:?}"));
+    let Some(ToClient::Slots { slots }) = got.last() else {
+        panic!("the slots come last: {got:?}");
+    };
+    assert!(got.len() - 1 > accepted);
+    assert_eq!(slots.get(0).map(|stack| stack.count), Some(2));
+    assert_eq!(slots, &s.player(guest).unwrap().slots);
+}
+
+/// Design 22: a refused place is answered with the slots as they were, so
+/// a prediction can be put back.
+#[test]
+fn a_refused_place_is_answered_with_the_slots_as_they_were() {
+    let (mut s, mut st) = server();
+    let players = joined(&mut s, &[1, 2], Slots::default());
+    let (cell, top) = dry_cells(&s, 1)[0];
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Request {
+            id: 2,
+            request: Request::Place {
+                cell,
+                layer: top + 1,
+                slot: 0,
+            },
+        },
+    );
+    let got = to_player(&mut s, players[1]);
+    assert!(
+        matches!(got.first(), Some(ToClient::Refused { id: 2, .. })),
+        "{got:?}"
+    );
+    assert_eq!(
+        got.last(),
+        Some(&ToClient::Slots {
+            slots: Slots::default()
+        })
+    );
+    assert!(st.entries.is_empty());
+}
+
+/// Design 22: a player who leaves and joins again is given the slots they
+/// left with, not the new player's kit.
+#[test]
+fn a_player_who_rejoins_gets_the_slots_they_left_with() {
+    use pbd_core::inventory::Stack;
+    let (mut s, _) = server();
+    let mut carried = Slots::default();
+    carried.set(2, Some(Stack::new(Item::Block(Material::Stone), 9)));
+    let host = s.join(0, &hello(1), Slots::default()).unwrap();
+    let guest = s.join(1, &hello(2), carried.clone()).unwrap();
+    assert!(s.leave(guest).is_some());
+    s.drain();
+    let again = s.join(2, &hello(2), Slots::default()).unwrap();
+    assert_eq!(again, guest);
+    assert_eq!(s.player(guest).unwrap().slots, carried);
+    assert_eq!(
+        to_player(&mut s, guest).last(),
+        Some(&ToClient::Slots { slots: carried })
+    );
+    let _ = host;
+}
+
+/// Design 23: a remote player's dig makes a drop in the store, written with
+/// the dig, and every player is told of it; the guest's pickup of it tells
+/// every player what is left and sends the guest their slots holding it.
+#[test]
+fn a_guests_dig_drop_is_told_to_everyone_and_picked_once() {
+    let (mut s, mut st) = server();
+    let players = joined(&mut s, &[1, 2], Slots::default());
+    let (cell, top) = dry_cells(&s, 1)[0];
+    let was = s
+        .column(&Edits::new(), cell)
+        .unwrap()
+        .material(top as usize);
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Request {
+            id: 1,
+            request: Request::Dig { cell, layer: top },
+        },
+    );
+    let sent = s.drain();
+    let made: Vec<(To, ItemDrop)> = sent
+        .iter()
+        .filter_map(|(to, m)| match m {
+            ToClient::Drop { drop } => Some((*to, *drop)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(made.len(), 2, "both players are told: {sent:?}");
+    let drop = made[0].1;
+    assert_eq!(made[1].1, drop);
+    assert_eq!(drop.item, Item::Block(was));
+    assert_eq!(st.drop(drop.id), Some(drop), "written with the dig");
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Request {
+            id: 2,
+            request: Request::Pick { drop: drop.id },
+        },
+    );
+    let sent = s.drain();
+    let left: Vec<&ToClient> = sent
+        .iter()
+        .filter(|(_, m)| matches!(m, ToClient::DropLeft { .. }))
+        .map(|(_, m)| m)
+        .collect();
+    assert_eq!(left.len(), 2, "both players are told");
+    assert_eq!(
+        left[0],
+        &ToClient::DropLeft {
+            id: drop.id,
+            left: 0
+        }
+    );
+    let Some((_, ToClient::Slots { slots })) = sent.last() else {
+        panic!("the guest's slots come last: {sent:?}");
+    };
+    assert!(
+        slots
+            .iter()
+            .flatten()
+            .any(|stack| stack.item == Item::Block(was) && stack.count == 1)
+    );
+    // The host reaching the same drop is refused: it is gone.
+    s.handle(
+        &mut st,
+        players[0],
+        ToServer::Request {
+            id: 3,
+            request: Request::Pick { drop: drop.id },
+        },
+    );
+    assert!(s.drain().iter().any(|(_, m)| matches!(
+        m,
+        ToClient::Refused {
+            id: 3,
+            reason: Refusal::Gone
+        }
+    )));
 }

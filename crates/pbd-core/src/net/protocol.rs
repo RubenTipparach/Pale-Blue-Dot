@@ -16,10 +16,13 @@ use crate::terrain::{Material, material_code, material_of};
 use crate::world_frame::{FrameId, WorldPos};
 use glam::DVec3;
 
-/// This build's protocol.
-pub const PROTOCOL: u16 = 1;
-/// The oldest protocol this build still speaks (design 15.9).
-pub const PROTOCOL_MIN: u16 = 1;
+/// This build's protocol. 2: `ToClient::Slots` (design 22), `Drop` and
+/// `DropLeft` (design 23).
+pub const PROTOCOL: u16 = 2;
+/// The oldest protocol this build still speaks (design 15.9). A version-1
+/// game cannot read its own slots, so it is refused rather than left with
+/// an empty hotbar (design 22).
+pub const PROTOCOL_MIN: u16 = 2;
 /// The longest chat line or name, in bytes.
 pub const MAX_TEXT: usize = 512;
 /// The most items any one list may hold, which bounds what a malformed
@@ -222,6 +225,21 @@ pub enum ToClient {
         from: u32,
         text: String,
     },
+    /// The player's own carried slots, whole (design 22): after the
+    /// welcome, after a request that changed them, after a refusal. Which
+    /// slot is selected is the player's own and is not sent.
+    Slots {
+        slots: crate::inventory::Slots,
+    },
+    /// A drop a dig made, whoever dug (design 23).
+    Drop {
+        drop: crate::drops::ItemDrop,
+    },
+    /// A pickup was decided: `left` remain on drop `id`, 0 for gone.
+    DropLeft {
+        id: u64,
+        left: u16,
+    },
 }
 
 /// Why bytes did not decode.
@@ -287,6 +305,34 @@ impl W {
     fn bytes(&mut self, v: &[u8]) {
         self.u32(v.len() as u32);
         self.0.extend_from_slice(v);
+    }
+    /// A slot (design 22): a count, 0 for empty, then a kind byte and the
+    /// item's code; a good by its code, never its table index.
+    fn stack(&mut self, stack: Option<crate::inventory::Stack>) {
+        use crate::inventory::Item;
+        let Some(stack) = stack.filter(|s| s.count > 0) else {
+            self.u16(0);
+            return;
+        };
+        self.u16(stack.count);
+        match stack.item {
+            Item::Block(material) => {
+                self.u8(1);
+                self.u8(material_code(material));
+            }
+            Item::Tool(tool) => {
+                self.u8(2);
+                self.u8(tool.index() as u8);
+            }
+            Item::Fish(species) => {
+                self.u8(3);
+                self.u16(species);
+            }
+            Item::Good(good) => {
+                self.u8(4);
+                self.bytes(good.code().as_bytes());
+            }
+        }
     }
     fn regions(&mut self, v: &[u32]) {
         self.u32(v.len() as u32);
@@ -385,6 +431,25 @@ impl<'a> R<'a> {
     }
     fn material(&mut self) -> Result<Material, Decode> {
         material_of(self.u8()?).ok_or(Decode::Invalid)
+    }
+    /// A slot (design 22): a count, 0 for empty, then its item.
+    fn stack(&mut self) -> Result<Option<crate::inventory::Stack>, Decode> {
+        use crate::inventory::{Item, Stack, Tool};
+        let count = self.u16()?;
+        if count == 0 {
+            return Ok(None);
+        }
+        let item = match self.u8()? {
+            1 => Item::Block(self.material()?),
+            2 => Item::Tool(*Tool::ALL.get(self.u8()? as usize).ok_or(Decode::Invalid)?),
+            3 => Item::Fish(self.u16()?),
+            4 => Item::Good(crate::goods::Good::by_code(&self.text()?).ok_or(Decode::Invalid)?),
+            _ => return Err(Decode::Invalid),
+        };
+        if count > item.stack_limit() {
+            return Err(Decode::Invalid);
+        }
+        Ok(Some(Stack::new(item, count)))
     }
     fn end<T>(self, value: T) -> Result<T, Decode> {
         if self.0.is_empty() {
@@ -689,6 +754,29 @@ impl ToClient {
                 w.u32(*from);
                 w.bytes(text.as_bytes());
             }
+            Self::Slots { slots } => {
+                w.u8(12);
+                for stack in slots.iter() {
+                    w.stack(stack);
+                }
+            }
+            Self::Drop { drop } => {
+                w.u8(13);
+                w.u64(drop.id);
+                w.stack(Some(crate::inventory::Stack {
+                    item: drop.item,
+                    count: drop.count,
+                }));
+                w.f64(drop.position.x);
+                w.f64(drop.position.y);
+                w.f64(drop.position.z);
+                w.f64(drop.made_s);
+            }
+            Self::DropLeft { id, left } => {
+                w.u8(14);
+                w.u64(*id);
+                w.u16(*left);
+            }
         }
         w.0
     }
@@ -758,6 +846,32 @@ impl ToClient {
             11 => Self::Chat {
                 from: r.u32()?,
                 text: r.text()?,
+            },
+            12 => {
+                let mut slots = crate::inventory::Slots::new();
+                for index in 0..crate::inventory::CARRIED {
+                    slots.set(index, r.stack()?);
+                }
+                Self::Slots { slots }
+            }
+            13 => {
+                let id = r.u64()?;
+                // A drop holds something: an empty one is never sent.
+                let stack = r.stack()?.ok_or(Decode::Invalid)?;
+                let position = DVec3::new(r.f64()?, r.f64()?, r.f64()?);
+                Self::Drop {
+                    drop: crate::drops::ItemDrop {
+                        id,
+                        item: stack.item,
+                        count: stack.count,
+                        position,
+                        made_s: r.f64()?,
+                    },
+                }
+            }
+            14 => Self::DropLeft {
+                id: r.u64()?,
+                left: r.u16()?,
             },
             other => return Err(Decode::Unknown(other)),
         };
@@ -885,6 +999,22 @@ mod tests {
                 from: 0,
                 text: String::new(),
             },
+            ToClient::Slots {
+                slots: one_of_each(),
+            },
+            ToClient::Slots {
+                slots: crate::inventory::Slots::new(),
+            },
+            ToClient::Drop {
+                drop: crate::drops::ItemDrop {
+                    id: 41,
+                    item: crate::inventory::Item::Block(Material::Dirt),
+                    count: 1,
+                    position: DVec3::new(1.0e6, -2.5, 3.0e-4),
+                    made_s: 812.25,
+                },
+            },
+            ToClient::DropLeft { id: 41, left: 0 },
         ];
         out.extend(
             JOIN_REFUSALS
@@ -897,6 +1027,44 @@ mod tests {
                 .map(|&reason| ToClient::Refused { id: 1, reason }),
         );
         out
+    }
+
+    /// Carried slots with one of each kind of item, at both ends of the
+    /// array (design 22).
+    fn one_of_each() -> crate::inventory::Slots {
+        use crate::inventory::{CARRIED, Item, Slots, Stack, Tool};
+        let mut slots = Slots::new();
+        slots.set(0, Some(Stack::new(Item::Block(Material::Stone), 12)));
+        slots.set(3, Some(Stack::new(Item::Tool(Tool::Axe), 1)));
+        slots.set(9, Some(Stack::new(Item::Fish(7), 2)));
+        slots.set(
+            CARRIED - 1,
+            Some(Stack::new(Item::Good(crate::goods::Good::IRON_INGOT), 5)),
+        );
+        slots
+    }
+
+    /// Design 22: a good goes by its code, and a code this build lacks, or
+    /// a count past the stack's limit, fails to decode.
+    #[test]
+    fn a_slot_this_build_cannot_hold_fails_to_decode() {
+        let good = crate::goods::Good::IRON_INGOT;
+        let bytes = ToClient::Slots {
+            slots: one_of_each(),
+        }
+        .encode();
+        let code = good.code().as_bytes();
+        let at = bytes
+            .windows(code.len())
+            .position(|w| w == code)
+            .expect("the good goes by its code");
+        let mut unknown = bytes.clone();
+        unknown[at] = b'#';
+        assert_eq!(ToClient::decode(&unknown), Err(Decode::Invalid));
+        let mut too_many = bytes;
+        // The first slot's count: past any stack's limit.
+        too_many[1..3].copy_from_slice(&u16::MAX.to_le_bytes());
+        assert_eq!(ToClient::decode(&too_many), Err(Decode::Invalid));
     }
 
     /// Task 3.2: every message round-trips, and every shorter prefix of it

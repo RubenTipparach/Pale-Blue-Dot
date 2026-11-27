@@ -1822,9 +1822,17 @@ pub fn run(args: &[String]) {
         eprintln!("terrain generator: {why}");
     }
     let saved_seconds = world.world_seconds;
-    let hotbar = slots::Hotbar::restore(&mut world);
+    let mut hotbar = slots::Hotbar::restore(&mut world);
+    // A joined game carries what the host holds for this player (design 22).
+    if let Some(from_server) = world.remote_slots() {
+        pbd_app::net_play::follow(&mut hotbar.0, from_server);
+    }
     let tools = pbd_app::fish::ToolSlot::restore(&world);
-    let drops = pbd_app::drops::Drops::restore(&world);
+    let mut drops = pbd_app::drops::Drops::restore(&world);
+    // A joined game's drops are the ones the host told it of (design 23).
+    for news in world.drop_news() {
+        pbd_app::net_play::apply_drop_news(&mut drops, &news);
+    }
     // The saves page is the front door of a plain launch: a player picks the
     // world rather than being put in the last one.
     let opening = menu::opening_screen(

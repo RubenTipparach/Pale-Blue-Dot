@@ -716,6 +716,145 @@ game applied every change, its own dig was accepted, and restarted it
 rejoined and was sent the hut. A seven-bot soak for 60 s passed the same
 checks (1715 requests).
 
+### 22. A joined player's own pack (2026-11-27)
+
+**Found.** The two-machine run (2026-11-23) noted the joining player's
+hotbar empty. The starting kit has been empty since 2026-11-17, so an empty
+hotbar on a first join is right. What is wrong is behind it: nothing sends
+a joined player their own slots. The server keeps every player's slots
+(`Player::slots`) and decides digs, places, pack moves and pickups against
+them, but no message carries them back. A joined game makes no prediction
+(design 20, first cut), so:
+
+- a block the player digs goes into the server's copy and never shows up
+  in their hotbar, so they have nothing to place;
+- a returning player gets the starting kit again, because the host passes
+  the kit to every `join`, even for a key it already knows;
+- a refusal cannot put the pack back (design 15.3 and `refuse_hands` say
+  "until the inventory message").
+
+**The message.** `ToClient::Slots { slots }`: the player's whole carried
+slots, the hotbar's ten and then the pack's thirty, sent only to that
+player. A slot goes on the wire as a count (u16, 0 for empty) and then its
+item: a kind byte, then the material's save code (u8) for a block, the tool
+in `Tool::ALL` order (u8), the fish's roster index (u16), or the good's
+code as text. A good goes by its code, never its table index, as the save
+does (`farming-and-smelting` decision 1). An unknown good or material
+fails to decode (`Decode::Invalid`). Which slot is selected is not sent: it
+is the player's hand on their own game. The protocol goes to version 2,
+and so does its minimum, so a version-1 game is refused with "Game version
+differs" rather than missing messages it cannot read.
+
+**When it is sent:**
+- right after `Welcome`;
+- after every accepted request that changed that player's slots (a dig, a
+  place, a pack move or a pickup), after the request's `Accepted`;
+- after every refused request about the hands or a cell, so a prediction
+  is put back (design 15.3).
+
+The host's own player, player 0, is never sent it: its slots are the app's
+own (design 18).
+
+**The joined game** sets its `Hotbar` to the slots it is sent and keeps its
+own selected index. Its pack screen, the held item and the build preview
+read the `Hotbar`, so they follow.
+
+**Away is not gone.** `Server::leave` keeps a departed player's slots by
+their number, and `join` gives a known key the slots it left with, not the
+new player's kit. This lasts only while the host is running: keeping them
+in the host's save is design 10's `player` record, which comes next.
+
+**Found with it: a guest's slots were written as the host's.** On a
+hosted world, the host's save is the store (design 18), and its lines carry
+no author: every player line is player 0's (`world-persistence` decision
+11). But `SaveStore` wrote a guest's dig, place, pack move or pickup with
+the guest's slots. Only a `debug_assert` stood in the way, and it is off in
+the `fast` and release builds. So the host's in-memory carried slots, and
+after a reload the host's pack, became the guest's last slots. The fix is
+in `SaveStore`:
+- a guest's edit is written with the host's own slots as they stand;
+- a guest's pickup writes what is left on the drop, also with the host's
+  own slots;
+- a guest's pack move writes no line, because the save has nothing of the
+  guest's to keep until design 10's player record.
+
+The guest's slots stay in the server's memory. A save written during the
+2026-11-23 run may already have the laptop player's slots as the Mac
+player's; the owner can check the Mac's pack.
+Check: `a_guests_hands_never_become_the_hosts_slots`.
+
+**Not covered here:** the aim fault from the same run, where bare hands
+dug only straight down for the laptop's player. The request carries the
+cell the client picked, so the fault is on the joined game's side. It
+needs a run on the owner's machines to find, and it stays open in the
+two-machine notes.
+
+**Checks:**
+- the round trip of `Slots` with one of each kind;
+- a good whose code this build lacks fails to decode;
+- a remote player's dig is answered with `Accepted` and then `Slots`
+  holding the block;
+- a refused place is answered with `Slots` as they were;
+- a player who leaves and rejoins gets the slots they left with, not the
+  kit;
+- the joined game's `Hotbar` takes the slots and keeps its selected slot.
+
+### 23. Drops through the server (task 8.2, the drops; 2026-11-27)
+
+**Found.** Writing design 22's tests showed why a joined player cannot
+build: a dig does not put its block in the pack, it floats out as a drop
+for the magnet to pull in (`inventory-grid` decision 4). The server works
+out what floats (`Decided::floats`), and for a remote player throws it away
+(`handle`: "What floats out becomes a drop record with task 8.2"). Nobody
+else sees a drop either: the host's own digs make drops only in the host's
+app. So a joined player's dig yields nothing, and the first thing they try
+in the world does nothing for them.
+
+**The drop is made where the dig is decided.**
+- Single player and the host's own player: the app makes the drop before
+  asking, as today (`Drops::make`, at the dug cell plus the lift), and the
+  store writes it on the dig's line.
+- A remote player's dig: the app is not there, so the store makes the drop,
+  `Store::make_drop(item, cell, layer, made_s)`. It is the same drop
+  `Drops::make` would make: the save's next id, at the cell's centre
+  half a metre up, scattered by its id, in the body's frame (f64), made at
+  the server's world clock. It is written on the dig's line as the app's
+  drop is. The save's lines do not change.
+
+**Everyone is told.** Two messages, both broadcast to every player:
+- `ToClient::Drop { drop }` when a drop is made by a dig, whoever dug. It
+  carries the id, the item and count (design 22's slot encoding), the
+  position (f64, the home body's frame) and the time it was made.
+- `ToClient::DropLeft { id, left }` when a pickup is decided, whoever
+  picked: how many are left, 0 for gone.
+
+The host's own game is player 0. It gets both through the outbox, adds a
+drop it does not already hold, and sets what is left on one it does. Its
+own digs and pickups are already in its `Drops`, so applying them again
+changes nothing.
+
+**A joined game's magnet asks.** Its drops are only those it was told
+about. When the magnet brings one in (`drops::step` says picked), it sends
+`Request::Pick { drop }` once, through the same queue as a dig, and changes
+nothing itself. What it takes comes back as `DropLeft` and `Slots`. Two
+players reaching one drop are given it once, by the server (design 19).
+
+**Not yet:** a toss (Q, or a stack dragged off the pack) by a joined
+player, and a host's toss being seen by its guests; a chest broken by a
+guest, whose contents spill; and expiry, which each game still runs on its
+own clock from the drop's `made_s`. Drops are not yet sent to a player who
+joins after they were made. All of these are left for region records (the
+rest of 8.2, with 6.3's snapshots).
+
+**Checks:**
+- the two messages round-trip;
+- a remote player's dig makes a drop in the store, writes it on the dig's
+  line, and broadcasts `Drop` to everyone;
+- the host's own dig with the app's drop broadcasts that drop;
+- a remote player's pickup broadcasts `DropLeft` and sends `Slots` holding
+  the item;
+- the host's game adds a guest's drop to its `Drops` once.
+
 ## Risks / Trade-offs
 
 - **Every stateful rule moves to the server path.** This is most of the work,

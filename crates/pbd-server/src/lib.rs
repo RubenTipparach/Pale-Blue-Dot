@@ -57,6 +57,18 @@ pub trait Store {
     /// set it in the edits, number it in its region and journal it. `None`
     /// refuses it, changing nothing, and the server refuses the request.
     fn commit(&mut self, author: &Author, edit: Edit, carried: &Slots) -> Option<Sequenced>;
+    /// The drop the next [`Store::commit`] writes on its line, for `item`
+    /// floating out of `cell`'s `layer` (design 23): the app's own, made
+    /// before it asked, for the host's player; one the store makes now,
+    /// named by its next id, for a remote player. `None` writes no drop.
+    fn floating(
+        &mut self,
+        author: &Author,
+        item: Item,
+        cell: u32,
+        layer: u16,
+        made_s: f64,
+    ) -> Option<ItemDrop>;
     /// Journal a player's slots after a move in the pack. `false` refuses
     /// it (design 19).
     fn commit_pack(&mut self, author: &Author, carried: &Slots) -> bool;
@@ -90,6 +102,8 @@ pub struct MemoryStore {
     pub records: Records,
     /// Refuse everything from here on, as a failed writer does.
     pub failed: bool,
+    /// The drop the next commit writes (design 23).
+    pub floating: Option<ItemDrop>,
 }
 
 impl MemoryStore {
@@ -117,7 +131,32 @@ impl Store for MemoryStore {
         let sequenced = self.ledger.accept(edit, &self.edits);
         self.entries
             .push((author.clone(), sequenced, carried.clone()));
+        if let Some(drop) = self.floating.take() {
+            self.drops.insert(drop.id, drop);
+        }
         Some(sequenced)
+    }
+    fn floating(
+        &mut self,
+        _author: &Author,
+        item: Item,
+        cell: u32,
+        layer: u16,
+        made_s: f64,
+    ) -> Option<ItemDrop> {
+        // In memory there is no planet: the cell's direction, as far out as
+        // the layer's number, is enough to tell drops apart.
+        let direction = pbd_core::cell_key::key_direction(cell)?.as_dvec3();
+        let id = self.drops.keys().next_back().map_or(0, |id| id + 1);
+        let drop = ItemDrop {
+            id,
+            item,
+            count: 1,
+            position: direction * f64::from(layer),
+            made_s,
+        };
+        self.floating = Some(drop);
+        Some(drop)
     }
     fn commit_pack(&mut self, author: &Author, carried: &Slots) -> bool {
         if self.failed {
@@ -207,6 +246,10 @@ pub struct Server {
     players: BTreeMap<u32, Player>,
     /// Players' install keys to their numbers, kept across leaving.
     known: Vec<([u8; 16], u32)>,
+    /// The slots a player left with, by number, given back on a rejoin
+    /// while this server runs (design 22; the save keeps them with design
+    /// 10's player record).
+    away: BTreeMap<u32, Slots>,
     clock_s: f64,
     since_clock_s: f64,
     outbox: Vec<(To, ToClient)>,
@@ -221,6 +264,7 @@ impl Server {
             world,
             players: BTreeMap::new(),
             known: Vec::new(),
+            away: BTreeMap::new(),
             clock_s,
             since_clock_s: 0.0,
             outbox: Vec::new(),
@@ -297,6 +341,12 @@ impl Server {
             self.reject(connection, JoinRefusal::Full);
             return None;
         }
+        // A player already known keeps what they carry: still in (a game
+        // restarted before its old connection closed), or away (design 22).
+        let slots = match self.players.get(&number) {
+            Some(player) => player.slots.clone(),
+            None => self.away.remove(&number).unwrap_or(slots),
+        };
         self.players.insert(
             number,
             Player {
@@ -317,6 +367,7 @@ impl Server {
                 topology: self.world.versions.topology,
             },
         );
+        self.send_slots(number);
         Some(number)
     }
 
@@ -350,7 +401,9 @@ impl Server {
 
     /// A player left.
     pub fn leave(&mut self, player: u32) -> Option<Player> {
-        self.players.remove(&player)
+        let left = self.players.remove(&player)?;
+        self.away.insert(player, left.slots.clone());
+        Some(left)
     }
 
     /// One message from a joined player.
@@ -362,6 +415,10 @@ impl Server {
             ToServer::Request { id, request } => {
                 // What floats out becomes a drop record with task 8.2.
                 let _ = self.request(store, player, id, request);
+                // Taken or refused, the player's slots as the server holds
+                // them: what a dig gave, or a prediction put back (design
+                // 22, 15.3).
+                self.send_slots(player);
             }
             ToServer::Resync { region } => {
                 let snap = store.ledger().snapshot(region, store.edits());
@@ -555,6 +612,10 @@ impl Server {
                 return Err(self.refuse(store, player, id, cell, reason));
             }
         };
+        // What floats out is a drop, written on the dig's line (design 23).
+        let made = taken.floats.and_then(|item| {
+            store.floating(&Author::Player(player), item, cell, layer, self.clock_s)
+        });
         // Made durable and numbered before anything is answered: a store
         // that refuses leaves the world as it was.
         let Some(sequenced) = store.commit(&Author::Player(player), edit, &taken.slots) else {
@@ -587,6 +648,9 @@ impl Server {
                 material,
             },
         });
+        if let Some(drop) = made {
+            self.broadcast(ToClient::Drop { drop });
+        }
         Ok(Decided {
             sequenced,
             slots: taken.slots,
@@ -658,6 +722,8 @@ impl Server {
                 seq: 0,
             },
         );
+        // Everyone's copy of the drop follows (design 23).
+        self.broadcast(ToClient::DropLeft { id: drop_id, left });
         Ok((taken, left))
     }
 
@@ -692,6 +758,17 @@ impl Server {
             );
         }
         reason
+    }
+
+    /// Send a remote player their own slots (design 22). The host's own
+    /// player, 0, holds the app's slots already (design 18).
+    fn send_slots(&mut self, player: u32) {
+        if player == 0 {
+            return;
+        }
+        if let Some(slots) = self.players.get(&player).map(|p| p.slots.clone()) {
+            self.send(To::Player(player), ToClient::Slots { slots });
+        }
     }
 
     fn reject(&mut self, connection: u64, reason: JoinRefusal) {

@@ -212,6 +212,16 @@ pub fn gather(
         let mut moved = *drop;
         let mut slots = hotbar.0.clone();
         match drops::step(&mut moved, chest, dt, &mut slots) {
+            Moved::Picked { taken } if save.joined() => {
+                // A joined game asks the host, once, and changes nothing:
+                // what it took comes back as the drop's news and the slots
+                // (`multiplayer` design 23). A full pack does not ask.
+                if taken > 0
+                    && save.send_request(pbd_core::net::protocol::Request::Pick { drop: drop.id })
+                {
+                    debug!("asked the host for drop {}", drop.id);
+                }
+            }
             Moved::Picked { taken } => {
                 // The magnet brought it in; whether it is picked up, and how
                 // many, is the server's (`multiplayer` design 19), from the
