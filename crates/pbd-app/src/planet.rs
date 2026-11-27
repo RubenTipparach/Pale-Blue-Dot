@@ -391,7 +391,10 @@ impl Plugin for PlanetPlugin {
         .init_resource::<lod::NearField>()
         .init_resource::<lod::DuskLamps>()
         .add_systems(Startup, create_planet)
-        .add_systems(Update, (lod::switch_dusk_lamps, lod::refresh_lod).chain())
+        .add_systems(
+            Update,
+            (lod::switch_dusk_lamps, lod::relight_edits, lod::refresh_lod).chain(),
+        )
         .add_systems(
             PostUpdate,
             (crate::render_origin::rebase, update_planet_frame)

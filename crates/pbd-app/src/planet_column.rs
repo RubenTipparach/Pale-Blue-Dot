@@ -248,6 +248,10 @@ pub struct ColumnTier {
     /// The water's queue and what it needs to name a slot's cell
     /// (`water-flow` E3).
     pub water: TierWater,
+    /// Whether an edit has changed the columns since the light was baked:
+    /// the relight is baked off the main thread (`river-hitches` design 7,
+    /// `planet::lod::relight_edits`), and swapped in when it is done.
+    light_stale: bool,
 }
 
 /// The tier's water (`water-flow` E3, `volumetric-water` phase 2): the
@@ -820,6 +824,13 @@ impl Grid for TierGrid<'_> {
     }
 }
 
+/// A tier's light, baked from it by [`ColumnTier::bake_relight`].
+pub struct Relit {
+    sides: Vec<[u32; 6]>,
+    lamps: Vec<LampSpot>,
+    light: light::Baked,
+}
+
 /// One emitting cell: its column's unit direction, the middle of its layer
 /// in metres above the planet's radius, and its level, 0..`light::MAX`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -844,6 +855,7 @@ impl ColumnTier {
             sides: Vec::new(),
             relit: 0,
             lamps: Vec::new(),
+            light_stale: false,
             water: TierWater::default(),
         }
     }
@@ -1209,10 +1221,17 @@ impl ColumnTier {
     /// pass is where the reference records its own scar - a dug cell that
     /// "stayed dark forever".
     pub fn relight(&mut self) {
-        self.relit += 1;
-        self.sides = self.neighbor_slots();
+        let baked = self.bake_relight();
+        self.take_relight(baked);
+    }
+
+    /// What [`Self::relight`] computes, from the tier as it stands, without
+    /// changing it: so it can run on another thread (`river-hitches`
+    /// design 7) and be taken with [`Self::take_relight`].
+    pub fn bake_relight(&self) -> Relit {
+        let sides = self.neighbor_slots();
         let emitters = self.emitters();
-        self.lamps = emitters
+        let lamps = emitters
             .iter()
             .filter_map(|e| {
                 let direction = *self.centres.get(e.column as usize)?;
@@ -1224,13 +1243,37 @@ impl ColumnTier {
                 })
             })
             .collect();
-        self.light = light::bake(
+        let light = light::bake(
             &light::Region {
                 columns: &self.columns,
-                neighbors: &self.sides,
+                neighbors: &sides,
             },
             &emitters,
         );
+        Relit {
+            sides,
+            lamps,
+            light,
+        }
+    }
+
+    /// Take a light baked by [`Self::bake_relight`] from this same tier.
+    pub fn take_relight(&mut self, baked: Relit) {
+        self.relit += 1;
+        self.sides = baked.sides;
+        self.lamps = baked.lamps;
+        self.light = baked.light;
+        self.light_stale = false;
+    }
+
+    /// An edit changed the columns and its light is being baked elsewhere.
+    pub fn mark_light_stale(&mut self) {
+        self.light_stale = true;
+    }
+
+    /// Whether the light waits on a bake of an edit (`mark_light_stale`).
+    pub fn light_stale(&self) -> bool {
+        self.light_stale
     }
 
     /// Both channels at a point, 0..1 `(sky, block)`: what lights the things
@@ -1392,6 +1435,7 @@ impl ColumnTier {
             sides: Vec::new(),
             relit: 0,
             lamps: Vec::new(),
+            light_stale: false,
             water: TierWater {
                 queue: liquid::Queue::new(),
                 keys: (0..n as u32).map(|i| 100 + i).collect(),
@@ -2174,6 +2218,7 @@ pub fn build_with(
         sides: Vec::new(),
         relit: 0,
         lamps: Vec::new(),
+        light_stale: false,
         water: TierWater {
             queue: liquid::Queue::new(),
             keys: members.iter().map(|&i| finest[i].key()).collect(),
@@ -3442,6 +3487,7 @@ mod tests {
             sides: Vec::new(),
             relit: 0,
             lamps: Vec::new(),
+            light_stale: false,
             water: TierWater::default(),
         };
         tier.relight();
@@ -3753,6 +3799,7 @@ mod tests {
             sides: Vec::new(),
             relit: 0,
             lamps: Vec::new(),
+            light_stale: false,
             water: TierWater::default(),
         };
         tier.relight();
@@ -3853,6 +3900,7 @@ mod water_tier_tests {
             sides: Vec::new(),
             relit: 0,
             lamps: Vec::new(),
+            light_stale: false,
             water: TierWater {
                 queue: liquid::Queue::new(),
                 keys: (0..N as u32).map(|i| 100 + i).collect(),

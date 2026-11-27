@@ -136,3 +136,52 @@ candidates, by what the split shows:
   level and a hash grid over its 191,000 cells, rebuilt on every edit,
   though an edit moves no cell: the grid and the neighbours are kept from
   the tier it replaces, and the records are read from the set, not copied.
+
+## 7. The split, measured, and the fix
+
+The trunk again (release, fresh world, `RUST_LOG=...digging=debug`), nine
+digs, the edit's own `edit cost` line:
+
+| part | each dig |
+| --- | ---: |
+| clone of the set | 0.8 to 2.7 ms |
+| apply (repack, reconcile) | 0.2 ms |
+| **relight** (`finish_edits`: the whole tier's light, and the sea's sheet) | **52 to 64 ms** |
+| contact | 6.8 to 7.9 ms |
+| total, in `apply_edit` | 70 to 84 ms |
+
+The rest of the ~110 ms frame is what a new set version sets off after it
+(the tier image, 7 ms; the field corners). The clone is cheap; the relight
+is three quarters of it. Its own comment ("ours costs six milliseconds")
+dates from a smaller tier: it is ten times that at the spawn now.
+
+**Fix: the relight leaves the main thread** (as the bounce and lamp bakes
+did). `apply_edit` writes the edit, marks the tier's light stale and
+publishes the set at once; a system (`relight_edits`) bakes the light and
+re-marks the sea on a copy on the async pool and swaps it in when it is
+done, if the set is still the one it copied, the way `switch_dusk_lamps`
+swaps its relit set (with `PlanetContact::relit`, so the contact is not
+rebuilt). An edit that adopts a column past the tier's edge still relights
+at once: it changes the tier's shape.
+
+What changes on screen: a dug cell's light arrives with the bake, about 60
+ms (four frames) after the block goes, where it arrived with it; no blend
+is added. Light is the field's, so the picture once baked is the same cell
+for cell. Taken as a perf cut (CLAUDE.md, "Performance improvements need no
+permission"); reported to the owner with the numbers.
+
+### 7.1 Measured after (the trunk, release, fresh world each, alternated, 4 min each)
+
+| run | set changes | median frame at a change (main) | worst at a change | frames over 50 ms |
+| --- | ---: | ---: | ---: | ---: |
+| before 1 | 36 | 102 ms (100) | 118 ms | 38 |
+| after 1 | 26 | 36 ms (29) | 56 ms | 15 |
+| before 2 | 10 | 106 ms (104) | 110 ms | 9 |
+| after 2 | 18 | 28 ms (26) | 57 ms | 6 |
+
+An edit now changes the set twice (the edit, then its light 70 to 75 ms
+later, `EDIT_RELIGHT on the pool`), each a frame of about 30 ms where it was
+one of about 105. The over-50 counts include the loading screen's frames.
+What is left at a change: the contact rebuild (7 ms, `FineTier::new`
+copying the finest level and hashing its 191,000 cells), the tier image
+(7 ms) and the rest of what a version sets off: the next cut (task 4.5).

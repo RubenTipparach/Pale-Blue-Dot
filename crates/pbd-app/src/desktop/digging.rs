@@ -562,7 +562,14 @@ pub fn apply_edit(
     // buys the exactness instead. Then the sea's sheet over the tier, its
     // shade from the light just baked.
     let repacked = started.elapsed();
-    set.finish_edits();
+    // The relight goes to the async pool (`river-hitches` design 7: 52 to 64
+    // ms of the main thread at the spawn), unless the edit adopted a column,
+    // which changes the tier's shape: that one is relit here, at once.
+    if adopting.is_some() {
+        set.finish_edits();
+    } else {
+        set.finish_edits_later();
+    }
     let relit = started.elapsed();
     let set = Arc::new(set);
     contact.set_fine(&set);
