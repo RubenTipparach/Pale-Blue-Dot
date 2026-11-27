@@ -486,6 +486,30 @@ mod tests {
     }
 
     #[test]
+    fn an_empty_water_bar_drains_health_slowly() {
+        let cfg = cfg();
+        let mild = Conditions::default();
+        let mut dry = Vitals::new(&cfg);
+        let mut watered = Vitals::new(&cfg);
+        dry.health = 50.0;
+        watered.health = 50.0;
+        for _ in 0..1200 {
+            dry.water = 0.0;
+            dry.food_fp = f64::from(cfg.food.max_fp);
+            watered.food_fp = f64::from(cfg.food.max_fp);
+            dry.tick(&cfg, &mild, 0.1);
+            watered.tick(&cfg, &mild, 0.1);
+        }
+        assert!(dry.health < 50.0, "120 s dry costs health: {}", dry.health);
+        assert!(dry.health > 35.0, "and only slowly: {}", dry.health);
+        assert!(
+            watered.health >= 50.0,
+            "a watered body does not: {}",
+            watered.health
+        );
+    }
+
+    #[test]
     fn an_empty_water_bar_in_the_desert_sun_has_the_stroke_before_it_kills() {
         // design "As built": the empty bar's drain is halved (1 pt every
         // 12 s), so the stroke comes first (about 7.8 min) and the player

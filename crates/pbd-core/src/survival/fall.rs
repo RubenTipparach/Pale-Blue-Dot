@@ -28,6 +28,16 @@ pub fn safe_speed(cfg: &FallConfig, gravity_mps2: f32) -> f32 {
     (2.0 * gravity_mps2.max(0.0) * cfg.safe_height_m).sqrt()
 }
 
+/// The impact speed a landing is judged at: the fastest downward speed seen
+/// while airborne, but never more than a fall of `dropped_m` (the highest
+/// point reached minus the landing) could reach under `gravity_mps2`, with
+/// 10% and 0.5 m/s over it for a frame's sampling. A physics push that
+/// spikes one frame's velocity is not a fall.
+pub fn bounded_impact(peak_mps: f32, dropped_m: f32, gravity_mps2: f32) -> f32 {
+    let free = (2.0 * gravity_mps2.max(0.0) * dropped_m.max(0.0)).sqrt();
+    peak_mps.min(1.1 * free + 0.5)
+}
+
 /// Health a landing takes: `max(0, v - v_safe) * k`, or nothing into deep
 /// water.
 pub fn fall_damage(cfg: &FallConfig, impact_mps: f32, gravity_mps2: f32, landing: Landing) -> f32 {
@@ -36,7 +46,7 @@ pub fn fall_damage(cfg: &FallConfig, impact_mps: f32, gravity_mps2: f32, landing
     {
         return 0.0;
     }
-    if !impact_mps.is_finite() {
+    if !impact_mps.is_finite() || gravity_mps2 < 0.1 {
         return 0.0;
     }
     (impact_mps - safe_speed(cfg, gravity_mps2)).max(0.0) * cfg.pts_per_mps
@@ -49,6 +59,30 @@ mod tests {
     use crate::survival::config::SurvivalConfig;
 
     const G: f32 = SURFACE_GRAVITY_MPS2_PER_G as f32;
+
+    #[test]
+    fn a_spike_is_capped_by_the_height_fallen() {
+        let cfg = SurvivalConfig::shipped();
+        // A 1 m drop under a push that reads 40 m/s for one frame.
+        let v = bounded_impact(40.0, 1.0, G);
+        assert!(v < 8.5, "{v}");
+        assert_eq!(fall_damage(&cfg.fall, v, G, Landing::Ground), 0.0);
+        assert_eq!(bounded_impact(40.0, 0.0, G), 0.5);
+    }
+
+    #[test]
+    fn a_real_fall_is_not_cut() {
+        for h in [2.0_f32, 5.0, 12.0, 30.0] {
+            let v = landing_speed(h, G);
+            assert_eq!(bounded_impact(v, h, G), v, "{h} m");
+        }
+    }
+
+    #[test]
+    fn no_gravity_no_fall_damage() {
+        let cfg = SurvivalConfig::shipped();
+        assert_eq!(fall_damage(&cfg.fall, 30.0, 0.0, Landing::Ground), 0.0);
+    }
 
     /// The speed after falling `layers` metres from rest under `g`.
     fn landing_speed(layers: f32, g: f32) -> f32 {

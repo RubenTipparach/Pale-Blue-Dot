@@ -1468,6 +1468,86 @@ before the code (recommendations taken, ask only with screenshots):
   bot's clock steps at most 0.1 s a frame, so a run takes many times its
   game time. Its stills say so.
 
+## Eating in a Survival world (2026-11-27)
+
+Found while checking why fruit gave no water: in the game, nothing eaten
+reached the survival rules at all. `kitchen::eat` ran the dish's buff and
+the missions' count, and never called `survival_act(Act::Eat)`, so in a
+Survival world a meal filled neither food nor water. Design 4 ("Every dish
+gains a `fills` value") and the hunger requirement already moved to the
+specs say it does; the core rule and its tests were right, the call was
+missing. And the raw foods design 12 lists (raw meat 8, fruit 6, egg 4) and
+design 15's milk could not be eaten at all, because only `cooking.ron`'s
+dishes are.
+
+The plan, a fix to the design as written, not a change to it:
+
+- **A dish eaten in Survival also fills.** After the dish's line is
+  accepted, `kitchen::eat` calls `survival_act(Act::Eat(code, 1))`. Items
+  carry no stars, so every meal is eaten at one star (design 4's star
+  multipliers stay for when they do). Explorer is unchanged: `survival_act`
+  is `None` there.
+- **Raw food is eaten in Survival only.** The right button with a held good
+  that is not a dish, but that `survival.ron` fills or waters (`fills` or
+  `drinks.eaten`), eats one: the slot loses it in one saved line (the pack's
+  line), then `Act::Eat`. No buff. In
+  Explorer the same press does nothing, as today.
+- **Every tree fruit is "fruit".** The tables name one `fruit` row; the
+  goods are `flora::FRUIT_GOODS` (apple, pear, plum, ...; not the pine cone,
+  which is wood). The core's
+  `hunger::food_code` maps any of them to `fruit` before `fills` and
+  `eaten_water` look it up, so each fruit fills 6 fp and 4 water without a
+  row per fruit.
+- Tests: `hunger::tests::every_tree_fruit_is_eaten_as_fruit` (core), and app
+  tests that a dish eaten in Survival fills food, an apple fills food and
+  water, raw meat is eaten only in Survival, and Explorer's meal leaves no
+  bars. With them the water requirement moves to `openspec/specs`.
+
+## Thin air on foot (2026-11-27)
+
+The core spends suit air whenever `Conditions.thin_air` is set, but the
+game never set it, so the breath requirement stayed in the change. Today
+every walkable body is the home planet, whose air is always open: on foot
+the only thin air design 5 can mean is "very high altitude".
+
+- **`suit_air.thin_above_m`, 600 m** (recommendation taken, ask only with
+  screenshots): the height above the body's mean radius past which the air
+  is too thin on foot. The highest summits stand about 150 m and the sky
+  shell's top is 960 m (1.2 R of 4,800 m), so only a tower built very high,
+  or a walk out of a craft high up, reaches it. It is a validated number in
+  `survival.ron`.
+- **The tick reads it.** `pbd_app::survival::thin_air_at(radius_m)`
+  compares the walker's radius (`SimOrigin::radius_at`, `f64`) with the
+  planet's mean radius plus the ceiling; the tick sets
+  `conditions.thin_air` from it while walking. A cabin still wins.
+- An airless body is thin everywhere, and comes with the first one the
+  player can walk on (none today).
+- Tests: `breath::tests::thin_above_the_ceiling_only` (core),
+  `pbd_app::survival::tests::{high_up_the_air_is_thin, thin_air_spends_the_suit_then_health}`.
+  With them the breath requirement moves to `openspec/specs`.
+
+## A fall is no faster than its height allows (2026-11-27)
+
+The bot run died once while digging, with no cause logged. The tick takes
+a fall's impact speed as the fastest downward velocity seen while airborne,
+and a physics push (the walker shoved out of a cell that was just dug or
+built, a rebase, a contact resolved after a long frame) can give one frame
+a downward velocity no fall of that height could reach. Nothing measured
+it; this guards against it, written up before the code.
+
+- **The impact speed is capped by the drop.** While airborne the tick keeps
+  the highest radius the feet reached (`SimOrigin::radius_at`, `f64`); on
+  landing the drop is that minus the landing radius, and the speed used is
+  `min(peak, 1.1 * sqrt(2 g drop) + 0.5 m/s)` (`fall::bounded_impact`). A
+  real fall is never cut: free fall reaches exactly `sqrt(2 g h)`, and the
+  10% and 0.5 m/s cover a frame's sampling. A drop of nothing hurts no one.
+- **No gravity, no fall damage.** The tick read 0 gravity when the scene
+  had none, which makes the safe speed 0 and any landing hurt.
+  `fall_damage` takes no damage below 0.1 m/s^2.
+- Tests: `fall::tests::{a_spike_is_capped_by_the_height_fallen, a_real_fall_is_not_cut, no_gravity_no_fall_damage}`.
+  Whether this was the bot's death is for the desktop's playtest: the cause
+  is now logged (`SURVIVAL hit`).
+
 ## Questions for the owner (with screenshots), 2026-11-26: answered
 
 Asked only where there is something to look at (CLAUDE.md, "Ask only with

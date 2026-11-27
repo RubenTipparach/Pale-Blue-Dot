@@ -216,6 +216,45 @@ impl WornRecord {
     }
 }
 
+/// A dish just eaten also fills the bars in Survival (design "Eating in a
+/// Survival world"): food and water through the server, at one star, since
+/// items carry no stars. `None` in Explorer.
+pub fn fill_from(
+    save: &mut WorldSave,
+    good: pbd_core::goods::Good,
+) -> Option<pbd_core::survival::body::Eaten> {
+    save.survival_act(Act::Eat(good.code().to_string(), 1))?
+        .eaten
+}
+
+/// Eat one of the raw food in the selected slot (Survival only): a good
+/// `survival.ron` fills or waters that is not a cooked dish (raw meat, an
+/// egg, milk, a tree fruit). The slot loses it in one saved line, then the
+/// bars fill. `None`, with nothing changed, in Explorer, for a good that is
+/// not eaten, or when the save refused.
+pub fn eat_raw(
+    save: &mut WorldSave,
+    carried: &mut Slots,
+) -> Option<(pbd_core::goods::Good, pbd_core::survival::body::Eaten)> {
+    if !save.mode().is_survival() {
+        return None;
+    }
+    let Some(pbd_core::inventory::Item::Good(good)) = carried.held().map(|s| s.item) else {
+        return None;
+    };
+    if !pbd_core::survival::hunger::is_eaten(rules(), good.code()) {
+        return None;
+    }
+    let mut after = carried.clone();
+    after.take_held()?;
+    if !save.record_pack(&after) {
+        return None;
+    }
+    *carried = after;
+    let eaten = fill_from(save, good)?;
+    Some((good, eaten))
+}
+
 /// Put on the good in the selected slot (Survival only): it leaves the
 /// hand for its worn slot, and what was there comes back into the hand, in
 /// one saved line. `false` when the held item is not worn or the save
@@ -441,6 +480,14 @@ pub use places::{water_source, water_source_in};
 
 // ------------------------------------------------------------- the tick
 
+/// Whether the air on foot is too thin at `radius_m` from the planet's
+/// centre (design "Thin air on foot"): above its mean radius by more than
+/// `suit_air.thin_above_m`.
+pub fn thin_air_at(radius_m: f64) -> bool {
+    let mean = f64::from(crate::planet::terrain_config().radius_m);
+    pbd_core::survival::breath::thin_at(rules(), (radius_m - mean) as f32)
+}
+
 /// What the tick keeps between frames to read falls and climbs off the
 /// walker's motion.
 #[derive(Default)]
@@ -451,6 +498,9 @@ pub struct Watch {
     was_wet: bool,
     /// The radius the feet stood at last frame, while grounded.
     stood_at: Option<f64>,
+    /// The highest radius the feet reached while airborne, m from the
+    /// body's centre: a fall is judged against the drop from it.
+    air_top: Option<f64>,
     /// Climbed metres not yet spent.
     climbed_m: f32,
     body_c_was: Option<f32>,
@@ -528,6 +578,7 @@ pub(crate) fn tick(
             conditions.exposure = Exposure::from_sample(&air.now.sample(up));
         }
         conditions.exposure.in_water = act.head_in_water;
+        conditions.thin_air = thin_air_at(o.radius_at(local));
         if let (Some(contact), Some(sun)) = (contact.as_deref(), sun.as_deref()) {
             let sun_dir = sun.clock.sun().as_dvec3();
             let head = point.as_dvec3() + up.as_dvec3() * 0.8;
@@ -554,8 +605,10 @@ pub(crate) fn tick(
             _ => Default::default(),
         };
         wet_now = wet.body;
+        let radius = o.radius_at(local);
         if !ground.grounded && !wet.body {
             watch.falling_mps = watch.falling_mps.max(-vertical);
+            watch.air_top = Some(watch.air_top.map_or(radius, |top| top.max(radius)));
         }
         let gravity = match (scene.as_deref(), frame.as_deref()) {
             (Some(scene), Some(frame)) => scene
@@ -575,7 +628,9 @@ pub(crate) fn tick(
             None
         };
         if let Some(landing) = landed {
-            let pts = fall::fall_damage(&cfg.fall, watch.falling_mps, gravity, landing);
+            let dropped = watch.air_top.map_or(0.0, |top| (top - radius) as f32);
+            let impact = fall::bounded_impact(watch.falling_mps, dropped, gravity);
+            let pts = fall::fall_damage(&cfg.fall, impact, gravity, landing);
             if pts > 0.0 {
                 hit(&mut save, &mut survival, Cause::Fall, pts);
             }
@@ -583,9 +638,9 @@ pub(crate) fn tick(
         }
         if ground.grounded || wet.body {
             watch.falling_mps = 0.0;
+            watch.air_top = None;
         }
         // ---- climbs: the feet rising while they stand (a layer stepped up)
-        let radius = o.radius_at(local);
         if ground.grounded {
             if let Some(was) = watch.stood_at {
                 let rise = (radius - was) as f32;

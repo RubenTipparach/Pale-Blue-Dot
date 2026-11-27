@@ -1610,6 +1610,38 @@ fn set_state(world: &mut World, state: &str, first: bool) {
 mod tests {
     use super::*;
 
+    fn warning_shown(body_c: Option<f32>) -> bool {
+        let mut app = App::new();
+        let vitals = body_c.map(|c| {
+            let mut v = pbd_core::survival::Vitals::new(play::rules());
+            v.body_c = c;
+            v
+        });
+        app.insert_resource(Screen::Playing)
+            .insert_resource(Survival {
+                vitals,
+                ..default()
+            })
+            .add_systems(Update, paint_overlay);
+        app.world_mut().spawn((Node::default(), HeatWarning));
+        app.update();
+        app.world_mut()
+            .query_filtered::<&Node, With<HeatWarning>>()
+            .single(app.world())
+            .unwrap()
+            .display
+            == Display::Flex
+    }
+
+    #[test]
+    fn the_heat_warning_shows_past_39_5_c_and_goes_below_it() {
+        assert!(!warning_shown(Some(37.0)));
+        assert!(warning_shown(Some(39.6)));
+        assert!(warning_shown(Some(40.2)), "and through heat stroke");
+        assert!(!warning_shown(Some(39.4)));
+        assert!(!warning_shown(None), "Explorer shows none");
+    }
+
     #[test]
     fn every_hud_word_is_in_the_locale_file() {
         for key in [
