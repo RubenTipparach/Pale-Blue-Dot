@@ -2433,6 +2433,14 @@ cut-out texture instead of modelled boxes.
   face opposite ways. App: the ghost carries the cards in their textures.
 - **Captures.** The bridge close up by day and at night.
 
+**42p (P8), the owner's answer (survey P8, 2026-11-27).** Of a larger drop,
+decks set from the settled water, both, or leaving it, the owner picked
+"Set a new bridge's deck from the settled river, not the generated one
+(existing bridges keep theirs)". The 0.2 m drop stays. A bridge laid after
+this reads the river's settled level over its cells and sets its deck
+clear of it; a bridge already in a save keeps its deck, so no saved world
+moves. Not built yet.
+
 **42p (P7), as built (2026-11-26).** As written above.
 - Core: `roads::piece::RAIL_CARD`, `TRESTLE_CARD` and `card`; test
   `roads::piece::tests::a_bridge_has_a_deck_and_rail_and_leg_cards_where_the_road_does_not_go`
