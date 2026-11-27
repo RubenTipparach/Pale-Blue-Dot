@@ -82,6 +82,9 @@ pub struct FireNow {
     pub snags: Vec<Snag>,
     /// The world's wind at the fire, m/s, planet frame (the smoke leans).
     pub wind: Vec3,
+    /// Small flames a torch made on a plant too green to burn (design 6):
+    /// the cell, where, and the world second each dies. Saved nowhere.
+    pub damp: Vec<(u32, DVec3, f64)>,
     /// Bumped when `flames` or `snags` change.
     pub version: u64,
 }
@@ -265,13 +268,178 @@ pub struct Scars {
     seen: (u64, u64, f64),
 }
 
-/// `PBD_FIRE_TICKS=<n>`, a capture instrument (design 4.2's shots): a
-/// blaze lit by [`light_for_capture`] is run `n` ticks at once, so one
-/// still shows a front. Unset, nothing is forced.
-pub fn capture_ticks() -> Option<u32> {
-    std::env::var("PBD_FIRE_TICKS")
-        .ok()
-        .and_then(|v| v.parse().ok())
+/// MEASUREMENT (capture instrument, `wildfire` 4.2's shots):
+/// `PBD_FIRE=<scene>` makes a capture's world a Survival one in a dry late
+/// summer (the weather the rule reads is held at two dry weeks, warm, with
+/// a 3 m/s wind) and sets a scene once the tier is in:
+/// - `front[:<ticks>]`: a blaze lit by a torch on the dry plant about 14 m
+///   ahead and run `<ticks>` world seconds at once (60 unset), so the shot
+///   shows its front;
+/// - `scar:<days>`: the same blaze run until it is out, `<days>` world days
+///   before the clock, so the shot shows its scar;
+/// - `torch-out`: every placed torch put out by the rain.
+///
+/// Unset, nothing is forced.
+pub fn capture_scene() -> Option<String> {
+    std::env::var("PBD_FIRE").ok()
+}
+
+/// The air the rule reads under [`capture_scene`]: two dry weeks of late
+/// summer, 3 m/s of wind. `None` when no scene is set.
+fn forced_air() -> Option<Air> {
+    capture_scene()?;
+    Some(Air {
+        ground_wet: 0.12,
+        humidity: 0.32,
+        air_c: 29.0,
+        rain_mm_h: 0.0,
+        wind: Vec3::ZERO,
+        snow: false,
+    })
+}
+
+/// Late summer at a direction's own hemisphere.
+fn late_summer_at(direction: Vec3) -> f64 {
+    if direction.y >= 0.0 { 0.10 } else { 0.60 }
+}
+
+/// The capture instrument's system ([`capture_scene`]).
+#[allow(clippy::too_many_arguments)]
+pub fn instrument(
+    rules: Res<FireRules>,
+    save: Option<ResMut<WorldSave>>,
+    fine: Option<Res<PlanetFine>>,
+    air: Option<Res<crate::atmosphere::Air>>,
+    sun: Option<Res<crate::sky::Sun>>,
+    frame: Option<Res<crate::planet::PlanetRenderFrame>>,
+    cameras: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
+    mut done: Local<u32>,
+) {
+    let Some(scene) = capture_scene() else {
+        return;
+    };
+    let (Some(mut save), Some(fine), Some(air), Some(sun), Some(frame)) =
+        (save, fine, air, sun, frame)
+    else {
+        return;
+    };
+    if *done == 0 {
+        save.identity.mode = Some(pbd_core::survival::WorldMode::Survival);
+    }
+    *done += 1;
+    // A few frames in, once the camera stands where the shot is taken.
+    if *done != 20 {
+        return;
+    }
+    let cfg = &rules.0;
+    if scene == "torch-out" {
+        let torches: Vec<(u32, u16)> = save
+            .edits
+            .all()
+            .into_iter()
+            .filter(|e| e.material == Material::Torch)
+            .map(|e| (e.cell, e.layer))
+            .collect();
+        for (cell, layer) in torches {
+            let proposal = Proposal {
+                edits: Vec::new(),
+                records: vec![torch::out_record(&save.records, cell, layer)],
+            };
+            save.note_record_kinds(&torch::KINDS);
+            let _ = save.propose(&torch::author(cell), proposal);
+            info!("FIRE_CAPTURE torch {cell}/{layer} put out");
+        }
+        return;
+    }
+    let Some((_, eye)) = cameras.iter().find(|(c, _)| c.is_active) else {
+        return;
+    };
+    let at = eye.translation().as_dvec3() - frame.center;
+    let up = at.normalize_or(DVec3::Y);
+    let mut ahead = eye.forward().as_vec3().as_dvec3();
+    ahead -= up * ahead.dot(up);
+    let target = (at + ahead.normalize_or(DVec3::X) * 14.0)
+        .normalize()
+        .as_vec3();
+    let year = late_summer_at(target);
+    let marked = BTreeMap::new();
+    let odds = odds_of(None);
+    // The dry plant nearest the point ahead.
+    let ground = TierGround {
+        set: &fine.set,
+        odds,
+        air: forced_air().unwrap_or_default(),
+        marked: &marked,
+    };
+    let world = blaze::World {
+        cfg,
+        seed: save.identity.seed,
+        ground: &ground,
+        records: &save.records,
+        yields: &save.yields,
+        now_s: sun.clock.seconds,
+        year_fraction: year,
+    };
+    let Some(cell) = fine
+        .set
+        .finest_records()
+        .iter()
+        .filter(|r| {
+            let d = Vec3::from_slice(&r.direction_height[..3]).normalize_or(Vec3::Y);
+            d.angle_between(target) * PLANET_RADIUS < 8.0
+        })
+        .map(|r| r.key())
+        .filter(|&k| ground.land(k).is_some_and(|l| l.plant.burns()))
+        .filter(|&k| world.plant_dry(k) >= 0.6)
+        .min_by(|&a, &b| {
+            let d =
+                |k: u32| pbd_core::roads::centre(k).map_or(f32::MAX, |c| c.angle_between(target));
+            d(a).total_cmp(&d(b))
+        })
+    else {
+        warn!("FIRE_CAPTURE no dry plant ahead");
+        return;
+    };
+    let (ticks, back_days) = match scene.split_once(':') {
+        Some(("front", n)) => (n.parse().unwrap_or(60), 0.0),
+        Some(("scar", d)) => (900, d.parse::<f64>().unwrap_or(1.0)),
+        _ if scene == "front" => (60, 0.0),
+        _ => {
+            warn!("PBD_FIRE {scene}: no such scene");
+            return;
+        }
+    };
+    let day = f64::from(pbd_core::daylight::DAY_S);
+    let start = sun.clock.seconds - back_days * day - if back_days > 0.0 { 1000.0 } else { 0.0 };
+    let lit = light(
+        cfg, &mut save, &fine.set, &air.now, &marked, &odds, cell, start, year,
+    );
+    info!("FIRE_CAPTURE {scene}: {lit:?} at cell {cell}");
+    let mut ran = 0;
+    for k in 0..ticks {
+        if run_once(
+            cfg,
+            &mut save,
+            &fine.set,
+            &air.now,
+            &marked,
+            &odds,
+            start + 1.0 + f64::from(k),
+            year,
+        ) == 0
+        {
+            break;
+        }
+        ran += 1;
+    }
+    info!(
+        "FIRE_CAPTURE ran {ran} ticks: {} burning, {} burnt",
+        blaze::live(&save.records)
+            .iter()
+            .map(|(_, b)| b.burning.len())
+            .sum::<usize>(),
+        save.records.of_kind(blaze::BURNT_KIND).count()
+    );
 }
 
 /// Once a world second, in a Survival world: every live blaze on the tier
@@ -340,10 +508,16 @@ pub fn run_once(
         return 0;
     };
     let toward = pbd_core::roads::centre(first.1.origin).unwrap_or(Vec3::Y);
+    let air = forced_air().unwrap_or_else(|| air_at(atmosphere, toward));
+    let year_fraction = if forced_air().is_some() {
+        late_summer_at(toward)
+    } else {
+        year_fraction
+    };
     let ground = TierGround {
         set,
         odds: *odds,
-        air: air_at(atmosphere, toward),
+        air,
         marked,
     };
     let world = blaze::World {
@@ -383,10 +557,16 @@ pub fn light(
         return blaze::Lighting::Nothing;
     }
     let toward = pbd_core::roads::centre(cell).unwrap_or(Vec3::Y);
+    let air = forced_air().unwrap_or_else(|| air_at(atmosphere, toward));
+    let year_fraction = if forced_air().is_some() {
+        late_summer_at(toward)
+    } else {
+        year_fraction
+    };
     let ground = TierGround {
         set,
         odds: *odds,
-        air: air_at(atmosphere, toward),
+        air,
         marked,
     };
     let world = blaze::World {
@@ -420,6 +600,14 @@ pub fn light(
         info!("FIRE blaze {id} lit at cell {cell}");
     }
     lighting
+}
+
+/// The torch in the player's hand (design 9): out in the rain, and how long
+/// it has stood in it. Not saved: a torch taken up again is lit.
+#[derive(Resource, Clone, Copy, Debug, Default)]
+pub struct TorchOut {
+    pub held: bool,
+    pub soak: torch::Soak,
 }
 
 /// How long each placed torch has stood in the rain, by `(key, layer)`.
@@ -655,6 +843,7 @@ pub fn show(
         .map_or(Vec3::ZERO, |(f, air)| {
             air.now.sample(f.at.normalize().as_vec3()).wind
         });
+    now.damp.retain(|d| d.2 > now_s);
     if flames != now.flames || snags != now.snags {
         now.flames = flames;
         now.snags = snags;
@@ -719,6 +908,7 @@ impl Plugin for WildfirePlugin {
             .init_resource::<FireNow>()
             .init_resource::<Scars>()
             .init_resource::<Soaking>()
+            .init_resource::<TorchOut>()
             .add_systems(
                 Update,
                 (tick, soak_torches, show).chain().run_if(crate::world_open),

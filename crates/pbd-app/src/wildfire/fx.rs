@@ -334,6 +334,7 @@ fn draw_flames(
     now: Res<FireNow>,
     frame: Res<PlanetRenderFrame>,
     time: Res<Time>,
+    sun: Option<Res<crate::sky::Sun>>,
     cameras: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut parts: Query<
@@ -347,7 +348,21 @@ fn draw_flames(
         Or<(With<FlameMesh>, With<EmberMesh>, With<SmokeMesh>)>,
     >,
 ) {
-    let Some(anchor) = now.flames.first().map(|f| f.at) else {
+    // The small flames a torch made on green plants, while they last.
+    let clock = sun.map_or(0.0, |s| s.clock.seconds);
+    let damp: Vec<super::Flame> = now
+        .damp
+        .iter()
+        .filter(|d| d.2 > clock)
+        .map(|&(key, at, until)| super::Flame {
+            key,
+            at,
+            plant: pbd_core::fire::Plant::Grass,
+            crown: false,
+            left: ((until - clock) / 3.0).clamp(0.0, 1.0) as f32 * 0.3,
+        })
+        .collect();
+    let Some(anchor) = now.flames.first().or(damp.first()).map(|f| f.at) else {
         for (_, _, mut v, _, _) in &mut parts {
             *v = Visibility::Hidden;
         }
@@ -367,7 +382,7 @@ fn draw_flames(
     let wind = now.wind;
     let (mut flames, mut sparks, mut puffs) =
         (Build::default(), Build::default(), Build::default());
-    for f in &now.flames {
+    for f in now.flames.iter().chain(&damp) {
         let base = (f.at - anchor).as_vec3();
         let up = f.at.normalize().as_vec3();
         let lean = (wind - up * wind.dot(up)) * 0.04;

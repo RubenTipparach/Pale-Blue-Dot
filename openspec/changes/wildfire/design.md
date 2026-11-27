@@ -567,6 +567,50 @@ yet; each moves with the game code that makes it true (task 5.2).
   burnt out there within ten minutes; at most 40 burned at once. Nothing
   was retuned: the numbers are decision 12's, and the size is the limit's.
 
+## As built: in the game (2026-11-27)
+
+Tasks 4.1, 4.3 and the player's half of 4.4 are built (`pbd_app::wildfire`,
+`desktop/fire_play.rs`); 4.2's flames, smoke, embers, light and scar are
+drawn, shown in `docs/screenshots/wildfire/` (lavapipe, no GPU; no frame
+time was measured, and `perf_suite.py` was not run: a cloud session).
+Recommendations taken (ask only with screenshots):
+
+- **F, not a held use.** A lit torch in hand and F on a plant lights it,
+  on an out placed torch lights it again, and with the torch in hand out,
+  near any fire (a burning cell, a campfire, a brazier, a lit placed
+  torch), lights it again: one press does one thing, as every F does
+  (`interact`'s rule), and the prompt names it ("Light grass").
+- **The weather a tick reads** is the atmosphere's at the blaze's origin,
+  once a tick: its cells are kilometres across, and a blaze 50 m.
+- **The torch in hand going out is not saved**: it is lit again by a fire
+  near, and a reload finds it lit. A placed torch out is the world's
+  record and stays out across a reload.
+- **An out torch** gives no light to the field and is drawn with no flame;
+  its head is drawn as it was (the charred head waits on its texture).
+- **The damp flame** on a plant too green to burn is drawn for
+  `damp_flame_s` and saved nowhere.
+- **The scar's ground** is ash until the cell's grass is back (day 4 to 8
+  by its roll); the green shoots of day 2 are not drawn apart from it.
+- **A burnt tree** is the tree's own model (`tree_kit`): a crown fire's
+  bark alone in its own bark burnt near black; a ground fire's whole tree
+  with its foot black and its leaves browned; from day 20 the tree's own
+  model again, scaled from a fifth to whole by day 60, when the
+  generator's tree stands in its place.
+- **Smoke** is a new 4-frame pixel puff sheet (`tools/art/fire_art.py`),
+  lit by the field; **flames** are the held torch's own sheet; **embers**
+  are bright pixels rising and drifting downwind.
+- **Danger**: the player's harm is `harm_at` (in a burning cell, within
+  0.6 of a cell; beside it, within 1.5 cells), taken a whole point at a
+  time through the survival server (`Cause::Fire`), and the warmth is
+  `survival.ron`'s `wildfire` row. Animals' flight is `flee_from`, built
+  and tested; wiring it into the herds (`husbandry.rs`) waits for the
+  combat change in flight in that file.
+- **Charcoal from a snag** is `scar::snag_gives`; the axe on a snag in
+  the game waits: the axe's chop is the digging change in flight, and a
+  burnt tree's cleared bit hides it from `grows_tree` meanwhile.
+- **Capture instrument**: `PBD_FIRE=front[:ticks] | scar:<days> |
+  torch-out` (`wildfire::capture_scene`), `tools/capture_wildfire.sh`.
+
 ## Questions for the owner (with screenshots), 2026-11-26
 
 | Id | Question | Options | Recommendation | Screenshots |

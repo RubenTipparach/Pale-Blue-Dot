@@ -31,6 +31,10 @@ const FADE_S: f32 = 0.6;
 /// How often the near torches are looked for, seconds.
 const LOOK_S: f32 = 0.25;
 
+/// The bit of a drawn torch's key that says the rain put it out: drawn,
+/// with no flame (`wildfire` design 9).
+pub const OUT_BIT: u32 = 1 << 31;
+
 /// One placed torch drawn: where it stands (planet frame) and its seed.
 #[derive(Component)]
 pub struct PlacedTorch {
@@ -169,9 +173,13 @@ pub fn near_torches(
     eye: Vec3,
     reach_m: f32,
 ) -> Vec<NearTorch> {
+    // A torch the rain put out (`wildfire` design 9) is drawn too, with no
+    // flame: its layer carries `OUT_BIT`.
+    let out = tier.out_torches();
     let mut near: Vec<(f32, NearTorch)> = tier
         .lamps()
         .iter()
+        .chain(&out)
         .filter_map(|spot| {
             let column = tier.columns.get(spot.slot)?;
             let layer = column::layer_at(spot.altitude)?;
@@ -185,7 +193,7 @@ pub fn near_torches(
                     (
                         spot.direction.x.to_bits(),
                         spot.direction.y.to_bits(),
-                        layer as u32,
+                        layer as u32 | if spot.level == 0 { OUT_BIT } else { 0 },
                     ),
                     foot,
                     up,
@@ -252,7 +260,7 @@ pub fn show_placed(
         };
         let at = crate::render_origin::drawn_of(frame, torch.foot)
             + Quat::from_rotation_arc(Vec3::Y, torch.up) * flame_at();
-        let want = if faded.0 < 0.5 {
+        let want = if faded.0 < 0.5 && torch.key.2 & OUT_BIT == 0 {
             Visibility::Inherited
         } else {
             Visibility::Hidden
@@ -296,7 +304,7 @@ pub fn show_placed(
         }
     }
     for (key, (foot, up)) in wanted {
-        let seed = ((key.0 ^ key.1.rotate_left(13) ^ key.2) % 1000) as f32 / 1000.0;
+        let seed = ((key.0 ^ key.1.rotate_left(13) ^ (key.2 & !OUT_BIT)) % 1000) as f32 / 1000.0;
         let mut transform = stand(foot, up, seed);
         transform.translation = crate::render_origin::drawn_of(frame, foot);
         let model = Transform::from_translation(Vec3::Y * (-light::haft_bottom() * PLACED_SCALE))

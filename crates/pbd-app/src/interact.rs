@@ -46,6 +46,8 @@ pub enum Reader {
     Sea,
     /// Survival's own: drinking (`survival-mode` design 15).
     Survival,
+    /// Fire: a torch held to a plant or to a torch (`wildfire` design 6, 9).
+    Fire,
 }
 
 /// A thing F can do.
@@ -118,6 +120,8 @@ pub enum Act {
     Fertilize,
     /// A sip of water with an empty hand (`survival-mode` design 15).
     Drink,
+    /// A lit torch held to a plant, or a torch lit again (`wildfire`).
+    Kindle,
 }
 
 /// One row of the table: an act, the verb the prompt names it by (the
@@ -136,7 +140,7 @@ const fn row(act: Act, verb: &'static str, reader: Reader) -> Row {
 
 /// Everything F does, highest priority first: the one table the prompt and
 /// the readers share.
-pub const ACTS: [Row; 42] = [
+pub const ACTS: [Row; 43] = [
     // A cart in hand, a seat or a back taken comes first: F lets it go.
     row(Act::LetGo, "let_go", Reader::Carts),
     row(Act::StepDown, "step_down", Reader::Carts),
@@ -180,6 +184,7 @@ pub const ACTS: [Row; 42] = [
     row(Act::Unhitch, "unhitch", Reader::Carts),
     row(Act::Mend, "mend", Reader::Mend),
     row(Act::Light, "light", Reader::Lamps),
+    row(Act::Kindle, "light", Reader::Fire),
     // Last: anything else at the water's edge comes first.
     row(Act::Drink, "drink", Reader::Survival),
 ];

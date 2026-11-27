@@ -1023,7 +1023,7 @@ pub(super) fn hold_lights(
     mut panes: Query<&mut MeshMaterial3d<StandardMaterial>, With<Panes>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut state: Local<LightState>,
+    (mut state, torch_out): (Local<LightState>, Option<Res<crate::wildfire::TorchOut>>),
 ) {
     let s = &settings.0.light;
     let dt = time.delta_secs().clamp(0.0, 0.1);
@@ -1103,7 +1103,8 @@ pub(super) fn hold_lights(
         }
         let burns = posed.transform_point(view.burns);
         burns_eye = Some(burns);
-        if view.kind == LightKind::Torch {
+        // A torch the rain put out has no flame (`wildfire` design 9).
+        if view.kind == LightKind::Torch && !torch_out.as_deref().is_some_and(|o| o.held) {
             flame_base = Some(burns);
         }
     }

@@ -12,6 +12,7 @@ mod drops_view;
 mod equipment;
 mod eye_path;
 mod farm;
+mod fire_play;
 mod forge;
 mod frame_graph;
 mod fruit;
@@ -2057,6 +2058,8 @@ pub fn run(args: &[String]) {
     // board panels.
     .add_plugins((pbd_app::economy::EconomyPlugin, talk::TalkPlugin))
     .add_plugins(survival_play::SurvivalPlayPlugin)
+    // Fire in the player's hands, in Survival (`wildfire` 4.1, 4.3, 4.4).
+    .add_plugins(fire_play::FirePlayPlugin)
     // `--craft pack-locked`'s pointer, after the UI's focus pass (a capture
     // instrument, `tool-crafting` 5.5).
     .add_systems(

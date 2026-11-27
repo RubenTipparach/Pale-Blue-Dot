@@ -22,10 +22,10 @@ mockup first; game code waits on their approval and a request to build.
 
 ## 4. In the game
 
-- [ ] 4.1 The server ticks blazes in Survival worlds only; ignition by a lit torch (design 6). Verify: an app test that a torch on late-summer grass starts a blaze and on spring-green grass does not; an Explorer world never makes one.
+- [x] 4.1 The server ticks blazes in Survival worlds only; ignition by a lit torch (design 6). Verify: an app test that a torch on late-summer grass starts a blaze and on spring-green grass does not; an Explorer world never makes one. Tests: `wildfire::tests::a_torch_on_late_summer_grass_starts_a_blaze_and_the_server_spreads_it`, `a_torch_on_spring_grass_makes_a_damp_flame_and_explorer_none`.
 - [ ] 4.2 Flames, smoke, embers and the fire's light in the cell light field; the burnt-cell table for the ground and tree draws. Verify: `--capture` shots at night at the front, the scar the next day and at day 30, in `docs/screenshots/wildfire/`; on the owner's hardware, `perf_suite.py` before and after with a forced blaze (not in a cloud session).
-- [ ] 4.3 Torches in the rain (design 9): `lamp_out`, the held torch, relighting. Verify: an app test with forced rain, a roof keeping one lit, a reload keeping one out; Explorer's never going out.
-- [ ] 4.4 Danger to the living (design 10). Verify: an app test that standing in fire hurts and animals flee.
+- [x] 4.3 Torches in the rain (design 9): `lamp_out`, the held torch, relighting. Verify: an app test with forced rain, a roof keeping one lit, a reload keeping one out; Explorer's never going out. Tests: `wildfire::tests::a_placed_torch_goes_out_in_forced_rain_and_a_roof_keeps_one_lit`, `an_out_torch_is_drawn_dark_and_lights_nothing`; the held torch and F's relighting in `desktop/fire_play.rs` (design, "As built: in the game").
+- [ ] 4.4 Danger to the living (design 10). Verify: an app test that standing in fire hurts and animals flee. Built: the player's harm and warmth (`desktop/fire_play.rs`), `harm_at` and `flee_from` (test `wildfire::tests::standing_in_fire_hurts_and_animals_flee`). Open: wiring `flee_from` into the herds, whose file is in another change's hands.
 - [ ] 4.5 The dry strike, once `lightning-fire` is built (design 6), with its quiet spell (10 world days within 2 km). Verify: a `--strike-at` test in a dry place and a wet one, and a second strike in the quiet spell starting nothing.
 - [ ] 4.6 Multiplayer: two clients, one fire. Verify: the two-machine procedure (`multiplayer` design 20) shows the same scar.
 

@@ -897,6 +897,34 @@ impl ColumnTier {
         &self.fire
     }
 
+    /// The placed torches the rain put out, where they stand, at level
+    /// nought: not in [`lamps`](Self::lamps), which light; still drawn.
+    pub fn out_torches(&self) -> Vec<LampSpot> {
+        if self.fire.out.is_empty() {
+            return Vec::new();
+        }
+        let mut found = Vec::new();
+        for (slot, &key) in self.water.keys.iter().enumerate() {
+            let from = self.fire.out.partition_point(|o| o.0 < key);
+            for &(_, layer) in self.fire.out[from..].iter().take_while(|o| o.0 == key) {
+                let (Some(column), Some(&direction)) =
+                    (self.columns.get(slot), self.centres.get(slot))
+                else {
+                    continue;
+                };
+                if column.material(layer as usize) == Material::Torch {
+                    found.push(LampSpot {
+                        slot,
+                        direction,
+                        altitude: column::layer_altitude(layer as usize) + 0.5,
+                        level: 0,
+                    });
+                }
+            }
+        }
+        found
+    }
+
     /// Light or put out the dusk-lit lamps, re-baking the field when that
     /// changes it. Nothing else changes: the columns, the runs and what is
     /// solid are the same by day and by night.

@@ -344,3 +344,56 @@ fn standing_in_fire_hurts_and_animals_flee() {
     );
     assert!(flee_from(&cfg, &FireNow::default(), animal).is_none());
 }
+
+/// A placed torch the rain put out stays drawn, with no flame, and gives
+/// no light to the field (`wildfire` design 9).
+#[test]
+fn an_out_torch_is_drawn_dark_and_lights_nothing() {
+    let (fine, _) = crate::planet::test_ground(anchor());
+    let cfg = FireConfig::shipped();
+    let cell = grass_cell(&fine.set, &cfg, &dry_summer());
+    let record = fine.set.finest_index_of(cell).unwrap();
+    let top = fine.set.columns.column(record).unwrap().surface().unwrap() as u16;
+    let mut edits = pbd_core::edits::Edits::new();
+    edits.set(Edit {
+        cell,
+        layer: top + 1,
+        material: Material::Torch,
+    });
+    let mut set = lod::generate_fine_live(
+        anchor(),
+        lod::BAND_M,
+        lod::REGEN_DISTANCE_M,
+        &crate::config::ColumnSettings::default(),
+        &edits,
+        4,
+        None,
+        0.0,
+    );
+    let slot_lamps = |set: &lod::FineSet| set.columns.lamps().len();
+    let lit = slot_lamps(&set);
+    assert!(lit >= 1, "the torch lights the field");
+    assert!(set.columns.out_torches().is_empty());
+    assert!(set.columns.set_fire(crate::planet::column::TierFire {
+        burning: Vec::new(),
+        out: vec![(cell, top + 1)],
+    }));
+    assert_eq!(slot_lamps(&set), lit - 1, "out: it lights nothing");
+    assert_eq!(set.columns.out_torches().len(), 1, "and is still drawn");
+    let eye = Vec3::from_slice(&fine.set.finest_records()[record].direction_height[..3])
+        .normalize()
+        * (PLANET_RADIUS + 2.0);
+    let near = crate::held::placed::near_torches(&set.columns, eye, 50.0);
+    assert!(
+        near.iter()
+            .any(|t| t.0.2 & crate::held::placed::OUT_BIT != 0),
+        "drawn with no flame"
+    );
+    // A burning cell is a lamp over its top.
+    let before = slot_lamps(&set);
+    assert!(set.columns.set_fire(crate::planet::column::TierFire {
+        burning: vec![(cell, flame_level(Plant::Grass))],
+        out: vec![(cell, top + 1)],
+    }));
+    assert_eq!(slot_lamps(&set), before + 1, "the flames light the field");
+}

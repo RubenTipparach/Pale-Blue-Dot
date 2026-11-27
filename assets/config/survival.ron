@@ -150,6 +150,9 @@
             (source: "block:campfire", c: 18.0, reach_m: 5.0),
             (source: "block:brazier", c: 14.0, reach_m: 4.0),
             (source: "held:torch", c: 3.0, reach_m: 0.0),
+            // A forest fire's burning cell (`wildfire` design 10): + 20 C
+            // within two cells.
+            (source: "wildfire", c: 20.0, reach_m: 5.7),
         ],
         // Worn: + cold_c while feel is below shelter_c (18), + hot_c while
         // it is above the comfort top (26); the sun term times sun_mult.

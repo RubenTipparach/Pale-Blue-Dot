@@ -531,6 +531,11 @@ fauna:
     rivers: rivers
     shallows: shallows
     shelf: shelf
+fire:
+  thing:
+    grass: grass
+    shrub: bush
+    tree: tree
 fishing:
   fact:
     about_cm: "about {length} cm"
