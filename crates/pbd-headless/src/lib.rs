@@ -179,6 +179,7 @@ fn serve_on<S: pbd_server::Store>(
     }
     let tick = Duration::from_secs_f64(pbd_server::TICK_S);
     let mut last_tick = Instant::now();
+    let mut last_digest = Instant::now();
     let mut last_report = Instant::now();
     loop {
         if stop.load(Ordering::Relaxed)
@@ -243,6 +244,12 @@ fn serve_on<S: pbd_server::Store>(
         while last_tick.elapsed() >= tick {
             last_tick += tick;
             server.tick(pbd_server::TICK_S);
+        }
+        // One region's digest to everyone, in rotation (design 29).
+        if !players.is_empty() && last_digest.elapsed().as_secs_f64() >= pbd_server::DIGEST_EVERY_S
+        {
+            last_digest = Instant::now();
+            server.send_digest(&store);
         }
         for (to, message) in server.drain() {
             match &message {

@@ -43,7 +43,7 @@ Groups 1 and 2 are the dependencies, and each is its own change.
 
 ## 7. Checksums and resync
 
-- [ ] 7.1 The periodic digest round-robin and the resync request (design 2). Verify: a test that corrupts one cell in a client's copy and sees the region replaced and the digests match within one check cycle.
+- [x] 7.1 (Built 2026-11-27, design 29: `Server::send_digest` every 2 s in rotation, the joined game keeping the server's sequence per region, asking once on a differing digest, and a snapshot replacing a region whole (`Edits::clear_cell`, `Ledger::resync`, cleared layers back to the seed's). Tests `a_region_replaced_from_a_snapshot_matches_the_server`, `the_digest_rotation_visits_every_region`, `a_wrong_region_is_asked_for_once_and_replaced_whole`.) The periodic digest round-robin and the resync request (design 2). Verify: a test that corrupts one cell in a client's copy and sees the region replaced and the digests match within one check cycle.
 
 ## 8. Sharing the world
 

@@ -43,6 +43,8 @@ use std::collections::BTreeMap;
 pub const TICK_S: f64 = 1.0 / 20.0;
 /// How often the clock is sent, s (design 15.8).
 pub const CLOCK_EVERY_S: f64 = 5.0;
+/// How often one region's digest is sent to every player, s (design 29).
+pub const DIGEST_EVERY_S: f64 = 2.0;
 /// Players at most (design 14.2).
 pub const MAX_PLAYERS: usize = 8;
 
@@ -319,6 +321,9 @@ pub struct Server {
     crew: Option<Crew>,
     /// Farming's tuning, for harvests (design 26).
     farm: pbd_core::farming::FarmSettings,
+    /// Where the digest rotation is: the next region after this one
+    /// (design 29).
+    digest_after: Option<u32>,
 }
 
 impl Server {
@@ -334,7 +339,28 @@ impl Server {
             outbox: Vec::new(),
             crew: None,
             farm: pbd_core::farming::FarmSettings::default(),
+            digest_after: None,
         }
+    }
+
+    /// Send the next region's digest, in a fixed rotation over every region
+    /// with an edit, to every player (design 29): the host's loop calls it
+    /// every [`DIGEST_EVERY_S`]. The region sent, if any.
+    pub fn send_digest(&mut self, store: &impl Store) -> Option<u32> {
+        let regions = store.ledger().regions().regions();
+        let next = regions
+            .iter()
+            .copied()
+            .find(|r| self.digest_after.is_none_or(|after| *r > after))
+            .or_else(|| regions.first().copied())?;
+        self.digest_after = Some(next);
+        let (seq, digest) = (store.ledger().seq(next), store.ledger().digest(next));
+        self.broadcast(ToClient::Digest {
+            region: next,
+            seq,
+            digest,
+        });
+        Some(next)
     }
 
     /// Farming's tuning, as the world's config has it (design 26).

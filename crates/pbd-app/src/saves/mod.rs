@@ -360,6 +360,12 @@ struct Outgoing {
     /// Drops made and picked, as the server told it, not yet applied to
     /// the live drops (design 23).
     drop_news: Vec<pbd_core::net::protocol::ToClient>,
+    /// The server's last sequence of each region this game applied
+    /// (design 29): not this game's own ledger's count.
+    server_seq: BTreeMap<u32, u64>,
+    /// Regions to ask for whole, and those asked for and not yet sent.
+    resync: Vec<u32>,
+    resync_waiting: std::collections::BTreeSet<u32>,
 }
 
 /// The save as the in-process server's store (`multiplayer` design 18):
@@ -898,6 +904,103 @@ impl WorldSave {
         if let Some(out) = self.outgoing.as_mut() {
             out.slots = Some(slots);
         }
+    }
+
+    /// A change the server sent, `seq` in `region` (design 29): its edit set
+    /// in this game's copy, and the server's sequence kept.
+    pub fn take_change(&mut self, region: u32, seq: u64, edit: Edit) {
+        self.take_remote(&[edit]);
+        if let Some(out) = self.outgoing.as_mut() {
+            out.server_seq.insert(region, seq);
+        }
+    }
+
+    /// A region whole from the server, as of `seq` (design 29): every cell
+    /// of it this game holds is cleared, the snapshot's edits set, and the
+    /// region's digest and sequence made the server's. Returns the edits the
+    /// tier must be brought round to: the snapshot's, and each cleared layer
+    /// the snapshot does not name back to what the seed made it.
+    pub fn take_snapshot(&mut self, region: u32, seq: u64, edits: &[Edit]) -> Vec<Edit> {
+        let in_region = |cell: u32| pbd_core::cell_key::region::of_key(cell) == Some(region);
+        let mut cleared: Vec<Edit> = self
+            .edits
+            .all()
+            .into_iter()
+            .filter(|e| in_region(e.cell))
+            .collect();
+        let mut cells: Vec<u32> = cleared.iter().map(|e| e.cell).collect();
+        cells.dedup();
+        for &cell in &cells {
+            self.edits.clear_cell(cell);
+        }
+        for &edit in edits {
+            self.edits.set(edit);
+        }
+        let mut keys: Vec<u32> = edits.iter().map(|e| e.cell).collect();
+        keys.dedup();
+        self.ledger.resync(region, seq, &keys, &self.edits);
+        // A cleared layer the snapshot does not name goes back to the seed's.
+        cleared.retain(|c| !edits.iter().any(|e| e.cell == c.cell && e.layer == c.layer));
+        let terrain = crate::planet::terrain_config();
+        let mut out: Vec<Edit> = edits.to_vec();
+        for gone in cleared {
+            let Some(direction) = pbd_core::cell_key::key_direction(gone.cell) else {
+                continue;
+            };
+            let near = pbd_core::worms::gather(&self.worms, terrain, direction, 0.0);
+            let column = pbd_core::column::generate_edited(
+                &near,
+                &self.worms,
+                terrain,
+                direction,
+                self.edits.for_cell(gone.cell),
+            );
+            out.push(Edit {
+                material: column.material(usize::from(gone.layer)),
+                ..gone
+            });
+        }
+        if let Some(out_) = self.outgoing.as_mut() {
+            out_.server_seq.insert(region, seq);
+            out_.resync_waiting.remove(&region);
+        }
+        out
+    }
+
+    /// A region's digest from the server, as of its `seq` (design 29): when
+    /// this game has reached that sequence and its own digest differs, the
+    /// region is asked for whole, once.
+    pub fn hear_digest(&mut self, region: u32, seq: u64, digest: u64) {
+        let mine = self.ledger.digest(region);
+        let Some(out) = self.outgoing.as_mut() else {
+            return;
+        };
+        let reached = out.server_seq.get(&region).copied().unwrap_or(0) == seq;
+        if reached
+            && mine != digest
+            && !out.resync_waiting.contains(&region)
+            && !out.resync.contains(&region)
+        {
+            out.resync.push(region);
+        }
+    }
+
+    /// The regions to ask for whole, now waiting for their snapshots.
+    pub fn take_resyncs(&mut self) -> Vec<u32> {
+        let Some(out) = self.outgoing.as_mut() else {
+            return Vec::new();
+        };
+        let asked = std::mem::take(&mut out.resync);
+        out.resync_waiting.extend(asked.iter().copied());
+        asked
+    }
+
+    /// The host's next digest, to everyone joined (design 29).
+    pub fn serve_digest(&mut self) {
+        let carried = self.carried.clone().unwrap_or_default();
+        self.with_server(&carried, None, |server, store| {
+            server.send_digest(&*store);
+        });
     }
 
     /// News of a drop from the server (design 23), for the live drops.
@@ -1621,6 +1724,56 @@ mod tests {
         assert!(!log(&a).is_empty());
         assert_eq!(log(&a), log(&b), "byte for byte");
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// `multiplayer` design 29: a joined game whose copy of a region is
+    /// wrong asks for it once when the server's digest says so, not while
+    /// it is behind in sequence; the snapshot replaces the region whole and
+    /// its digest then matches the server's, the wrong layer taken out.
+    #[test]
+    fn a_wrong_region_is_asked_for_once_and_replaced_whole() {
+        let (cell, top) = dry_tops(1)[0];
+        let region = pbd_core::cell_key::region::of_key(cell).unwrap();
+        let dig = |layer| Edit {
+            cell,
+            layer,
+            material: Material::Air,
+        };
+        // The server's world: two layers dug.
+        let mut server_edits = Edits::new();
+        let mut server_ledger = Ledger::default();
+        for layer in [top, top - 1] {
+            server_edits.set(dig(layer));
+            server_ledger.accept(dig(layer), &server_edits);
+        }
+        let mut joined = WorldSave::memory_only();
+        joined.join_remote();
+        joined.take_change(region, 1, dig(top));
+        // A layer the server never had, in this game's copy only.
+        joined.take_remote(&[dig(top - 5)]);
+        let (seq, digest) = (server_ledger.seq(region), server_ledger.digest(region));
+        // Behind in sequence (change 2 is in flight): no ask.
+        joined.hear_digest(region, seq, digest);
+        assert!(joined.take_resyncs().is_empty());
+        joined.take_change(region, 2, dig(top - 1));
+        joined.hear_digest(region, seq, digest);
+        joined.hear_digest(region, seq, digest);
+        assert_eq!(joined.take_resyncs(), vec![region], "asked once");
+        joined.hear_digest(region, seq, digest);
+        assert!(joined.take_resyncs().is_empty(), "not again while waiting");
+        let snap = server_ledger.snapshot(region, &server_edits);
+        let (_, edits) = pbd_core::net::digest::snapshot_edits(&snap.bytes).unwrap();
+        let to_tier = joined.take_snapshot(region, snap.seq, &edits);
+        assert_eq!(joined.ledger().digest(region), digest);
+        assert_eq!(joined.edits.for_cell(cell), server_edits.for_cell(cell));
+        assert!(
+            to_tier
+                .iter()
+                .any(|e| e.layer == top - 5 && e.material != Material::Air),
+            "the wrong layer goes back to the seed's: {to_tier:?}"
+        );
+        joined.hear_digest(region, seq, digest);
+        assert!(joined.take_resyncs().is_empty(), "it now agrees");
     }
 
     /// `multiplayer` design 26: the host's sowing through the server writes

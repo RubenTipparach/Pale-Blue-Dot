@@ -316,6 +316,7 @@ pub fn play(
     drops: Option<ResMut<crate::drops::Drops>>,
     mut others: ResMut<Others>,
     time: Res<Time>,
+    mut digest_s: Local<f64>,
 ) {
     let mut drops = drops;
     let now = time.elapsed_secs_f64();
@@ -329,6 +330,11 @@ pub fn play(
     let mut applied: Vec<Edit> = Vec::new();
     match net.as_mut() {
         NetPlay::Host { host, players } => {
+            // One region's digest to everyone, in rotation (design 29).
+            if !players.is_empty() && now - *digest_s >= pbd_server::DIGEST_EVERY_S {
+                *digest_s = now;
+                save.serve_digest();
+            }
             let near = walkers
                 .iter()
                 .next()
@@ -427,6 +433,10 @@ pub fn play(
             for request in save.take_requests() {
                 client.send(&ToServer::Request { id: 0, request });
             }
+            for region in save.take_resyncs() {
+                info!("region {region:#x} differs from the host's: asked for it whole");
+                client.send(&ToServer::Resync { region });
+            }
             for message in client.poll() {
                 match message {
                     Ok(message) if others.hear(now, &message) => {}
@@ -460,31 +470,37 @@ pub fn play(
 pub fn receive(player: u32, message: ToClient, save: &mut WorldSave, applied: &mut Vec<Edit>) {
     match message {
         ToClient::Change {
+            region,
+            seq,
             change:
                 Change::Edit {
                     cell,
                     layer,
                     material,
                 },
-            ..
         } => {
             let edit = Edit {
                 cell,
                 layer,
                 material,
             };
-            save.take_remote(&[edit]);
+            save.take_change(region, seq, edit);
             applied.push(edit);
         }
-        ToClient::Snapshot { region, bytes, .. } => {
+        ToClient::Snapshot { region, seq, bytes } => {
+            // A region whole: replaced, not merged (design 29).
             match pbd_core::net::digest::snapshot_edits(&bytes) {
                 Some((r, edits)) if r == region => {
-                    save.take_remote(&edits);
-                    applied.extend(edits);
+                    applied.extend(save.take_snapshot(region, seq, &edits));
                 }
                 _ => warn!("region {region:#x}'s snapshot could not be read"),
             }
         }
+        ToClient::Digest {
+            region,
+            seq,
+            digest,
+        } => save.hear_digest(region, seq, digest),
         ToClient::Refused { id, reason } => {
             save.answered();
             info!("the host refused request {id}: {reason:?}");

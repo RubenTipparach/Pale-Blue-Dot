@@ -1106,3 +1106,36 @@ fn a_guests_crop_is_sown_sent_and_harvested_through_the_server() {
         .unwrap();
     assert_eq!(bare.crop(), None);
 }
+
+/// Design 29: the digest rotation visits every region with an edit, in
+/// order, and starts over; each digest goes to every player.
+#[test]
+fn the_digest_rotation_visits_every_region() {
+    let (mut s, mut st) = server();
+    let players = joined(&mut s, &[1, 2], Slots::default());
+    assert_eq!(s.send_digest(&st), None, "no region has an edit yet");
+    for (cell, top) in dry_cells(&s, 6) {
+        let edit = Edit {
+            cell,
+            layer: top,
+            material: Material::Air,
+        };
+        st.edits.set(edit);
+        st.ledger.accept(edit, &st.edits);
+    }
+    s.drain();
+    let regions = st.ledger.regions().regions();
+    assert!(regions.len() > 1, "the cells span regions: {regions:?}");
+    let sent: Vec<u32> = (0..regions.len() + 1)
+        .filter_map(|_| s.send_digest(&st))
+        .collect();
+    assert_eq!(&sent[..regions.len()], &regions[..]);
+    assert_eq!(sent[regions.len()], regions[0], "and starts over");
+    let out = s.drain();
+    assert_eq!(out.len(), 2 * sent.len());
+    assert!(
+        out.iter()
+            .all(|(to, m)| players.iter().any(|p| *to == To::Player(*p))
+                && matches!(m, ToClient::Digest { .. }))
+    );
+}
