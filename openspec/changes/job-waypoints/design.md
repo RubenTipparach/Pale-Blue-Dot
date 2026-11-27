@@ -62,3 +62,14 @@ light, goodwill) take the same "Job from Holbrook 1.2 km" ending as deliver.
 
 The audit of every mission's objectives, and what the tracker gives the
 player for each, is the change's `audit.md`.
+
+## 7. The job giver pinned (owner, 2026-11-27)
+
+"it is just that delivery missions are so precise and theres only usually a
+few specific locations to start and finish, it should just say where to go".
+Within 600 m of a town, its job giver's post (`Person::at` of the keeper the
+jobs config names) is pinned on the compass bar ("Job giver 40 m") and on the
+map. With the tracker's "Job from <town>" line, a delivery now names both
+ends: the job giver to start, the drop-off town to finish.
+`docs/screenshots/job-waypoints/giver-pin-compass.png`: the red pin by NW,
+beside Holingmouth's studs.

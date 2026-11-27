@@ -1045,6 +1045,7 @@ jobs:
   parcel_marker: Parcel drop-off
   repair_marker: Repair
   rockfall_marker: Rockfall
+  giver_marker: Job giver
   posted: ON THE BOARD
   posted_at: "From {town}"
   take: TAKE
