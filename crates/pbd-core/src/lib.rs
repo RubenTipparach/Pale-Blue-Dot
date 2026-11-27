@@ -62,6 +62,7 @@ pub mod shadow;
 pub mod sites;
 pub mod sky_light;
 pub mod station;
+pub mod survival;
 pub mod terrain;
 pub mod topology;
 pub mod townsfolk;

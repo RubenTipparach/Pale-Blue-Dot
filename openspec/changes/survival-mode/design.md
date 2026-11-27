@@ -880,6 +880,88 @@ defaults. Units in the names or the comments. Not written until the build
 )
 ```
 
+## As built: the core rules (2026-11-27)
+
+Tasks 3.1 to 3.8 and 2.1's core half are built in `pbd_core::survival`,
+with `assets/config/survival.ron` (design 20's shape, adjusted below). They
+are rules only: nothing in the game calls them yet (tasks 4.x wire them), so
+no requirement has moved to `openspec/specs/` yet; each moves in the commit
+that makes the game do it.
+
+### The API the game calls
+
+- **Config.** `survival::SurvivalConfig::shipped()` parses and validates the
+  built-in file; `SurvivalConfig::parse(text)` and `.validate()` for the
+  app's own loader (`config.rs`'s `Validated`). `named_goods()` lists every
+  good the file names, to check against the goods at load.
+- **Mode.** `survival::WorldMode { Explorer, Survival }`,
+  `WorldMode::of_saved(Option<WorldMode>)` (absent reads Explorer),
+  `.is_survival()`, `.name()` (locale `survival.mode.*`). The app's
+  `saves::format::Identity` gains `mode: Option<WorldMode>` (serde default,
+  skipped when absent), `Identity::new_in(seed, mode)` and `.mode()`.
+- **A player's state.** `survival::Vitals` (serde; the player record keeps
+  it): `health`, `food_fp` and `water` (f64: a tick's few ten-thousandths of
+  a point would round in an f32), `stamina`, `breath`, `body_c`, `wet_s`,
+  `consciousness`.
+  - `Vitals::for_mode(cfg, mode)` gives `None` in Explorer;
+    `Vitals::new(cfg)`; `wake_up(cfg)` after a death.
+  - `tick(cfg, &Conditions, dt) -> Tick`: one step of PLAY seconds (the
+    only clock; a closed game changes nothing). `Conditions { effort,
+    exposure, head_in_water, in_deep_water, thin_air, in_cabin }`.
+    `Tick { damage: Vec<(Cause, f32)>, healed, events, feel_c }`; `Event`
+    is `Winded`, `Recovered`, `PassedOut`, `Woke(Wake)`, `Died(Cause)`,
+    `Note(Note)`, `HeatWarning(bool)`.
+  - `hit(cfg, cause, pts)` (a fall's or a creature's damage; wakes a
+    passed-out player), `revive(cfg)`, `eat(cfg, good, stars) -> Eaten`,
+    `drink(cfg, &Sip)`, `burst(cfg, Burst::{Jump, Climb(m), SpearThrow})`,
+    `limits(cfg, in_deep_water) -> (stamina::Limits, passout::Control)` for
+    the walker, `shown(cfg) -> Shown` for the HUD's left stack (design 9),
+    `state(cfg) -> BodyState`.
+- **Pieces, each usable alone:** `stamina::{Stamina, Effort, Burst}`;
+  `fall::{impact_speed(vel, up), fall_damage(cfg, v, g, Landing)}`;
+  `hunger::{fills(cfg, good, stars), eaten_water, idle_burn_fp_per_s}`;
+  `water::{sip(cfg, WaterSource, water_now) -> Sip, drain_per_s,
+  rain_catch, thirst_note, CactusDrunk, Still}`, with `WaterSource::{Fresh,
+  Sea, Brackish, Bucket { salt }, Cactus, Still}` and `Sip { water, sip_s,
+  note, counts }` (salt gives 0, `Note::SaltWater`, and does not count for a
+  `drink` objective); `Note::text()` from the locale file
+  (`survival.note.*`); `temperature::{Exposure::from_sample(&Sample), feel,
+  target_c, approach, BodyState, Wet, shaded(cfg, from, sun, up, solid)}`
+  (the shade march takes a `solid(point)` closure for the column tier);
+  `breath::{Breath, Air, head_air}`; `passout::Consciousness`;
+  `wear::{Wear, Wearer, Action, Spend, uses_spent, repair_inputs,
+  repair_coins}` (an absent `Wear` reads full: `Wear::of_saved`);
+  `weapons::{Held, melee_damage, melee_reach_m, Projectile, Missile,
+  Struck, Flight}` (a projectile flies in the body's frame as a `WorldPos`
+  in f64; `step(cfg, g, dt, hit)` takes a segment test; `kept()` is the
+  70% keep by a hash of the launch; on `tests/origin_guard.rs`);
+  `hunting::{Quarry, strike, dress, Blade, carcass_lies, Hunted}`
+  (`Quarry::Protected` from `fauna.ron`'s status, `Quarry::Kept` for a kept
+  or bought animal).
+
+### Where it differs from the plan, and why (recommendations taken)
+
+- **An empty water bar kills before the stroke.** At design 15's
+  1 pt every 6 s and design 14's 0.2 a second, a body whose water is EMPTY in
+  the desert sun dies at about 7.3 minutes, before it reaches 40 C at 7.8.
+  The stroke happens as designed while water is low but not empty (below
+  `dry_below`). The test pins that case; the numbers are the owner's to
+  move (a slower thirst drain, or the dry rate from a higher bar).
+- **The day example runs from a full food bar**, as the mockup's day case
+  does: starting at 80 fp, food reaches 0 while the bar still refills, and
+  design 12's starving rule (free refill to half), which the planning model
+  leaves out, makes it 112.7, not 112.9.
+- **A hide is not a drop.** `hunting.game.<species>.hide` is apart from
+  `drops`: the kill drops the rest at once, dressing gives the hide. An
+  undressed carcass gone after `carcass_s` takes its hide with it.
+- **New numbers:** suit air refills in 5 s (`suit_air.refill_s`); water
+  wakes at 50 (`water.wake`); a steel axe hits 22 (iron's step on); a rod
+  hits as bare hands; a winded swimmer cannot hard-swim (it swims plain).
+  "Thirsty" and "Very thirsty" are notes the core raises
+  (`water.thirsty_at`, `very_thirsty_at`).
+- **Meals' `fills` live in `survival.ron`**, not in `cooking.ron`, so the
+  kitchen's file is unchanged in Explorer.
+
 ## Questions for the owner (with screenshots), 2026-11-26: answered
 
 Asked only where there is something to look at (CLAUDE.md, "Ask only with

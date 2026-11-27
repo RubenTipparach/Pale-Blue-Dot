@@ -1884,6 +1884,16 @@ station:
     name: mixer
   workbench:
     name: workbench
+survival:
+  mode:
+    explorer: Explorer
+    survival: Survival
+  note:
+    salt_water: Salt water
+    dry: Dry
+    thirsty: Thirsty
+    very_thirsty: Very thirsty
+    protected: Protected
 talk:
   back: BACK
   bye: BYE

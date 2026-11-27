@@ -1,0 +1,302 @@
+// Survival (pbd_core::survival; openspec/changes/survival-mode, design 2 to
+// 17 and 20). Nothing here applies in an Explorer world.
+//
+// Units: points (pts) out of the bar's `max`; food points (fp); seconds of
+// PLAY (a closed game runs nothing down); world days of play; metres; m/s;
+// deg C; W/m^2. A field's unit is in its name or on its line.
+//
+// Every number is a recommendation taken (ask only with screenshots) except
+// where the design quotes the owner. The stamina and food numbers are the
+// ones the mockup's Stamina tab (docs/mockups/survival.html#stamina) and
+// tools/survival/stamina_model.py run.
+//
+// This file is the one source of these values: the core reads it, and its
+// tests run against it.
+(
+    // Design 2. The bar refills 1 pt every `regen_s_per_pt` while food is at
+    // or above `hungry_below_fp`, at `regen_hungry_mult` of that below it,
+    // and not at all at 0 fp, where it drains 1 pt every
+    // `starving_drain_s_per_pt`.
+    health: (
+        max_pts: 100.0,
+        regen_s_per_pt: 4.0,
+        regen_hungry_mult: 0.5,
+        hungry_below_fp: 25.0,
+        starving_drain_s_per_pt: 10.0,
+    ),
+    // Design 3: damage = max(0, v - sqrt(2 g h_safe)) * pts_per_mps, v the
+    // downward speed at impact along the body's up, g the body's own surface
+    // gravity. Water at least `water_depth_layers` deep cancels it.
+    fall: (
+        safe_height_m: 3.5,
+        pts_per_mps: 4.35,
+        water_depth_layers: 2,
+    ),
+    // Design 4. Standing about, a full bar empties in `idle_empty_min`
+    // minutes of play. Shivering (body cold, design 14) burns it
+    // `cold_mult` times as fast.
+    food: (
+        max_fp: 100.0,
+        idle_empty_min: 75.0,
+        start_fp: 100.0,
+        wake_fp: 50.0,
+        cold_mult: 1.5,
+    ),
+    // Design 12.
+    stamina: (
+        max_pts: 100.0,
+        regen_pts_per_s: 12.0,
+        regen_delay_s: 1.0,
+        // Food a point refilled: `cost_low` at or below half, rising in a
+        // straight line to `cost_high` at full.
+        cost_low_fp_per_pt: 0.02,
+        cost_high_fp_per_pt: 0.05,
+        // While strain is owed, each point refilled costs this many times
+        // as much and pays off a point of strain.
+        strain_mult: 1.5,
+        // The refill runs at full rate at or above this food, slowing in a
+        // straight line to `rate_at_empty_food` of it at 0 fp.
+        full_rate_above_fp: 50.0,
+        rate_at_empty_food: 0.4,
+        // Starving (0 fp), the bar refills only to this, costing no food.
+        starving_cap_pts: 50.0,
+        // Empty is winded until the bar is back to this.
+        winded_until_pts: 25.0,
+        winded: (
+            swim_speed_mult: 0.5,
+            jump_mult: 0.6,
+        ),
+        // A cold body (design 14) refills at this share of the rate.
+        cold_regen_mult: 0.5,
+        spend: (
+            sprint: (pts_per_s: 1.0, fp_per_s: 0.03, strain: true),
+            swim: (pts_per_s: 0.8, fp_per_s: 0.025, strain: true),
+            swim_sprint: (pts_per_s: 1.6, fp_per_s: 0.05, strain: true),
+            tread: (pts_per_s: 0.25, fp_per_s: 0.0, strain: true),
+            bow_drawn: (pts_per_s: 0.5, fp_per_s: 0.0, strain: false),
+            jump_pts: 2.0,
+            climb_pts_per_m: 1.5,
+            spear_throw_pts: 4.0,
+        ),
+    ),
+    // Design 15. At comfort a full bar empties in `comfort_empty_min`
+    // minutes of play; sprinting or swimming hard add `exertion_per_s`.
+    // Above `heat_above_c` of feel the drain is x (1 + (feel - heat_above_c)
+    // * heat_per_c_above); below `cold_below_c` it is x `cold_mult`. Empty,
+    // health drains 1 pt every `empty_drain_s_per_pt`. Below `dry_below`
+    // the body heats at the dry rate (design 13).
+    water: (
+        max: 100.0,
+        start: 100.0,
+        wake: 50.0,
+        comfort_empty_min: 50.0,
+        exertion_per_s: 0.02,
+        heat_above_c: 26.0,
+        heat_per_c_above: 0.1,
+        cold_below_c: 10.0,
+        cold_mult: 0.8,
+        empty_drain_s_per_pt: 6.0,
+        dry_below: 15.0,
+        // "Thirsty" once as the bar falls through each (design 18).
+        thirsty_at: 50.0,
+        very_thirsty_at: 25.0,
+    ),
+    // Design 13 and 14.
+    body: (
+        start_c: 37.0,
+        time_constant_s: 240.0,
+        // Feel inside this range (deg C) is comfortable: the body heads for
+        // `start_c`.
+        comfort_c: (10.0, 26.0),
+        // Hot target: start_c + (feel - comfort top) * this, or the dry rate
+        // while water is below `water.dry_below`; + exertion_c while
+        // sprinting or swimming hard.
+        hot_c_per_c: 0.12,
+        hot_dry_c_per_c: 0.20,
+        exertion_c: 0.8,
+        // Cold target: start_c - (comfort bottom - feel) * this.
+        cold_c_per_c: 0.10,
+        feel: (
+            sun_c_at_1000_wm2: 6.0,
+            humid_above_c: 26.0,
+            humid_c_per_unit: 8.0,
+            chill_c_per_mps: 0.5,
+            chill_above_mps: 2.0,
+            chill_below_c: 20.0,
+            rain_c: -2.0,
+            wet_c: -5.0,
+            wet_s: 120.0,
+            // Being wet dries this many times as fast within a fire's reach.
+            wet_fire_dry_mult: 2.0,
+            // In water: the air clamped to this range, plus in_water_c.
+            water_c: (2.0, 28.0),
+            in_water_c: -4.0,
+            // Under a roof with walls feel moves this share of the way to
+            // shelter_c.
+            shelter_pull: 0.4,
+            shelter_c: 18.0,
+            // The shade march: a solid cell within this many layers up the
+            // sun's ray, marched in steps of shade_step_m, never further than
+            // shade_max_m along the ray.
+            shade_march_layers: 8,
+            shade_step_m: 0.5,
+            shade_max_m: 32.0,
+        ),
+        // A fire's warmth: + `c` at the fire, falling in a straight line to
+        // 0 at `reach_m`. A reach of 0 is a fire carried in hand.
+        fires: [
+            (source: "block:campfire", c: 18.0, reach_m: 5.0),
+            (source: "block:brazier", c: 14.0, reach_m: 4.0),
+            (source: "held:torch", c: 3.0, reach_m: 0.0),
+        ],
+        // Worn: + cold_c while feel is below shelter_c (18), + hot_c while
+        // it is above the comfort top (26); the sun term times sun_mult.
+        worn: [
+            (item: "wool-cloak", cold_c: 10.0, hot_c: -2.0, sun_mult: 1.0),
+            (item: "straw-hat", cold_c: 0.0, hot_c: 0.0, sun_mult: 0.5),
+        ],
+        // The states of design 14, deg C.
+        hot_c: 38.0,
+        exhaustion_c: 39.5,
+        stroke_c: 40.0,
+        cool_c: 36.0,
+        cold_c: 35.5,
+        hypothermia_c: 34.5,
+        // Health lost a second in heat exhaustion and in hypothermia.
+        hurt_per_s: 0.2,
+        // Health lost at once on a heat stroke.
+        stroke_pts: 10.0,
+    ),
+    // Design 14: a heat stroke passes the player out.
+    pass_out: (
+        fade_s: 1.5,
+        out_s: 30.0,
+        // While out the body's target is held at this at most.
+        cool_to_c: 39.0,
+        dazed_s: 60.0,
+        dazed_walk_mult: 0.75,
+        revive_hold_s: 2.0,
+        revive_water: 20.0,
+    ),
+    // Design 5.
+    breath: (
+        under_s: 30.0,
+        refill_s: 3.0,
+        drown_pts_per_s: 5.0,
+    ),
+    suit_air: (
+        reserve_s: 60.0,
+        refill_s: 5.0,
+    ),
+    // Design 15: what a sip gives. Every drink here is fresh; salt water
+    // (the sea, a brackish river mouth, a bucket filled at the sea) gives
+    // nothing.
+    drinks: (
+        fresh: (water: 10.0, sip_s: 1.0),
+        bucket: (water: 15.0, sip_s: 1.0, sips: 4),
+        cactus: (water: 8.0, sip_s: 1.5, sips: 3, regrow_days: 1.0),
+        still: (water: 10.0, sip_s: 1.0, sips: 6),
+        // Standing in rain with an empty hand held up, water a second.
+        rain_per_s: 2.0,
+        // Water a good gives when eaten.
+        eaten: {"milk": 15.0, "fruit": 4.0, "meat-stew": 20.0},
+    ),
+    // Design 18: the still beside a lit campfire turns a sip of salt water
+    // into fresh every `boil_s_per_sip` seconds of play; rain adds one every
+    // `rain_s_per_sip`, fire or not. It holds `drinks.still.sips`.
+    still: (
+        boil_s_per_sip: 60.0,
+        rain_s_per_sip: 60.0,
+        fire_reach_cells: 2,
+    ),
+    // Design 4 and 12: food a dish fills at one star, fp; two stars and
+    // three stars times `star_fill_mult`. Raw fish is not eaten.
+    fills: {
+        "grilled-fish": 25.0,
+        "chili-fish": 30.0,
+        "roast-meat": 35.0,
+        "meat-stew": 45.0,
+        "flatbread": 20.0,
+        "roast-turnip": 20.0,
+        "kale-skewer": 25.0,
+        "fried-egg": 15.0,
+        "steamed-mussels": 20.0,
+        "kelp-crisps": 10.0,
+        "raw-meat": 8.0,
+        "fruit": 6.0,
+        "egg": 4.0,
+    },
+    star_fill_mult: (1.0, 1.15, 1.3),
+    // Design 16. Damage in pts of the target's health. A melee weapon's
+    // `tier` is a tier digit (0 stone, 1 bronze, 2 iron, 3 steel), which
+    // sets its uses (`wear.tool_uses`).
+    weapons: (
+        hand: 3.0,
+        // The tools a player already has: the axe by tier (stone, bronze,
+        // iron, steel), a pickaxe and a shovel a share of their tier's axe;
+        // a rod hits as bare hands.
+        axe_by_tier: (10.0, 14.0, 18.0, 22.0),
+        pickaxe_share: 0.7,
+        shovel_share: 0.5,
+        melee: {
+            "stone-spear": (damage: 14.0, thrown: Some(22.0), reach_m: 2.6, time_s: 0.7, tier: 0),
+            "bronze-spear": (damage: 20.0, thrown: Some(30.0), reach_m: 2.6, time_s: 0.7, tier: 1),
+            "iron-spear": (damage: 26.0, thrown: Some(38.0), reach_m: 2.6, time_s: 0.7, tier: 2),
+            "bronze-hunting-axe": (damage: 24.0, thrown: None, reach_m: 2.0, time_s: 0.6, tier: 1),
+            "iron-hunting-axe": (damage: 30.0, thrown: None, reach_m: 2.0, time_s: 0.6, tier: 2),
+            "bronze-sword": (damage: 28.0, thrown: None, reach_m: 2.2, time_s: 0.5, tier: 1),
+            "iron-sword": (damage: 36.0, thrown: None, reach_m: 2.2, time_s: 0.5, tier: 2),
+        },
+        // A thrown spear leaves the hand at this speed and always lands as
+        // a drop.
+        spear_throw_mps: 18.0,
+        bow: (draw_s: 0.8, arrow_mps: 45.0, kept_share: 0.7),
+        // Each arrow's damage at full draw; a part draw scales damage and
+        // speed by the share drawn.
+        arrows: {
+            "stone-arrow": 18.0,
+            "bone-arrow": 22.0,
+            "bronze-arrow": 26.0,
+        },
+        // A projectile is given up after this long in flight, s.
+        flight_max_s: 10.0,
+    ),
+    // Design 17. Drops are (good, count); `hide` comes only when the carcass
+    // is dressed. A hunting axe dresses for the hide and `dress_bonus_meat`
+    // more meat; another blade takes the hide `other_blade_hide_share` of
+    // the time (by a hash of the kill). An undressed carcass lies
+    // `carcass_s`, then is gone with its hide. A killed herd member is back
+    // after `herd_back_days` world days of play.
+    hunting: (
+        carcass_s: 120.0,
+        herd_back_days: 3.0,
+        dress_bonus_meat: 1,
+        other_blade_hide_share: 0.5,
+        meat: "raw-meat",
+        hide: "hide",
+        game: {
+            "meadow-hen": (health: 10.0, flee_m: 9.0, flee_mps: 3.0, drops: [("raw-meat", 1), ("feather", 3)], hide: 0),
+            "hare": (health: 12.0, flee_m: 14.0, flee_mps: 9.0, drops: [("raw-meat", 1), ("bone", 1)], hide: 1),
+            "woolback": (health: 40.0, flee_m: 12.0, flee_mps: 5.0, drops: [("raw-meat", 3), ("wool", 2), ("bone", 2)], hide: 1),
+            "ridge-goat": (health: 45.0, flee_m: 12.0, flee_mps: 6.0, drops: [("raw-meat", 3), ("bone", 2)], hide: 1),
+            "rootling": (health: 55.0, flee_m: 10.0, flee_mps: 5.0, drops: [("raw-meat", 4), ("bone", 2)], hide: 1),
+            "plodder": (health: 70.0, flee_m: 10.0, flee_mps: 3.2, drops: [("raw-meat", 5), ("bone", 3)], hide: 2),
+            "red-fox": (health: 30.0, flee_m: 0.0, flee_mps: 7.0, drops: [("bone", 1)], hide: 1),
+            "dust-hound": (health: 50.0, flee_m: 0.0, flee_mps: 7.0, drops: [("bone", 2)], hide: 1),
+        },
+    ),
+    // Design 11: uses a tool or weapon has by tier, one use a finished
+    // action and `harder_block_uses` for a block above the tool's tier.
+    // Repair at the workbench takes half the head materials, rounded up: a
+    // recipe's inputs other than `handle_goods`.
+    wear: (
+        tool_uses: (stone: 60, bronze: 160, iron: 320, steel: 640),
+        rod_uses: (stone: 60, bronze: 160, iron: 320, steel: 640),
+        straw_uses: 30,
+        bow_uses: 120,
+        harder_block_uses: 2,
+        handle_goods: ["planks", "rope", "log", "fibre", "leather"],
+        // Below this share of uses left the slot's bar shows red.
+        red_below_share: 0.1,
+    ),
+)
