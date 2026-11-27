@@ -293,6 +293,22 @@ pub fn escort_directions(eco: &Economy, save: &WorldSave) -> Vec<Vec3> {
         .collect()
 }
 
+/// Where each taken, unfinished rockfall job's fallen rock lies, as
+/// directions from the planet's centre (its first road cell): what the
+/// compass and the map mark (`job-waypoints`).
+pub fn rockfall_directions(eco: &Economy, save: &WorldSave) -> Vec<Vec3> {
+    open_jobs(eco, JobKind::Rockfall)
+        .iter()
+        .filter_map(|j| rockfall_of(save, j.id))
+        .filter_map(|r| {
+            r.cells
+                .first()
+                .and_then(|(cell, _)| pbd_core::roads::centre(*cell))
+        })
+        .filter_map(|p| p.try_normalize())
+        .collect()
+}
+
 /// The walk between frames.
 #[derive(Default)]
 pub struct LeadWalk {

@@ -134,6 +134,10 @@ enum Click {
     Paths,
 }
 
+/// How long a walk may go without three metres before the bot is put ashore
+/// (`bot-rescue`), s.
+const RESCUE_AFTER_S: f32 = 180.0;
+
 /// One frame's inputs.
 #[derive(Default)]
 struct Intent {
@@ -148,6 +152,9 @@ struct Intent {
     /// The pointer moved to this place in the window, logical pixels, as a
     /// player's hand moves the mouse over an open screen.
     pointer: Option<Vec2>,
+    /// The last resort (`bot-rescue`): the walker put on dry land near this
+    /// direction, the game's own put-ashore rule. Logged `BOT_RESCUE`.
+    rescue: Option<Vec3>,
 }
 
 /// What an act says after a frame.
@@ -364,6 +371,10 @@ struct Bot {
     walk_anchor: Option<(Vec3, f32)>,
     /// The watchdog: the goal walked to, the nearest it came, and when.
     nearest: Option<(Vec3, f32, f32)>,
+    /// The rescue's own watch (`bot-rescue`): where the walk last made three
+    /// metres of ground, and when. Never reset by up-and-out or a replan,
+    /// so a loop of those cannot hold the bot forever.
+    rescue_anchor: Option<(Vec3, f32)>,
     detour_s: f32,
     roam_to: Option<Vec3>,
     climb_s: f32,
@@ -967,6 +978,53 @@ impl Bot {
             }
         }
         Walked::Going
+    }
+
+    /// The last resort (`bot-rescue`; owner, 2026-11-27: "improve bot
+    /// scripts so it never gets stuck like this ever"): with a point to go
+    /// to more than 5 m off, three minutes without three metres of ground,
+    /// whatever was tried (a plan, up and out, a dig, a tool swapped over and
+    /// over), and the walker is put ashore 20 m toward the goal by the game's
+    /// own rule. Checked every frame, outside every act, so no loop inside
+    /// one can hold it.
+    fn rescue_watch(&mut self, s: &Sight, out: &mut Intent) {
+        let Some(Goal::Point(point, _)) = self.goal else {
+            self.rescue_anchor = None;
+            return;
+        };
+        let dist = tangent(point - s.feet, s.up).length();
+        if dist < 5.0 {
+            self.rescue_anchor = None;
+            return;
+        }
+        let Some((anchor, since)) = self.rescue_anchor else {
+            self.rescue_anchor = Some((s.feet, s.now));
+            return;
+        };
+        if tangent(s.feet - anchor, s.up).length() >= 3.0 {
+            self.rescue_anchor = Some((s.feet, s.now));
+            return;
+        }
+        if s.now - since < RESCUE_AFTER_S {
+            return;
+        }
+        let way = tangent(point - s.feet, s.up).normalize_or(s.heading);
+        let to = (s.up * PLANET_RADIUS + way * 20.0).normalize_or(s.up);
+        warn!(
+            "BOT_RESCUE {:.0} s without 3 m, {dist:.0} m from the goal; put ashore 20 m on",
+            s.now - since
+        );
+        out.rescue = Some(to);
+        self.rescue_anchor = None;
+        self.climbing_out = false;
+        self.climb_to = None;
+        self.plan = None;
+        self.plan_avoid.clear();
+        self.through = None;
+        self.route = None;
+        self.nearest = None;
+        self.walk_anchor = None;
+        self.stuck_s = 0.0;
     }
 
     /// Up and out of a hole (`bot-path-planner` design 5.1, `place-underfoot`):
@@ -3526,6 +3584,12 @@ pub fn drive(
                 bot.reset_act(&sight);
             }
         }
+        bot.rescue_watch(&sight, &mut out);
+        if let Some(to) = out.rescue.take() {
+            commands.queue(move |world: &mut bevy::prelude::World| {
+                pbd_app::walking::put_ashore(world, to);
+            });
+        }
         apply(bot, &mut hands, &w, &mut pending, out);
         return;
     }
@@ -3630,6 +3694,12 @@ pub fn drive(
             }
             return;
         }
+    }
+    bot.rescue_watch(&sight, &mut out);
+    if let Some(to) = out.rescue.take() {
+        commands.queue(move |world: &mut bevy::prelude::World| {
+            pbd_app::walking::put_ashore(world, to);
+        });
     }
     apply(bot, &mut hands, &w, &mut pending, out);
 }

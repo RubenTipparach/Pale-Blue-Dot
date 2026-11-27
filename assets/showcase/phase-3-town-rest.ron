@@ -1,0 +1,39 @@
+// The town tree past its trunk (`mission-playthrough` design 6, tasks 8.3
+// and 8.4), played with the acts the bot has: more trade, three jobs, and
+// the town's furniture. Run on a world whose trunk is done, near a town.
+// Deliver, lost, mend and lamps have no act yet; the playtest of
+// 2026-11-27 drives those by hand through the bot's controls.
+(
+    goal: "Goal: the town tree's trade, jobs and furniture",
+    at: None,
+    hour: 9.0,
+    shots: [
+        (
+            caption: "Back into town",
+            max_s: 600.0,
+            acts: [Seek("town"), Still],
+        ),
+        (
+            caption: "Trade more: sell twenty goods",
+            until: ["trade-more"],
+            max_s: 900.0,
+            acts: [Trade(20, 0), Still],
+        ),
+        (
+            caption: "Three jobs from the board",
+            until: ["three-jobs"],
+            max_s: 2400.0,
+            acts: [Job, Job, Job, Still],
+        ),
+        (
+            caption: "Sit, lie down, and look in a chest",
+            max_s: 600.0,
+            acts: [Furniture("sit"), Furniture("lie"), Furniture("loot"), Still],
+        ),
+        (
+            caption: "The town tree so far",
+            max_s: 30.0,
+            acts: [Missions(5.0)],
+        ),
+    ],
+)

@@ -1043,6 +1043,8 @@ jobs:
   none_taken: No jobs taken
   paid: "Paid {coins} coins"
   parcel_marker: Parcel drop-off
+  repair_marker: Repair
+  rockfall_marker: Rockfall
   posted: ON THE BOARD
   posted_at: "From {town}"
   take: TAKE
