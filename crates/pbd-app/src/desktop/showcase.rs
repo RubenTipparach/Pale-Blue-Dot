@@ -334,6 +334,8 @@ struct Bot {
     not_trader: HashSet<(u32, u32)>,
     /// Townsfolk asked who did not offer WORK (`Job`).
     not_giver: HashSet<(u32, u32)>,
+    /// Towns moved on to for want of a job giver in reach (`Job`).
+    job_towns: u8,
     /// Jobs taken and given back as not the bot's kind (`Job`).
     skipped_jobs: HashSet<u64>,
     /// The job whose work was last set going, and how many times.
@@ -7588,6 +7590,17 @@ fn job(bot: &mut Bot, s: &Sight, out: &mut Intent) -> Status {
         .copied();
     let Some((site, index, at)) = target else {
         if bot.act_s > 120.0 {
+            // Nobody in reach gives work here (2026-11-27: Holingmouth's five,
+            // four drawn, none the giver): on to the next town and ask there,
+            // twice at most.
+            if bot.job_towns < 2 {
+                bot.job_towns += 1;
+                info!("showcase: job: no giver in reach here; on to another town");
+                bot.not_giver.clear();
+                bot.injected.push_back(file::Act::Seek("other-town".into()));
+                bot.act_s = 0.0;
+                return Status::Running;
+            }
             return Status::Fail("no townsperson gives work".into());
         }
         return Status::Running;
