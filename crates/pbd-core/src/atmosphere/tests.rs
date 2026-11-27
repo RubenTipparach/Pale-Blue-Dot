@@ -489,7 +489,8 @@ fn a_save_from_before_the_sea_state_still_loads() {
     old.extend_from_slice(&current[MAGIC.len()..header]);
     old.extend_from_slice(&current[header..header + n * 4 * (SCALARS - 1)]);
     // And no thermostat, which came after.
-    old.extend_from_slice(&current[header + n * 4 * SCALARS..current.len() - 12]);
+    // (The ground's wetness, newer still, is the last n floats.)
+    old.extend_from_slice(&current[header + n * 4 * SCALARS..current.len() - 12 - n * 4]);
     let mut b = air(quiet());
     b.restore(&old).expect("an old save");
     assert_eq!(b.wind, a.wind);
@@ -508,8 +509,10 @@ fn a_save_from_before_the_thermostat_loads_with_no_trim() {
     a.balance_absorbed = 230.0;
     a.balance_greenhouse = 20.0;
     let current = a.to_bytes();
+    // The ground's wetness, newer than both, is the last n floats.
+    let wet = a.grid.len() * 4;
     let mut old = b"PBDATM02".to_vec();
-    old.extend_from_slice(&current[MAGIC.len()..current.len() - 12]);
+    old.extend_from_slice(&current[MAGIC.len()..current.len() - 12 - wet]);
     let mut b = air(quiet());
     b.restore(&old).expect("a save from before the thermostat");
     assert_eq!(b.trim_integral, 0.0);
@@ -521,7 +524,7 @@ fn a_save_from_before_the_thermostat_loads_with_no_trim() {
     assert_eq!((c.balance_absorbed, c.balance_greenhouse), (230.0, 20.0));
     // One from before the balance keeps its integral and starts its averages.
     let mut v3 = b"PBDATM03".to_vec();
-    v3.extend_from_slice(&current[MAGIC.len()..current.len() - 8]);
+    v3.extend_from_slice(&current[MAGIC.len()..current.len() - 8 - wet]);
     let mut d = air(quiet());
     d.restore(&v3).expect("a save from before the balance");
     assert_eq!(d.trim_integral, 0.1);
@@ -1171,4 +1174,73 @@ fn what_falls_in_freezing_air_is_snow() {
     }
     assert!(snowed > 0 && rained > 0, "snow {snowed}, rain {rained}");
     assert!(snowy_seen > 0, "nothing fell on snowy ground in the run");
+}
+
+/// `wildfire` 2.1: soaked ground under a world day of dry summer sun dries
+/// enough that cured grass on it can burn, and rain wets it again.
+#[test]
+fn soaked_ground_dries_in_about_a_world_day_of_summer_sun() {
+    let mut a = air(quiet());
+    let land = (0..a.grid.len())
+        .find(|&i| !a.surface.ocean[i] && !a.surface.snowy[i] && a.surface.elevation[i] < 200.0)
+        .expect("a lowland cell");
+    let e = a.surface.elevation[land];
+    // A dry summer's air over it: 25 C, humidity 0.3.
+    a.air_k[land] = 25.0 + a.settings.lapse_k_per_m * e;
+    let sat = a.saturation(25.0);
+    a.vapour[land] = 0.3 * sat;
+    a.ground_wet[land] = 1.0;
+    a.rain_rate[land] = 0.0;
+    let day = crate::daylight::DAY_S as usize;
+    for s in 0..day {
+        let t = s as f32 / day as f32;
+        a.sunlight[land] = (1000.0 * (t * std::f32::consts::TAU).sin()).max(0.0);
+        a.wet_ground(1.0);
+    }
+    let wet = a.ground_wet[land];
+    assert!((0.3..0.6).contains(&wet), "after a day: {wet}");
+    let cfg = crate::fire::FireConfig::shipped();
+    let weather = crate::fire::dryness::weather(&cfg, wet, 0.3, 25.0);
+    assert!(
+        weather >= cfg.dryness.dry_min,
+        "cured grass can burn: {weather}"
+    );
+    // Ten millimetres soak it again.
+    a.rain_rate[land] = 10.0 / 3600.0;
+    for _ in 0..3600 {
+        a.wet_ground(1.0);
+    }
+    assert!(a.ground_wet[land] > 0.95, "soaked by 10 mm");
+    // The sea stays wet.
+    let sea = (0..a.grid.len()).find(|&i| a.surface.ocean[i]).unwrap();
+    a.wet_ground(1.0);
+    assert_eq!(a.ground_wet[sea], 1.0);
+}
+
+/// `wildfire` 2.1: a weather state saved before the ground's wetness
+/// (`PBDATM04`) restores, with the wetness at the biome's, and is saved
+/// again in the new layout; the new layout keeps it.
+#[test]
+fn a_save_from_before_the_ground_wetness_restores_at_the_biomes_wetness() {
+    let mut a = air(quiet());
+    for _ in 0..20 {
+        a.step(SUN, &[]);
+    }
+    a.ground_wet.iter_mut().for_each(|w| *w = 0.25);
+    let n = a.grid.len();
+    let current = a.to_bytes();
+    let mut old = b"PBDATM04".to_vec();
+    old.extend_from_slice(&current[MAGIC.len()..current.len() - n * 4]);
+    let mut b = air(quiet());
+    b.restore(&old).expect("a save from before the wetness");
+    assert_eq!(b.ground_wet, b.surface.wetness);
+    assert_eq!(b.wind, a.wind);
+    assert_eq!(&b.to_bytes()[..MAGIC.len()], MAGIC, "saved again as new");
+    let mut c = air(quiet());
+    c.restore(&current).expect("its own bytes");
+    assert_eq!(c.ground_wet, a.ground_wet);
+    assert_eq!(c.to_bytes(), current);
+    // And the sample reads it.
+    let s = c.sample(c.grid.centre[0]);
+    assert!((0.0..=1.0).contains(&s.ground_wet));
 }

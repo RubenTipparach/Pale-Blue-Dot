@@ -20,6 +20,7 @@ pub mod economy;
 pub mod edits;
 pub mod farming;
 pub mod fauna;
+pub mod fire;
 pub mod fishing;
 pub mod flight;
 pub mod flora;

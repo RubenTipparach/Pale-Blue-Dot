@@ -10,15 +10,15 @@ mockup first; game code waits on their approval and a request to build.
 
 ## 2. The weather
 
-- [ ] 2.1 `ground_wet` in `pbd_core::atmosphere` (design 2), stepped with it, additive in `to_bytes`. Verify: a test that soaked ground dries in about a world day of summer sun, and an atmosphere saved before restores.
-- [ ] 2.2 The fire weather and `plant_dry` (design 2, decision 12), derived and never saved, each factor read from its source. Verify: a test per row of design 2's table of examples; a cell below 0.5 never catching; spring-green grass never catching on a test patch; the dry season half a year apart across the equator.
+- [x] 2.1 `ground_wet` in `pbd_core::atmosphere` (design 2), stepped with it, additive in `to_bytes`. Verify: a test that soaked ground dries in about a world day of summer sun, and an atmosphere saved before restores. Tests: `atmosphere::tests::soaked_ground_dries_in_about_a_world_day_of_summer_sun`, `a_save_from_before_the_ground_wetness_restores_at_the_biomes_wetness` (and the older-layout tests, which strip the new field).
+- [x] 2.2 The fire weather and `plant_dry` (design 2, decision 12), derived and never saved, each factor read from its source. Verify: a test per row of design 2's table of examples; a cell below 0.5 never catching; spring-green grass never catching on a test patch; the dry season half a year apart across the equator. Tests: `fire::tests::the_fire_weather_matches_design_2s_rows`, `plant_dry_matches_design_2s_table_of_examples`, `the_hazard_grows_as_the_square_of_the_margin_and_is_nought_when_green`, `a_cell_below_one_half_never_catches_from_a_neighbour`, `spring_green_grass_never_catches_anywhere_on_the_patch`, `the_dry_season_is_half_a_year_apart_across_the_equator`, `snow_water_and_a_cactus_never_burn`.
 
 ## 3. The rule in the core
 
-- [ ] 3.1 `pbd_core::fire`: the fuel table from the generator (design 3), the `blaze` record and its lines, the one-second spread in cell-key order with seeded hashes, reading each neighbour's `plant_dry` (design 5), no ember throw, the limits (2 blazes, 300 cells, 40 burning). Verify: the design's Verification tests, decision 12's worked examples inside their ranges, a pentagon's five neighbours, and two runs and a reload mid-fire agreeing cell for cell.
-- [ ] 3.2 Stopping (design 7): rain, water, bare and green breaks, grazed pasture, the bucket, the yield set; a burnt cell unburnable until its grass is whole (design 8). Verify: a test each; a player's field and fence untouched.
-- [ ] 3.3 The scar and regrowth (design 8), charcoal from a snag. Verify: tests by day.
-- [ ] 3.4 `assets/config/fire.ron` (design 11), validated, the one source of defaults.
+- [x] 3.1 `pbd_core::fire`: the fuel table from the generator (design 3), the `blaze` record and its lines, the one-second spread in cell-key order with seeded hashes, reading each neighbour's `plant_dry` (design 5), no ember throw, the limits (2 blazes, 300 cells, 40 burning). Verify: the design's Verification tests, decision 12's worked examples inside their ranges, a pentagon's five neighbours, and two runs and a reload mid-fire agreeing cell for cell. Tests: `fire::tests::a_late_summer_grass_fire_stays_small_and_slow`, `a_fire_on_open_dry_grass_stops_at_its_limits`, `a_pentagon_cell_tries_its_five_neighbours`, `the_same_blaze_burns_the_same_cells_on_two_runs_and_across_a_reload`, `a_torch_on_late_summer_grass_starts_a_blaze_and_a_third_is_a_damp_flame`, `lightning_starts_a_blaze_only_when_dry_and_once_in_its_quiet_spell`.
+- [x] 3.2 Stopping (design 7): rain, water, bare and green breaks, grazed pasture, the bucket, the yield set; a burnt cell unburnable until its grass is whole (design 8). Verify: a test each; a player's field and fence untouched. Tests: `fire::tests::rain_stops_a_front`, `a_front_goes_out_at_a_green_river_bank`, `a_bucket_puts_out_a_cell_and_its_neighbours`, `a_dug_line_and_the_players_field_hold`, `a_burnt_cell_cannot_burn_again_until_its_grass_is_whole`.
+- [x] 3.3 The scar and regrowth (design 8), charcoal from a snag. Verify: tests by day. Test: `fire::tests::the_scar_grows_back_by_day` (`scar::snag_gives` gives the charcoal; the chop in the game is 4.2's).
+- [x] 3.4 `assets/config/fire.ron` (design 11), validated, the one source of defaults. Test: `fire::tests::the_shipped_file_parses_and_validates`.
 
 ## 4. In the game
 

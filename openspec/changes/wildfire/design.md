@@ -473,6 +473,100 @@ Without the cell limit the same 24 late-summer torches would have burned
 up to about 1,100 cells (0.8 ha) at the most; the limit, not the weather,
 keeps the biggest small.
 
+### 13. What the design left open, decided for the build (2026-11-27)
+
+Every item here is a recommendation taken (ask only with screenshots); none
+is the owner's own words.
+
+- **Where `ground_wet`'s rates live.** In `fire.ron` (`ground_wet`), the one
+  source, held by the atmosphere beside its settings rather than inside
+  them: the shipped settled climates are matched against
+  `AtmosphereSettings` field for field, and a new field there would throw
+  every one away. The field is stepped in every world (the weather is the
+  world's, the same on every machine) and read only in Survival. Saved as
+  `PBDATM05`, the wetness after the thermostat; an older state, and the
+  shipped settled climate, restore with it at the biome's wetness.
+- **Where a cell's fuel is read.** From the fine tier the player has loaded
+  (each record's material word, its tree, its scatter, its water and the
+  edits), through a `fire::Ground` the core asks; a cell off the tier reads
+  as a break. A fire is lit by a hand or a strike in sight and is at most
+  about 50 m across, so its cells are on the tier. A blaze whose origin is
+  off the tier does not tick: it holds, and goes on when it is loaded again,
+  so it is the same blaze whatever the player did meanwhile. (Design 5
+  wanted the generator alone; a cell's tree, scatter and water are the
+  record's word, which only the tier carries today.)
+- **How a fire is saved.** Two kinds of record, both authored
+  `@wfire:blaze/<n>`:
+  - `blaze` n: its start, origin, who lit it, its state, the ticks it has
+    run and the cells burning now with their time left (at most 40), so a
+    reload resumes on the same tick with the same cells;
+  - `burnt`, one per cell, its id the cell's key: the blaze, the second it
+    burnt out, its fuel and whether its crown burned. Regrowth runs from
+    each cell's own second (design 8's "the day it went out", taken per
+    cell, so the cells lit first heal first).
+  A player's torch writes an `ignition` record (the player's act, its own
+  line); the world's blaze follows it. A record a player's line wrote is
+  the player's whole, so the world could never update a blaze the player
+  had written.
+- **A placed torch going out and lit again** are two records, `lamp_out`
+  (the world's, `@wfire:lamp/<cell>`) and `lamp_lit` (the player's), each
+  counting; a torch is out while the world's count is ahead. Each author
+  writes only its own, so the yield set never stops the rain putting a
+  torch out a second time.
+- **Being near a fire is warm** through `survival.ron`'s own fire table
+  (`body.fires`, a `wildfire` row: + 20 C within 5.7 m, two cells), which
+  is where every fire's warmth lives; `fire.ron`'s `harm` keeps the damage
+  and the flight. Its damage is a new cause, `Cause::Fire`.
+- **The burnt-cell table is the tier's own records.** In place of a new
+  8,192-cell buffer: each burnt cell's record in the fine tier carries it
+  in its material word, as a road does. The road bit (no tufts, no
+  clutter) and the cleared bit (no generated tree) while it is bare, and a
+  new ash bit (31) the ground's cap greys by. It reaches as far as the
+  fine tier, which is well past a 50 m scar, and costs no new upload: the
+  words go up with the records when they change. A cell's grass comes back
+  between day 4 and 8 by its own roll. A burnt tree is drawn as a charred
+  snag (trunk and stubs, the bark's own texture darkened, field-lit) until
+  day 20, then a sapling of its own species grown to full size by day 60,
+  when the generator's tree stands again.
+- **A shrub** is a cell whose ground cover grows a bush (`scatter::Kind::Bush`).
+- **Grazing.** A pen's cells come from the pens the husbandry finds
+  (`husbandry::pen`); a cell within 2 of one is grazed.
+- **Spread draws.** Each try is `hash(world seed, blaze id, from cell, to
+  cell, tick)`: a cell two burning neighbours reach is tried twice, by two
+  draws.
+- **Torch ignition** is the held lit torch used (the use key held 1 s) on
+  the plant the crosshair is on, within reach, in Survival.
+
+## As built: the core rules (2026-11-27)
+
+Tasks 2.1, 2.2 and 3.1 to 3.4 are built: `pbd_core::fire` (`dryness`,
+`blaze`, `scar`, `torch`), `Atmosphere::ground_wet` and
+`assets/config/fire.ron`. No requirement has moved to `openspec/specs/`
+yet; each moves with the game code that makes it true (task 5.2).
+
+- **The API.** `fire::FireConfig::shipped()`; `dryness::{weather, cured,
+  cure, plant_dry, burn, can_catch, shade, water, hollow, patch, grazed}`
+  on a `Factors`; `blaze::World { cfg, seed, ground, records, yields,
+  now_s, year_fraction }` over the app's `blaze::Ground` (a cell's `Land`
+  and its `Air`), with `World::{factors, plant_dry, hazard}`,
+  `blaze::{ignite, tick, run, douse, lightning_starts, next_id, live,
+  burnt}`; `scar::{ground_look, tree_look, burns_again, snag_gives,
+  healed}`; `torch::{Soak, Exposure, open_sky, is_out, out_record,
+  lit_record, out_lamps}`; `fire::harm_per_s`.
+- **`fire.ron`'s shape** follows design 11 with named fields for the plant
+  and fuel rows (`cure.grass`, `fuel.grass`) in place of string maps, the
+  crown's terms in a `crown` row, `ground_wet`'s temperature terms
+  (`dry_from_c`, `dry_span_c`) named, the snag's good, and the bucket's
+  wet days. `harm` has no warmth (design 13).
+- **Fronts on the test patch.** On a patch of fields with no river, hollow
+  or shade (the test's), fronts ran 0.3 to 0.45 m/s calm (the farthest
+  cell from the start, any way) and 0.16 to 0.37 m/s downwind in 3 m/s,
+  0.3 to 0.36 in 8 m/s: under a metre a second always, but up to twice
+  decision 12's 0.1 to 0.25, because the patch has none of the green
+  breaks decision 12's had. Every fire on it reached the 300-cell limit and
+  burnt out there within ten minutes; at most 40 burned at once. Nothing
+  was retuned: the numbers are decision 12's, and the size is the limit's.
+
 ## Questions for the owner (with screenshots), 2026-11-26
 
 | Id | Question | Options | Recommendation | Screenshots |
