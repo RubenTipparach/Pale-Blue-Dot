@@ -766,6 +766,48 @@ wood", a sip from the sea ("Salt water", nothing taken), then a river.
   night in Survival" (task 5.1) is the trunk, Eat and drink, and Shelter and
   weather's "The first night".
 
+#### As built (tasks 6.1, 6.2, 6.5; 2026-11-27)
+
+- **The file.** The 25 missions are appended to `missions.ron`'s list with
+  `mode: survival` (`pbd_core::missions::Mode`). `Chain::for_mode` cuts a
+  world's tree; `pbd_app::missions` keeps every mode's as `AllMissions` and
+  sets `MissionChain` to the open world's when it opens, so every reader of
+  the starter tree (the stations' locks, the tab, the HUD) sees only its
+  mode's missions. A mission for every world may not wait on one of a single
+  mode (`resolve` refuses it).
+- **Where the file differs from the table above**, to name what the game
+  counts: "Something to eat" eats any fruit or an egg (`eat`); "A hot meal"
+  is `cook` any dish and `eat` any dish; "Bow and arrows" is a bow and two
+  arrow crafts (`recipe:stone-arrows|recipe:bone-arrows`, four arrows a
+  craft, so eight); "Dress a kill" and the hunting axe's second objective
+  are a hide taken (`gather hide`); "A long shot" is `kill long-shot`, which
+  hunting raises beside the animal's own kill; "Drink water" counts
+  `fresh|rain|bucket|still`; "A long swim" is `swim water 100` (winded is
+  not checked until stamina is in the walker).
+- **Pending until built.** The recipes, goods, station and game the survival
+  build adds (`recipe:straw`, the weapons, `block:still`, `hide`, the hare
+  and the ridge goat, ...) are in the file's `awaited`: a mission naming only
+  these is pending (skipped, and met for the ones after it) until they land,
+  then counts with no change to the file.
+- **The mode.** `pbd_app::missions::mode_of` is the one place the missions
+  ask a world's mode; it reads Explorer until the identity record's
+  `WorldMode` (task 2.1) is wired there (`Mode: From<WorldMode>` is ready).
+  `--mission-mode survival` is a capture instrument meanwhile.
+- **The kinds.** All eleven are live. `dawn`, `dive` and `fall` are raised
+  by the game now (`desktop::missions::dawn_watch` and `water_watch`); the
+  rest are raised as `pbd_app::missions::Did` by the survival mechanics,
+  `drink` named by `missions::drink_name(WaterSource)` (salt names nothing).
+  Until then those missions are open and uncounted.
+- **The picker.** `Progress.path` (record schema 2); `path_cards`,
+  `path_now`, `choose_path`, `choosing` and `offer_after` are the rules;
+  `desktop/path_picker.rs` draws it in the side panel's kit (a stone frame,
+  an oak lintel, stone cards turning to carved oak under the pointer, a slot
+  well for each path's icon). It opens when the player is back in play
+  after the offer (never over a station's panel), with the Missions screen
+  while a path is to be picked, and from the Paths plaque at the screen's
+  top left. A pick re-centres the tree on the path's Now and rings its
+  branch plaque. `--pick-path <branch>` is its capture instrument.
+
 ### 19. Explorer and Survival side by side
 
 | | Explorer | Survival |
