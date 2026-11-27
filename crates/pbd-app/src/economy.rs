@@ -323,6 +323,45 @@ pub fn roads_to(save: &WorldSave, site: u32) -> Vec<u32> {
 }
 
 /// A town's name, by its site id: what a delivery's line names.
+/// Where a town's job giver keeps their post, as a direction from the
+/// planet's centre: what the compass and the map mark as the place a job is
+/// taken (`job-waypoints` design 7). `None` while its people are not laid.
+pub fn giver_direction(
+    cfg: &EconomyConfig,
+    folk: &crate::townsfolk::Townsfolk,
+    site: u32,
+) -> Option<Vec3> {
+    let mut people: Vec<_> = folk.people(site).collect();
+    people.sort_by_key(|p| p.id.index);
+    let roles: Vec<&str> = people.iter().map(|p| p.role.as_str()).collect();
+    let k = cfg.jobs.keepers(&roles)?;
+    people.get(k.giver).and_then(|p| p.at.try_normalize())
+}
+
+/// The nearest held town within `within_m` of `up`, and its job giver's
+/// direction (`job-waypoints` design 7).
+pub fn near_giver(
+    cfg: &EconomyConfig,
+    folk: &crate::townsfolk::Townsfolk,
+    towns: &Towns,
+    up: Vec3,
+    within_m: f32,
+) -> Option<Vec3> {
+    let site = towns
+        .held
+        .iter()
+        .map(|h| {
+            (
+                h.site.id,
+                h.site.direction.angle_between(up) * crate::planet::PLANET_RADIUS,
+            )
+        })
+        .filter(|(_, d)| *d <= within_m)
+        .min_by(|a, b| a.1.total_cmp(&b.1))?
+        .0;
+    giver_direction(cfg, folk, site)
+}
+
 pub fn town_name(towns: &Towns, site: u32) -> String {
     towns
         .held
