@@ -427,6 +427,21 @@ in it, outlives every change to how worlds are made:
   stay valid: a saved edit is indexed from `column::BASE_M`, which does not
   move.
 
+## Cloud sessions implement and unit test; the desktop playtests (owner, 2026-11-27)
+
+**Standing instruction from the user:** "The desktop session is
+playtesting stuff. You are headless just implement and unit test". In a
+Claude Code cloud session (no GPU, lavapipe):
+- implement the change and prove it with unit and app tests (`cargo test`),
+  `openspec validate --all`, fmt and clippy;
+- no bot runs, showcase plays or playtests, and no `--capture` sessions to
+  check how a change plays: that is the desktop session's;
+- a task whose proof is a playtest, a bot run or screenshots is left open
+  and marked "for the desktop session's playtest", never ticked off from
+  the cloud.
+This overrides the older guidance below to render changes with headless
+`--capture` shots from a cloud session.
+
 ## One pull request, not many (owner, 2026-11-18)
 
 **Standing instruction from the user:** "add to claude md to maintain a
