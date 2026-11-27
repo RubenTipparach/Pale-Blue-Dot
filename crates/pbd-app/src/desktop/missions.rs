@@ -456,8 +456,15 @@ pub fn show_line(
                 {
                     let to = pbd_app::compass::name_line(town, *d);
                     Localized::verbatim(format!("{} {n}/{}  {}", o.label, o.count, to.as_str()))
-                } else if o.kind == pbd_core::missions::Kind::Deliver
-                    && n < o.count
+                } else if matches!(
+                    o.kind,
+                    pbd_core::missions::Kind::Deliver
+                        | pbd_core::missions::Kind::Job
+                        | pbd_core::missions::Kind::Escort
+                        | pbd_core::missions::Kind::Repair
+                        | pbd_core::missions::Kind::Light
+                        | pbd_core::missions::Kind::Goodwill
+                ) && n < o.count
                     && let Some((town, d)) = &parcel_from
                 {
                     tr_with(

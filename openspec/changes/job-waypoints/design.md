@@ -51,3 +51,14 @@ the deliver line names the nearest town and its distance: "Carry a parcel 0/1
 Job from Holbrook 1.2 km". Once a parcel is carried it names the drop-off
 instead (design 4). Marking the job giver in the town itself is the survey's
 question.
+
+## 6. Every job-made mission says where the job is (owner, 2026-11-27)
+
+"Check for similar gaps in other missions where you might've skipped a
+step". The town tree's first-job, three-jobs, lost, mend, lamps and goodwill
+all need a job from a town's job giver first, as deliver does, and their
+tracker lines said nothing of it. Their objectives (job, escort, repair,
+light, goodwill) take the same "Job from Holbrook 1.2 km" ending as deliver.
+
+The audit of every mission's objectives, and what the tracker gives the
+player for each, is the change's `audit.md`.
