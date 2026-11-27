@@ -1121,6 +1121,9 @@ pub struct PaintParams<'w> {
     body: Res<'w, pbd_app::fish::Body>,
     coin: Option<Res<'w, CoinIcon>>,
     lost: Option<Res<'w, LostIcon>>,
+    /// The tool in hand, for a trader's or smith's repair price
+    /// (`survival-mode` design 11).
+    tools: Option<Res<'w, pbd_app::fish::ToolSlot>>,
 }
 
 /// Rebuild the open panel when what it shows changes.
@@ -1137,9 +1140,24 @@ pub fn paint(
     if !matches!(open, Screen::Talk | Screen::Trade | Screen::Board) {
         return;
     }
+    // A Survival town's repair price for the tool in hand, if any.
+    let repair = match (
+        p.talking.with.as_ref(),
+        p.save.as_deref(),
+        p.tools.as_deref(),
+    ) {
+        (Some(with), Some(save), Some(tools)) => super::survival_panels::town_repair_price(
+            save,
+            tools,
+            &p.cfg,
+            with.trader,
+            &with.talker.role,
+        ),
+        _ => None,
+    };
     // What the panel shows, as one line: it is rebuilt only when this moves.
     let now = format!(
-        "{open:?}|{:?}|{}|{:?}|{:?}|{}|{}",
+        "{open:?}|{:?}|{}|{:?}|{:?}|{}|{}|{repair:?}",
         p.talking,
         p.eco.purse.coins,
         p.eco.jobs,
@@ -1173,7 +1191,7 @@ pub fn paint(
     let ids = fish_ids(&p.fauna, &p.body.0);
     let now_s = p.sun.clock.seconds;
     commands.entity(body).with_children(|panel| match open {
-        Screen::Talk => paint_talk(panel, kit, with, &p.talking.said, &p.eco),
+        Screen::Talk => paint_talk(panel, kit, with, &p.talking.said, &p.eco, repair, coin),
         Screen::Trade => paint_trade(
             panel,
             kit,
@@ -1202,6 +1220,8 @@ fn paint_talk(
     with: &TalkWith,
     said: &Option<Localized>,
     eco: &Economy,
+    repair: Option<u32>,
+    coin: &Handle<Image>,
 ) {
     menu::lintel(panel, kit, Localized::verbatim(with.town.name.clone()));
     line(panel, role_name(&with.talker.role), ui_kit::TEXT_DIM);
@@ -1231,6 +1251,9 @@ fn paint_talk(
             }
             if with.giver || ready {
                 button(row, kit, tr("talk.work"), TalkAction::Work, 60.0);
+            }
+            if let Some(coins) = repair {
+                super::survival_panels::spawn_town_repair(row, kit, coins, coin);
             }
             button(row, kit, tr("talk.bye"), TalkAction::Bye, 50.0);
         });

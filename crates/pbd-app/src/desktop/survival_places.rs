@@ -37,6 +37,11 @@ const STILL_EVERY_S: f32 = 1.0;
 #[derive(Component)]
 pub struct BedrollShown;
 
+/// The fresh water standing in a still's cup, a child of the still's own
+/// drawing.
+#[derive(Component)]
+pub struct StillWater;
+
 pub struct SurvivalPlacesPlugin;
 
 impl Plugin for SurvivalPlacesPlugin {
@@ -49,6 +54,7 @@ impl Plugin for SurvivalPlacesPlugin {
                 lay_bedroll,
                 step_stills,
                 draw_bedroll,
+                draw_still_water,
             )
                 .run_if(pbd_app::world_open),
         );
@@ -477,6 +483,104 @@ fn step_stills(
     }
 }
 
+// --------------------------------------------------------- the still's water
+
+/// The still's cup, in the still's own frame (`roads::models::still`): its
+/// centre, the floor of its inside and its rim, and the inside's radius at
+/// each, m.
+const CUP_AT: Vec3 = Vec3::new(0.66, 0.0, 0.05);
+const CUP_FLOOR: (f32, f32) = (0.06, 0.06);
+const CUP_RIM: (f32, f32) = (0.135, 0.078);
+
+/// The water's surface in the cup at `share` full (0..1): its height and
+/// radius, following the cup's inside wall.
+pub fn cup_water(share: f32) -> (f32, f32) {
+    let t = share.clamp(0.0, 1.0);
+    (
+        CUP_FLOOR.0 + (CUP_RIM.0 - CUP_FLOOR.0) * t,
+        CUP_FLOOR.1 + (CUP_RIM.1 - CUP_FLOOR.1) * t,
+    )
+}
+
+/// Each still drawn on the tier shows its fresh water in its cup, rising as
+/// it fills (one sip of `drinks.still.sips` a step) and gone when it is
+/// drunk dry. Textured by `tools/art/still_water_texture.py`.
+#[allow(clippy::too_many_arguments)]
+fn draw_still_water(
+    mut commands: Commands,
+    save: Res<WorldSave>,
+    assets: Res<AssetServer>,
+    stills: Query<(Entity, &super::farm::ForgeView, Option<&Children>)>,
+    mut water: Query<(&mut Transform, &mut Visibility), With<StillWater>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut look: Local<Option<(Handle<Mesh>, Handle<StandardMaterial>)>>,
+) {
+    if !save.mode().is_survival() {
+        return;
+    }
+    let cap = f32::from(play::rules().drinks.still.sips.max(1));
+    let still_cells: std::collections::HashSet<(u32, u16)> = save
+        .edits
+        .all()
+        .into_iter()
+        .filter(|e| e.material == Material::Still)
+        .map(|e| (e.cell, e.layer))
+        .collect();
+    for (entity, view, children) in &stills {
+        if !still_cells.contains(&view.at()) {
+            continue;
+        }
+        let (cell, layer) = view.at();
+        let fresh = f32::from(places::still_at(&save, cell, layer).fresh_sips);
+        let (y, r) = cup_water(fresh / cap);
+        let transform = Transform::from_translation(CUP_AT + Vec3::Y * y)
+            .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2))
+            .with_scale(Vec3::splat(r));
+        let shown = if fresh > 0.0 {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        let mut found = false;
+        for child in children.into_iter().flatten() {
+            if let Ok((mut t, mut v)) = water.get_mut(*child) {
+                found = true;
+                if *t != transform {
+                    *t = transform;
+                }
+                if *v != shown {
+                    *v = shown;
+                }
+            }
+        }
+        if found {
+            continue;
+        }
+        let (mesh, material) = look
+            .get_or_insert_with(|| {
+                (
+                    meshes.add(Circle::new(1.0).mesh().resolution(20)),
+                    materials.add(StandardMaterial {
+                        base_color_texture: Some(pbd_app::towns::texture(&assets, "still_water")),
+                        perceptual_roughness: 0.25,
+                        ..default()
+                    }),
+                )
+            })
+            .clone();
+        commands.entity(entity).with_children(|still| {
+            still.spawn((
+                Mesh3d(mesh),
+                MeshMaterial3d(material),
+                transform,
+                shown,
+                StillWater,
+            ));
+        });
+    }
+}
+
 // ------------------------------------------------------- the bedroll's look
 
 /// The bedroll's size, m: across, along, and its pad's thickness.
@@ -640,6 +744,18 @@ mod tests {
         }
         let mesh = bedroll_mesh();
         assert!(mesh.attribute(Mesh::ATTRIBUTE_UV_0).is_some());
+    }
+
+    /// The still's water rises in its cup as it fills, inside the cup's
+    /// wall, from its floor to under its rim.
+    #[test]
+    fn the_stills_water_rises_in_its_cup() {
+        let (y0, r0) = cup_water(0.0);
+        let (y1, r1) = cup_water(0.5);
+        let (y2, r2) = cup_water(1.0);
+        assert!(y0 < y1 && y1 < y2 && r0 < r1 && r1 < r2);
+        assert!(y2 < 0.14 && r2 < 0.08, "under the rim, inside the wall");
+        assert_eq!(cup_water(2.0), cup_water(1.0));
     }
 
     #[test]

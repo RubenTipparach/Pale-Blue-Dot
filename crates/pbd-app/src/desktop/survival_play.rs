@@ -1019,12 +1019,8 @@ fn drink(
     else {
         return;
     };
-    sip_from(
-        &mut save,
-        &mut survival,
-        &mut did,
-        play::water_source(point, top),
-    );
+    let source = play::water_source_in(&save, point, top);
+    sip_from(&mut save, &mut survival, &mut did, source);
 }
 
 /// A sip from `source`: into the bar through the server, its note shown,
@@ -1386,8 +1382,8 @@ fn recipes_for_mode(save: Res<WorldSave>, recipes: Option<ResMut<pbd_app::config
 /// dropped), `worn` (a worn and then a broken pickaxe), `bag` (the pack
 /// dropped a step ahead with the player alive, for its look and its map
 /// marker), `bedroll` (a bedroll laid a step ahead), `still` (every still
-/// placed by `--place-row` given four sips of sea water to boil). Once, at
-/// the start.
+/// placed by `--place-row` given four sips of sea water and three minutes
+/// of boiling, so three are fresh). Once, at the start.
 fn instrument(
     mut commands: Commands,
     mut save: ResMut<WorldSave>,
@@ -1532,6 +1528,10 @@ fn set_state(world: &mut World, state: &str, first: bool) {
                     1,
                 );
                 play::places::use_still(&mut save, &mut hands, at, 50.0);
+                // Three minutes of boiling beside the fire, so the shot
+                // shows its water in the cup.
+                let mut still = play::places::still_at(&save, at.0, at.1);
+                play::places::step_still(&mut save, at, &mut still, true, false, 180.0);
             }
         }
         "worn" => {

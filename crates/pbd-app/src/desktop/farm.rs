@@ -1380,6 +1380,13 @@ pub struct ForgeView {
     leaving: bool,
 }
 
+impl ForgeView {
+    /// The station's cell and layer.
+    pub fn at(&self) -> (u32, u16) {
+        (self.cell, self.layer)
+    }
+}
+
 #[derive(Component)]
 pub struct Flame;
 

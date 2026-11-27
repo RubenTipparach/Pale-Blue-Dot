@@ -998,18 +998,6 @@ pub fn spawn(
                                     ));
                                 });
                         }
-                        for k in 0..BAG_MARKERS {
-                            markers.spawn((
-                                MapMarker::Bag(k),
-                                ImageNode::new(bag_icon.clone()),
-                                hidden(Node {
-                                    position_type: PositionType::Absolute,
-                                    width: px(16),
-                                    height: px(16),
-                                    ..default()
-                                }),
-                            ));
-                        }
                         markers.spawn((
                             MapMarker::Ship,
                             ImageNode::new(icons.craft.clone()),
@@ -1030,6 +1018,20 @@ pub fn spawn(
                                 ..default()
                             }),
                         ));
+                        // A dropped pack's marker over the player's arrow, so
+                        // a bag at the feet is not hidden under it.
+                        for k in 0..BAG_MARKERS {
+                            markers.spawn((
+                                MapMarker::Bag(k),
+                                ImageNode::new(bag_icon.clone()),
+                                hidden(Node {
+                                    position_type: PositionType::Absolute,
+                                    width: px(16),
+                                    height: px(16),
+                                    ..default()
+                                }),
+                            ));
+                        }
                     });
             });
             // The map's frame at the window's edge: the stone moulding with
@@ -2086,7 +2088,11 @@ pub fn markers(
         // A pin stands on its point; the rest are centred on their place.
         let rise = if matches!(
             *mark,
-            MapMarker::Mark(_) | MapMarker::Lost(_) | MapMarker::Trader(_) | MapMarker::Parcel(_)
+            MapMarker::Mark(_)
+                | MapMarker::Lost(_)
+                | MapMarker::Trader(_)
+                | MapMarker::Parcel(_)
+                | MapMarker::Bag(_)
         ) {
             h / 2.0
         } else {

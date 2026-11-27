@@ -86,6 +86,48 @@ pub fn water_source(point: Vec3, top_m: f32) -> WaterSource {
     }
 }
 
+/// Sea water poured out of a sea bucket (design 15): one record a pour, by
+/// the cell and layer it was poured into, holding where it was poured
+/// (body-relative f64). The generator does not know an edit's salt, so water
+/// near a pour reads as the sea it came from.
+pub const SALT_KIND: &str = "salt-water";
+pub const SALT_SCHEMA: u32 = 1;
+/// How far a pour's salt reaches, m: the cell it was poured into and the
+/// cells its water runs into (water flows a few cells from a source).
+pub const SALT_REACH_M: f32 = 4.0 * CELL_M;
+
+/// Record sea water poured at `(cell, layer)`, at planet point `at`.
+pub fn note_salt_pour(save: &mut WorldSave, (cell, layer): (u32, u16), at: WorldPos) -> bool {
+    let record = StoredRecord::of(
+        SALT_KIND,
+        pbd_core::station::record_id(cell, layer),
+        SALT_SCHEMA,
+        &at,
+    );
+    let kept = save.store(&Author::Player(0), vec![record]).is_some();
+    if kept {
+        save.note_record_kinds(&[(SALT_KIND, SALT_SCHEMA)]);
+    }
+    kept
+}
+
+/// Whether a planet point is within reach of poured sea water.
+pub fn salted(save: &WorldSave, point: Vec3) -> bool {
+    save.records
+        .of_kind(SALT_KIND)
+        .filter_map(|r| r.read::<WorldPos>())
+        .any(|at| at.pos.as_vec3().distance(point) <= SALT_REACH_M)
+}
+
+/// [`water_source`] in a world: water near sea water poured out of a bucket
+/// is the sea's, whatever its level.
+pub fn water_source_in(save: &WorldSave, point: Vec3, top_m: f32) -> WaterSource {
+    match water_source(point, top_m) {
+        WaterSource::Fresh if salted(save, point) => WaterSource::Sea,
+        other => other,
+    }
+}
+
 // ------------------------------------------------- the spawn near water
 
 /// How near fresh water a new Survival world's start wants to be, m.

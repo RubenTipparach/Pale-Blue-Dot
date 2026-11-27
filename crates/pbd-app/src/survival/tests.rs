@@ -724,3 +724,45 @@ fn a_workbench_repair_takes_half_the_head_of_the_tools_recipe() {
     assert_eq!(carried, Slots::new(), "the price left the hands");
     assert!(!WearBook::of(&save).broken(Tool::Pickaxe, Tier::Stone));
 }
+
+#[test]
+fn sea_water_poured_above_the_sea_stays_salt() {
+    let cfg = crate::planet::terrain_config();
+    // Land well above the sea that the generator made no water on: water
+    // gathered there reads fresh.
+    let dry = (0..4000)
+        .map(|k| {
+            let t = k as f32 * 0.37;
+            Vec3::new(t.cos(), (k as f32 * 0.011).sin() * 0.6, t.sin()).normalize()
+        })
+        .find(|&d| {
+            !pbd_core::planet_gen::fresh_water_at(cfg, d)
+                && pbd_core::planet_gen::surface_altitude(cfg, d) > cfg.sea_level_m + 5.0
+        })
+        .expect("dry land above the sea");
+    let top = pbd_core::planet_gen::surface_altitude(cfg, dry) + 0.5;
+    let point = dry * (cfg.radius_m + top);
+    let mut save = survival_memory();
+    assert_eq!(
+        places::water_source_in(&save, point, top),
+        WaterSource::Fresh
+    );
+    // A sea bucket poured there: that water, and the water it runs into a
+    // cell on, is the sea's.
+    assert!(places::note_salt_pour(
+        &mut save,
+        (5, 9),
+        WorldPos::new(crate::sim_origin::HOME, point.as_dvec3())
+    ));
+    assert_eq!(places::water_source_in(&save, point, top), WaterSource::Sea);
+    let beside = point + point.normalize().any_orthonormal_vector() * places::CELL_M;
+    assert_eq!(
+        places::water_source_in(&save, beside, top),
+        WaterSource::Sea
+    );
+    let sipped = sip(rules(), places::water_source_in(&save, point, top), 40.0);
+    assert_eq!(sipped.note, Some(Note::SaltWater));
+    // Far from the pour, gathered water is fresh as before.
+    let far = point + point.normalize().any_orthonormal_vector() * 40.0;
+    assert_eq!(places::water_source_in(&save, far, top), WaterSource::Fresh);
+}

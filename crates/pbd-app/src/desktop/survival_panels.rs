@@ -8,7 +8,7 @@
 //! #hud`, "Pack open"): the four bars with their numbers, the thermometer,
 //! and the two worn slots, in the kit's stone.
 
-use super::menu::{self, Panel, Screen};
+use super::menu::{self, Screen};
 use super::slots::{self, Hotbar, ItemIcons};
 use super::survival_play::SurvivalIcons;
 use bevy::prelude::*;
@@ -62,13 +62,9 @@ pub struct RepairWearFill;
 pub struct PriceIcon(usize);
 #[derive(Component)]
 pub struct PriceCount(usize);
-/// The town's repair panel, its plaque and its price in coins.
-#[derive(Component)]
-pub struct TownRepair;
+/// The town's REPAIR plaque on the talk panel.
 #[derive(Component)]
 pub struct TownRepairPlaque;
-#[derive(Component)]
-pub struct TownRepairCoins;
 
 /// The four stats in the HUD's order: icon, colour.
 fn colours() -> [Color; 4] {
@@ -360,166 +356,162 @@ fn paint_stats(
 
 // ------------------------------------------------------------ repairs (4.8)
 
-/// The repair panel's frame and its plaque, the tool's icon with its wear
-/// bar, and room for a price, top centre over a screen.
-fn spawn_repair<P: Component, Pl: Component>(
-    commands: &mut Commands,
-    kit: &UiKit,
-    atlas: &Handle<Image>,
-    screen: Screen,
-    marker: P,
-    plaque: Pl,
-    coins: Option<Handle<Image>>,
-) {
-    commands
+/// The workbench's repair panel (design 11), spawned in the station panels'
+/// own layer beside the workbench's panel, as the pack's craft panel stands
+/// beside the pack: the tool in hand with its wear, the price as recipe
+/// icons with their counts, and the REPAIR plaque. Hidden until the
+/// workbench is open in a Survival world with a worn tool in hand.
+pub fn spawn_bench_repair(layer: &mut ChildSpawnerCommands, kit: &UiKit, atlas: &Handle<Image>) {
+    layer
         .spawn((
+            kit.nine(Set::Stone, "frame"),
             Node {
-                align_items: AlignItems::FlexStart,
-                justify_content: JustifyContent::Center,
-                padding: UiRect::top(px(14)),
-                ..menu::layer()
+                padding: UiRect::all(px(super::pack::RIM)),
+                margin: UiRect::left(px(8)),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                row_gap: px(6),
+                flex_shrink: 0.0,
+                display: Display::None,
+                ..default()
             },
-            GlobalZIndex(11),
-            Panel(screen),
+            BenchRepair,
         ))
-        .with_children(|layer| {
-            layer
-                .spawn((
-                    kit.nine(Set::Stone, "frame"),
-                    Node {
-                        padding: UiRect::new(px(10), px(10), px(8), px(8)),
+        .with_children(|panel| {
+            menu::lintel(panel, kit, tr("craft.repair"));
+            panel
+                .spawn(Node {
+                    align_items: AlignItems::Center,
+                    column_gap: px(4),
+                    ..default()
+                })
+                .with_children(|row| {
+                    row.spawn(Node {
+                        flex_direction: FlexDirection::Column,
                         align_items: AlignItems::Center,
-                        column_gap: px(4),
-                        display: Display::None,
+                        row_gap: px(1),
                         ..default()
-                    },
-                    marker,
-                ))
-                .with_children(|panel| {
-                    // The tool in hand, its wear under it.
-                    panel
-                        .spawn(Node {
-                            flex_direction: FlexDirection::Column,
-                            align_items: AlignItems::Center,
-                            row_gap: px(1),
-                            ..default()
-                        })
-                        .with_children(|tool| {
-                            tool.spawn((
-                                ImageNode::default(),
+                    })
+                    .with_children(|tool| {
+                        tool.spawn((
+                            ImageNode::default(),
+                            Node {
+                                width: px(16),
+                                height: px(16),
+                                ..default()
+                            },
+                            RepairToolIcon,
+                        ));
+                        tool.spawn((
+                            Node {
+                                width: px(16),
+                                height: px(2),
+                                ..default()
+                            },
+                            BackgroundColor(ui_kit::WELL),
+                        ))
+                        .with_children(|bar| {
+                            bar.spawn((
                                 Node {
-                                    width: px(16),
-                                    height: px(16),
+                                    width: percent(50),
+                                    height: percent(100),
                                     ..default()
                                 },
-                                RepairToolIcon,
+                                BackgroundColor(ui_kit::RUNE),
+                                RepairWearFill,
                             ));
-                            tool.spawn((
-                                Node {
-                                    width: px(16),
-                                    height: px(2),
-                                    ..default()
-                                },
-                                BackgroundColor(ui_kit::WELL),
-                            ))
-                            .with_children(|bar| {
-                                bar.spawn((
-                                    Node {
-                                        width: percent(50),
-                                        height: percent(100),
-                                        ..default()
-                                    },
-                                    BackgroundColor(ui_kit::RUNE),
-                                    RepairWearFill,
-                                ));
-                            });
                         });
-                    panel
-                        .spawn((ui_kit::plaque(kit, Set::Stone, 64.0), plaque))
-                        .with_children(|p| {
-                            p.spawn(ui_kit::plaque_label(Set::Stone, tr("craft.repair")));
-                        });
-                    match coins {
-                        // A town's price: the coin and the number.
-                        Some(coin) => {
-                            panel.spawn((
-                                ImageNode::new(coin),
-                                Node {
-                                    width: px(16),
-                                    height: px(16),
-                                    ..default()
-                                },
-                            ));
-                            panel.spawn((
+                    });
+                    row.spawn(
+                        KitText::new(Localized::verbatim("←"), ui_kit::TEXT).shadow(ui_kit::INK),
+                    );
+                    for k in 0..PRICE_MAX {
+                        row.spawn((
+                            ImageNode {
+                                image: atlas.clone(),
+                                color: Color::NONE,
+                                ..default()
+                            },
+                            Node {
+                                width: px(16),
+                                height: px(16),
+                                flex_shrink: 0.0,
+                                display: Display::None,
+                                ..default()
+                            },
+                            PriceIcon(k),
+                        ))
+                        .with_children(|icon| {
+                            icon.spawn((
                                 KitText::new(Localized::empty(), ui_kit::LABEL)
                                     .outline(ui_kit::INK),
-                                TownRepairCoins,
+                                Node {
+                                    position_type: PositionType::Absolute,
+                                    bottom: px(-3),
+                                    right: px(-2),
+                                    ..default()
+                                },
+                                PriceCount(k),
                             ));
-                        }
-                        // The bench's price: up to four items with counts.
-                        None => {
-                            for k in 0..PRICE_MAX {
-                                panel
-                                    .spawn((
-                                        ImageNode {
-                                            image: atlas.clone(),
-                                            color: Color::NONE,
-                                            ..default()
-                                        },
-                                        Node {
-                                            width: px(16),
-                                            height: px(16),
-                                            flex_shrink: 0.0,
-                                            display: Display::None,
-                                            ..default()
-                                        },
-                                        PriceIcon(k),
-                                    ))
-                                    .with_children(|icon| {
-                                        icon.spawn((
-                                            KitText::new(Localized::empty(), ui_kit::LABEL)
-                                                .outline(ui_kit::INK),
-                                            Node {
-                                                position_type: PositionType::Absolute,
-                                                bottom: px(-3),
-                                                right: px(-2),
-                                                ..default()
-                                            },
-                                            PriceCount(k),
-                                        ));
-                                    });
-                            }
-                        }
+                        });
                     }
+                });
+            panel
+                .spawn((ui_kit::plaque(kit, Set::Stone, 64.0), BenchRepairPlaque))
+                .with_children(|p| {
+                    p.spawn(ui_kit::plaque_label(Set::Stone, tr("craft.repair")));
                 });
         });
 }
 
-fn spawn_panels(
-    mut commands: Commands,
-    kit: Res<UiKit>,
-    icons: Res<ItemIcons>,
-    coin: Option<Res<super::talk::CoinIcon>>,
+/// What a town's trader or smith asks to repair the tool in hand, in coins,
+/// when the talk is with one in a Survival world and the tool is worn.
+pub fn town_repair_price(
+    save: &WorldSave,
+    tools: &pbd_app::fish::ToolSlot,
+    cfg: &pbd_app::economy::EconomyConfig,
+    trader: bool,
+    role: &str,
+) -> Option<u32> {
+    if !(trader || role == "smith") {
+        return None;
+    }
+    let (tool, tier, _) = worn_in_hand(save, tools)?;
+    let value = cfg.values.get(&format!("tool:{}", tool.code()))?.coins;
+    Some(play::places::repair_coins_for(save, tool, tier, value))
+}
+
+/// The town's REPAIR among the talk panel's buttons (painted by the talk
+/// itself), its price in coins after it.
+pub fn spawn_town_repair(
+    row: &mut ChildSpawnerCommands,
+    kit: &UiKit,
+    coins: u32,
+    coin: &Handle<Image>,
 ) {
-    spawn_repair(
-        &mut commands,
-        &kit,
-        &icons.atlas,
-        Screen::Forge,
-        BenchRepair,
-        BenchRepairPlaque,
-        None,
-    );
-    let coin = coin.map(|c| c.0.clone()).unwrap_or_default();
-    spawn_repair(
-        &mut commands,
-        &kit,
-        &icons.atlas,
-        Screen::Talk,
-        TownRepair,
-        TownRepairPlaque,
-        Some(coin),
-    );
+    row.spawn((ui_kit::plaque(kit, Set::Stone, 64.0), TownRepairPlaque))
+        .with_children(|p| {
+            p.spawn(ui_kit::plaque_label(Set::Stone, tr("craft.repair")));
+        });
+    row.spawn(Node {
+        align_items: AlignItems::Center,
+        column_gap: px(2),
+        ..default()
+    })
+    .with_children(|price| {
+        price.spawn((
+            ImageNode::new(coin.clone()),
+            Node {
+                width: px(16),
+                height: px(16),
+                ..default()
+            },
+        ));
+        price.spawn(
+            KitText::new(Localized::verbatim(coins.to_string()), ui_kit::LABEL)
+                .outline(ui_kit::INK),
+        );
+    });
 }
 
 /// The tool in hand and its tier, if it is worn (below full) in a Survival
@@ -659,10 +651,9 @@ fn bench_repair(
     }
 }
 
-/// A town's repair (design 11): on the talk with a trader or a smith in a
-/// Survival world, while the tool in hand is worn, a REPAIR plaque with its
-/// price in coins; a press pays and restores every use.
-#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+/// A town's repair (design 11): the talk's REPAIR plaque (painted by the
+/// talk with its price) is greyed while the purse is short, and a press
+/// pays and restores every use; the talk says what happened.
 fn town_repair(
     screen: Res<Screen>,
     mut talking: ResMut<super::talk::Talking>,
@@ -670,47 +661,21 @@ fn town_repair(
     tools: Res<pbd_app::fish::ToolSlot>,
     cfg: Option<Res<pbd_app::economy::EconomyConfig>>,
     mut eco: Option<ResMut<pbd_app::economy::Economy>>,
-    items: Option<Res<ItemIcons>>,
-    mut panel: Query<&mut Node, (With<TownRepair>, Without<RepairWearFill>)>,
     mut plaque: Query<(&Interaction, &mut Plaque), With<TownRepairPlaque>>,
-    mut tool_icon: Query<&mut ImageNode, (With<RepairToolIcon>, Without<PriceIcon>)>,
-    mut fill: Query<(&mut Node, &mut BackgroundColor), With<RepairWearFill>>,
-    mut coins_text: Query<&mut KitText, With<TownRepairCoins>>,
 ) {
-    if *screen != Screen::Talk {
+    if *screen != Screen::Talk || plaque.is_empty() {
         return;
     }
-    let repairer = talking
-        .with
-        .as_ref()
-        .is_some_and(|w| w.trader || w.talker.role == "smith");
-    let worn = worn_in_hand(&save, &tools).filter(|_| repairer);
-    let price = worn.and_then(|(tool, tier, _)| {
-        let value = cfg
-            .as_deref()?
-            .values
-            .get(&format!("tool:{}", tool.code()))?
-            .coins;
-        Some(play::places::repair_coins_for(&save, tool, tier, value))
-    });
-    let show = worn.is_some() && price.is_some();
-    for mut node in &mut panel {
-        let want = if show { Display::Flex } else { Display::None };
-        if node.display != want {
-            node.display = want;
-        }
-    }
-    let (Some((tool, tier, share)), Some(coins), Some(items)) = (worn, price, items) else {
+    let (Some(cfg), Some(eco)) = (cfg.as_deref(), eco.as_deref_mut()) else {
         return;
     };
-    paint_tool(&items, tool, tier, share, &mut tool_icon, &mut fill);
-    let want = Localized::verbatim(coins.to_string());
-    for mut text in &mut coins_text {
-        if text.text != want {
-            text.text = want.clone();
-        }
-    }
-    let Some(eco) = eco.as_deref_mut() else {
+    let Some(with) = talking.with.as_ref() else {
+        return;
+    };
+    let Some(coins) = town_repair_price(&save, &tools, cfg, with.trader, &with.talker.role) else {
+        return;
+    };
+    let Some((tool, tier, _)) = worn_in_hand(&save, &tools) else {
         return;
     };
     let short = !eco.purse.covers(u64::from(coins));
@@ -718,7 +683,7 @@ fn town_repair(
         if state.disabled != short {
             state.disabled = short;
         }
-        if *interaction != Interaction::Pressed {
+        if *interaction != Interaction::Pressed || short {
             continue;
         }
         talking.said = Some(
@@ -741,12 +706,6 @@ pub struct SurvivalPanelsPlugin;
 impl Plugin for SurvivalPanelsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
-            PostStartup,
-            spawn_panels
-                .after(super::talk::spawn)
-                .after(super::slots::load_icons),
-        )
-        .add_systems(
             Update,
             (paint_stats, bench_repair, town_repair).run_if(pbd_app::world_open),
         );

@@ -1294,8 +1294,9 @@ commits.
   Every bar shows whatever its height: this is where a hidden stat is read.
   Explorer's pack has no panel. Its words are the locale's `pack.stats`.
 - **Repair at the workbench.** While the workbench is open in a Survival
-  world and the tool in hand is worn, a small Repair panel over the screen's
-  top: the tool in hand's icon at its tier,
+  world and the tool in hand is worn, a small REPAIR panel beside the
+  workbench's, in the station panels' own row as the pack's craft panel
+  stands beside the pack (round 2; it stood over the screen's top first): the tool in hand's icon at its tier,
   its uses left as the slot's bar, and the price, `repair_inputs` of the
   recipe that made that tool at that tier (half its head, rounded up), drawn
   as the recipe rows' icons with their counts. The plaque is greyed while
@@ -1309,8 +1310,9 @@ commits.
   is bought) and restores the tool; the wear and the purse go in one line
   (`survival::places::repair_for_coins`; the two records are stored in one
   call, two journal lines back to back). Short of coins, the talk says the
-  trade refusal's own "Not enough coins". The panel stands over the screen's
-  top beside the talk, so the talk panel itself is unchanged.
+  trade refusal's own "Not enough coins". REPAIR is one of the talk panel's
+  own buttons, between TRADE and BYE, its price in coins after it (round 2;
+  it stood over the screen's top first).
 - **The break sound.** A short dry crack, cut from a CC0 recording by the
   `sound-effects` skill (`tools/audio/cc0_cues.json`, its source named in
   `assets/audio/sfx/SOURCES.md` and `AUDIO_SOURCES.md`), played once at the
@@ -1328,7 +1330,10 @@ commits.
   weather rains on it under open sky. A step that changed what it holds is
   written at once; the boil's seconds are kept in memory between, so a
   reload loses at most part of one sip's boil. A still off the fine tier
-  does not boil: world time passes only where the world is played.
+  does not boil: world time passes only where the world is played. Its fresh
+  water is drawn in its cup (round 2): a disc of water textured by
+  `tools/art/still_water_texture.py`, rising up the cup's inside wall from
+  its floor to under its rim as the sips come, gone when it is drunk dry.
 - **A bucket's sip.** A bucket filled at the sea is a good of its own,
   `sea-bucket` (appended: a bucket of sea water; every `water-bucket` an old
   save holds stays fresh). The empty bucket takes the sea's water as a
@@ -1338,9 +1343,11 @@ commits.
   `bucket` record of sips taken, and the fourth hands back the empty bucket
   in the same line; a sea bucket gives nothing and "Salt water". Its icon is
   the water bucket's drawn by `tools/gen_item_icons.py` with the sea's
-  grey-green water. Known gap: sea water poured into a hole above the sea
-  reads fresh, as gathered water does (the generator does not know an
-  edit's water's salt); a salt mark on poured cells is a follow-up.
+  grey-green water. Sea water poured out of a sea bucket stays salt (round 2): each pour
+  is a `salt-water` record (where it was poured, body-relative f64), and
+  water within four cells of one reads as the sea's wherever it stands
+  (`places::water_source_in`); the empty bucket filled there is a sea bucket
+  again.
 - **The cactus and the straw.** With a straw in hand, F on a standing
   desert cactus within 3 m (the cell whose record `tree_kit::grows_cactus`
   says, its trunk the eye ray passes within 0.6 m of) drinks a cactus sip
@@ -1384,7 +1391,9 @@ commits.
   `tools/gen_item_icons.py`, on a card twice a drop's size that stands
   upright on the ground and turns to the eye, lit by the field. On the map
   every bag lying in the world has a marker: a pack icon in the player's
-  colour beside the waypoints (`MapMarker::Bag`), the newest two shown.
+  colour beside the waypoints (`MapMarker::Bag`), the newest two shown,
+  drawn over the player's arrow and standing on its point as a pin does, so
+  a bag at the feet is not hidden under the arrow (round 2).
 - **Help text.** The `drink` mission's help: "Press F at a river or lake.
   Sea water is salt."
 

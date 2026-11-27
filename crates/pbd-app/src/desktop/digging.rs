@@ -1126,7 +1126,7 @@ pub fn dig_and_place(
                 return;
             };
             let sea = met.is_some_and(|p| {
-                pbd_app::survival::water_source(p, p.length() - PLANET_RADIUS)
+                pbd_app::survival::water_source_in(&edits, p, p.length() - PLANET_RADIUS)
                     == pbd_core::survival::WaterSource::Sea
             });
             let swapped = if full {
@@ -1137,6 +1137,7 @@ pub fn dig_and_place(
                 Good::WATER_BUCKET
             };
             let poured = full;
+            let salt_poured = good == Good::SEA_BUCKET;
             if apply_edit(
                 &mut Edited {
                     fine: &mut fine,
@@ -1161,6 +1162,19 @@ pub fn dig_and_place(
                         "took water from"
                     }
                 );
+                // Sea water poured stays salt, wherever it is poured
+                // (`survival-mode` design 15).
+                if salt_poured {
+                    let at = eye + look * (target.distance - 0.3).max(0.0);
+                    pbd_app::survival::places::note_salt_pour(
+                        &mut edits,
+                        (cell, layer as u16),
+                        pbd_core::world_frame::WorldPos::new(
+                            pbd_app::sim_origin::HOME,
+                            at.as_dvec3(),
+                        ),
+                    );
+                }
                 if poured {
                     did.write(pbd_app::missions::Did::new(
                         pbd_core::missions::Kind::Pour,

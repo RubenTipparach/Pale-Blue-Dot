@@ -437,7 +437,7 @@ pub fn pick_bag(save: &mut WorldSave, carried: &mut Slots, id: u64) -> bool {
 // ------------------------------------------------------- water (task 6.6)
 
 /// What water at a planet point is to drink: [`places::water_source`].
-pub use places::water_source;
+pub use places::{water_source, water_source_in};
 
 // ------------------------------------------------------------- the tick
 

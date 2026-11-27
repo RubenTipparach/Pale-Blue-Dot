@@ -130,5 +130,8 @@
     // `survival-mode` 6.3: the laid bedroll's wool and hide, mapped once
     // across and twice along; drawn by tools/art/bedroll_texture.py.
     (name: "bedroll", width: 32, height: 32, repeat_m: 0.0),
+    // `survival-mode` design 18: the still's fresh water in its cup, drawn
+    // by tools/art/still_water_texture.py.
+    (name: "still_water", width: 16, height: 16, repeat_m: 0.0),
   ],
 )
