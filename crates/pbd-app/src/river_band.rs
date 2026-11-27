@@ -317,7 +317,10 @@ pub fn drop_round(at: Vec3, metres: f32, keys: impl IntoIterator<Item = (u32, Ve
 
 // --- The file ----------------------------------------------------------------
 
-const MAGIC: &[u8; 8] = b"PBDBAND1";
+/// The file's mark, and its version: 2 since a full river's top is drawn
+/// under its bank (`townsfolk` design 42p), so a file meshed before is read
+/// as none and meshed again.
+const MAGIC: &[u8; 8] = b"PBDBAND2";
 
 fn file() -> Option<PathBuf> {
     if !pbd_core::river_cache::enabled() {

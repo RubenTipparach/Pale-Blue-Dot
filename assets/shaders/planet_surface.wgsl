@@ -1607,60 +1607,20 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
                     }
                 }
             } else if v >= COLUMN_CAP_VERTICES + 6u*COLUMN_SIDE_VERTICES {
-                // ---- A lamp: a torch, a slim post standing on the floor
-                // with a lit head on it, or two boxes for every other light
+                // ---- A lamp: two boxes for every light but a torch
                 // (`lamps-and-lanterns` task 5.2).
                 //
-                // Drawn HERE rather than in the clutter, because a torch is at
+                // Drawn HERE rather than in the clutter, because a lamp is at
                 // a layer rather than on the surface: one can stand on a cave
-                // floor forty metres down, which is the whole reason to carry
-                // one.
+                // floor forty metres down.
                 let t = v-(COLUMN_CAP_VERTICES+6u*COLUMN_SIDE_VERTICES);
                 let layer = lamp_layer(rec);
                 let which = lamp_kind(rec);
-                if layer != 0u && which == LAMP_TORCH && t < 30u {
-                    let foot = params.settings.x+COLUMN_BASE_M+f32(layer-1u);
-                    kind = KIND_LAMP;
-                    let up = axis;
-                    let post = 0.55;
-                    let rad = 0.06;
-                    if t < 24u {
-                        // The post: four flat sides, so it reads as a stick
-                        // rather than a cylinder at the pixel size it is drawn.
-                        let face = t/6u;
-                        let i = t%6u;
-                        let a0 = f32(face)*TAU/4.;
-                        let a1 = f32(face+1u)*TAU/4.;
-                        let base = axis*foot;
-                        let c0 = base+(tangent*cos(a0)+bitangent*sin(a0))*rad;
-                        let c1 = base+(tangent*cos(a1)+bitangent*sin(a1))*rad;
-                        let points = array<vec3<f32>,4>(c0,c1,c1+up*post,c0+up*post);
-                        let indices = array<u32,6>(0u,1u,2u,0u,2u,3u);
-                        position = points[indices[i]];
-                        normal = normalized(cross(points[1]-points[0],points[3]-points[0]));
-                        let post_uv = array<vec2<f32>,4>(vec2(0.,1.),vec2(1.,1.),vec2(1.,0.),vec2(0.,0.));
-                        uv = post_uv[indices[i]];
-                        material = LAMP_WOOD_CODE | (cell.metadata.y & 0xff00u);
-                        out_voxel = vec2(sky_at(lit_slot,layer-1u),1.0);
-                    } else {
-                        // The head, at full lamp: it IS the light, so it is
-                        // drawn at the brightest the block channel goes rather
-                        // than at whatever reached the cell it stands in.
-                        let i = t-24u;
-                        let head = axis*(foot+post);
-                        let a0 = f32(i/3u)*TAU/2.;
-                        let a1 = f32(i/3u+1u)*TAU/2.;
-                        let c = i%3u;
-                        let p0 = head+(tangent*cos(a0)+bitangent*sin(a0))*rad*2.2;
-                        let p1 = head+(tangent*cos(a1)+bitangent*sin(a1))*rad*2.2;
-                        let tip = head+up*0.16;
-                        position = select(select(tip,p1,c==1u),p0,c==0u);
-                        uv = select(select(vec2(0.5,0.1),vec2(0.9,0.9),c==1u),vec2(0.1,0.9),c==0u);
-                        normal = up;
-                        material = LAMP_WOOD_CODE | (cell.metadata.y & 0xff00u);
-                        out_voxel = vec2(0.0, LAMP_FLAME + FLAME_RISE*select(0.0, 1.0, c == 2u));
-                    }
-                } else if layer != 0u && which != LAMP_TORCH {
+                // A torch's body is not drawn here: it is the held torch's
+                // model, an entity near the eye (`held::placed`,
+                // playtest-fixes design 4), and its 30 vertices stay on the
+                // cell's centre, degenerate. Its light is the record's.
+                if layer != 0u && which != LAMP_TORCH {
                     let foot = params.settings.x+COLUMN_BASE_M+f32(layer-1u);
                     kind = KIND_LAMP;
                     // The frame: across the cell, and up. A wall lantern turns
@@ -2190,6 +2150,11 @@ fn vertex(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance:
     if kind == 0u || kind == 1u || kind == 4u {
         out.material |= cell.metadata.y & MOUNTAIN_RELIEF_MASK;
     }
+    // `wildfire` design 8 and 13: a burnt cell's top carries its record's
+    // ash bit (`wildfire::ASH_BIT`), set while its grass has not come back.
+    if kind == 0u || kind == 1u || kind == 4u {
+        out.material |= cell.metadata.y & ASH_MASK;
+    }
     out.height = out_height;
     // The low half only: the high half carries the column tier slot.
     out.skylight = f32(cell.metadata.z & 0xffffu)/65535.;
@@ -2264,6 +2229,8 @@ const MOUNTAIN_SNOW_LINE_M: f32 = 170.0;
 const MOUNTAIN_SCREE_BIT: u32 = 22u;
 const MOUNTAIN_FLAT_BIT: u32 = 23u;
 const MOUNTAIN_RELIEF_MASK: u32 = 0xc00000u;
+// `wildfire`: the material word's top bit, a burnt cell's ash.
+const ASH_MASK: u32 = 0x80000000u;
 const ALPINE_TURF_MEAN = vec3(0.27,0.32,0.22);
 const ALPINE_SOIL_MEAN = vec3(0.33,0.31,0.29);
 const ALPINE_SIDE_MEAN = vec3(0.40,0.38,0.25);
@@ -4153,6 +4120,12 @@ fn shade_terrain(input: VertexOut) -> vec4<f32> {
 #ifndef TERRAIN_OFF_SEASON
         albedo = ground_tint(albedo, normalized(input.position));
 #endif
+    }
+    // `wildfire` design 8: a burnt cell's top is ash, in its own texels'
+    // grain, so the scar is pixel ground and not paint.
+    if (input.kind == 0u || input.kind == 1u || input.kind == 4u)
+        && (input.material & ASH_MASK) != 0u {
+        albedo = mix(albedo, vec3(0.15, 0.145, 0.14)*(0.65 + 0.7*grain), 0.85);
     }
     // Design 9.4: the year's fallen leaves, in the cap's own texels.
     if input.kind == 0u && cap != 0u {

@@ -682,20 +682,39 @@ pub fn dig_and_place(
         MessageWriter<pbd_app::missions::Did>,
         Option<ResMut<pbd_app::walking::Lift>>,
     ),
-    // The fell's dust and leaves (`tree_fx`).
-    mut tree_fx: Option<ResMut<pbd_app::tree_fx::TreeFxQueue>>,
+    // The fell's dust and leaves (`tree_fx`); and whether the tool in hand
+    // is broken, which digs as bare hands (`survival-mode` design 11).
+    (mut tree_fx, broken, claim, fire): (
+        Option<ResMut<pbd_app::tree_fx::TreeFxQueue>>,
+        Option<Res<pbd_app::survival::HeldBroken>>,
+        // A click that is a strike's (`survival-mode` combat C1).
+        Option<Res<pbd_app::combat::CombatClaim>>,
+        // A burnt tree's snag, chopped for charcoal (`wildfire` design 8).
+        (
+            Option<Res<pbd_app::wildfire::FireNow>>,
+            Option<Res<pbd_app::wildfire::FireRules>>,
+        ),
+    ),
 ) {
+    let broken = broken.is_some_and(|b| b.0);
     if let Some(ground) = ground.as_mut() {
         ground.0 = None;
     }
     let dt = time.delta_secs();
     let between = dig.0.between_s;
+    // A click that is a strike's digs nothing, and the strike draws its
+    // own stroke (`survival-mode` combat C1).
+    if claim.is_some_and(|c| c.0) {
+        aimed.target = None;
+        mining.breaking.step(dt, false, None, between);
+        return;
+    }
     // The walker has the pointer, and a digger is in hand (bare hands or a
     // digging tool; the rod casts).
     let captured = walking
         .as_deref()
         .is_some_and(|readout| readout.active && readout.captured);
-    let a_digger = tools.bare_handed() || tools.digging().is_some();
+    let a_digger = tools.bare_handed() || broken || tools.digging().is_some();
     // The tool in hand strokes on the dig's beat (`held-swing` decision 5):
     // last frame's answer, a frame behind, which nobody can see. While a
     // block breaks, its time and how far in; in the pause after it, on
@@ -794,7 +813,7 @@ pub fn dig_and_place(
     }
     // What breaks: bare hands dig soft ground (`tool-crafting` decision 1),
     // a tool at its tier; the rod nothing.
-    let digger = if tools.bare_handed() {
+    let digger = if tools.bare_handed() || broken {
         Some(Digger::Hands)
     } else {
         tools.digging().map(|(tool, tier)| Digger::Tool(tool, tier))
@@ -802,9 +821,14 @@ pub fn dig_and_place(
     // A tree's trunk nearer than the ground is worked for a log (decision 3).
     if buttons.pressed(MouseButton::Left)
         && digger.is_some()
-        && let Some(tree) = tree_on_ray(&fine, eye, look, solid_m.unwrap_or(aim::REACH_M), |cell| {
-            tree_standing(&edits, gather.0.axe_logs, cell)
-        })
+        && let Some(tree) = tree_or_snag_on_ray(
+            &fine,
+            eye,
+            look,
+            solid_m.unwrap_or(aim::REACH_M),
+            |cell| tree_standing(&edits, gather.0.axe_logs, cell),
+            |cell| is_snag(fire.0.as_deref(), cell),
+        )
     {
         let by_axe = matches!(digger, Some(Digger::Tool(Tool::Axe, _)));
         let wood = dig.0.wood.axe;
@@ -820,7 +844,35 @@ pub fn dig_and_place(
         // The stroke's impacts shake it (`shake_on_impact`).
         mining.meets = Meets::Breaks;
         mining.tree_worked = Some(tree);
-        if let Step::Broken(_) = step {
+        if let Step::Broken(_) = step
+            && is_snag(fire.0.as_deref(), tree)
+            && let Some(rules) = fire.1.as_deref()
+        {
+            if let Some((good, count)) = pbd_app::wildfire::take_snag(
+                &rules.0,
+                &mut edits,
+                &mut slots.0,
+                tree,
+                sun.clock.seconds,
+                gather.0.axe_logs,
+            ) {
+                gained.write(pbd_app::hotbar::Gained {
+                    item: Item::Good(good),
+                    count,
+                    how: pbd_app::hotbar::How::Found,
+                });
+                did.write(pbd_app::missions::Did::new(
+                    pbd_core::missions::Kind::Fell,
+                    "tree",
+                    1,
+                ));
+                if let Some(fx) = tree_fx.as_deref_mut() {
+                    fx.0.push(pbd_app::tree_fx::TreeFxEvent::Felled { cell: tree });
+                }
+            } else {
+                note.say(time.elapsed_secs(), tr("farm.no_room"));
+            }
+        } else if let Step::Broken(_) = step {
             take_log(
                 &mut edits,
                 &mut slots,
@@ -1046,9 +1098,12 @@ pub fn dig_and_place(
         // The wooden bucket (`water-flow` E11): an empty one takes the
         // source the eye meets, a full one pours where a block would go.
         if let Some(Item::Good(good)) = slots.held().map(|stack| stack.item)
-            && (good == Good::BUCKET || good == Good::WATER_BUCKET)
+            && (good == Good::BUCKET || good == Good::WATER_BUCKET || good == Good::SEA_BUCKET)
         {
-            let full = good == Good::WATER_BUCKET;
+            let full = good == Good::WATER_BUCKET || good == Good::SEA_BUCKET;
+            // Where the empty bucket meets the water, for its salt
+            // (`survival-mode` design 15): the sea's fills a sea bucket.
+            let mut met: Option<Vec3> = None;
             let at = if full {
                 Some((place.cell, place.layer))
             } else {
@@ -1062,7 +1117,10 @@ pub fn dig_and_place(
                         s
                     })
                 })
-                .map(|t| (t.dig.cell, t.dig.layer))
+                .map(|t| {
+                    met = Some(eye + look * t.distance);
+                    (t.dig.cell, t.dig.layer)
+                })
             };
             let Some((cell, layer)) = at else {
                 info!("PLACE refused: the bucket found no water or cell along the ray");
@@ -1074,12 +1132,19 @@ pub fn dig_and_place(
                 info!("PLACE refused: the bucket has nothing to take or nowhere to pour");
                 return;
             };
+            let sea = met.is_some_and(|p| {
+                pbd_app::survival::water_source_in(&edits, p, p.length() - PLANET_RADIUS)
+                    == pbd_core::survival::WaterSource::Sea
+            });
             let swapped = if full {
                 Good::BUCKET
+            } else if sea {
+                Good::SEA_BUCKET
             } else {
                 Good::WATER_BUCKET
             };
             let poured = full;
+            let salt_poured = good == Good::SEA_BUCKET;
             if apply_edit(
                 &mut Edited {
                     fine: &mut fine,
@@ -1104,6 +1169,19 @@ pub fn dig_and_place(
                         "took water from"
                     }
                 );
+                // Sea water poured stays salt, wherever it is poured
+                // (`survival-mode` design 15).
+                if salt_poured {
+                    let at = eye + look * (target.distance - 0.3).max(0.0);
+                    pbd_app::survival::places::note_salt_pour(
+                        &mut edits,
+                        (cell, layer as u16),
+                        pbd_core::world_frame::WorldPos::new(
+                            pbd_app::sim_origin::HOME,
+                            at.as_dvec3(),
+                        ),
+                    );
+                }
                 if poured {
                     did.write(pbd_app::missions::Did::new(
                         pbd_core::missions::Kind::Pour,
@@ -1194,6 +1272,20 @@ pub fn dig_and_place(
     }
 }
 
+/// A burnt tree standing charred on `cell` (`wildfire` design 8): its
+/// generated tree is hidden from the foliage's rule, and its snag drawn.
+fn is_snag(fire: Option<&pbd_app::wildfire::FireNow>, cell: u32) -> bool {
+    fire.is_some_and(|f| {
+        f.snags.iter().any(|s| {
+            s.key == cell
+                && matches!(
+                    s.look,
+                    pbd_core::fire::TreeLook::Snag | pbd_core::fire::TreeLook::Scorched
+                )
+        })
+    })
+}
+
 /// The tree whose trunk the eye ray meets nearer than `before_m` and within
 /// reach, by its cell's key: a vertical column at the centre of a cell that
 /// grows a tree (`pbd_core::flora::grows_tree`, the foliage pass's own rule),
@@ -1202,12 +1294,16 @@ pub fn dig_and_place(
 /// Only a tree `standing` says still stands: a felled tree is not drawn, and
 /// its trunk taking the ray left the ground where it stood undiggable by any
 /// tool (`dig-fixes` 1).
-pub fn tree_on_ray(
+///
+/// A burnt tree's snag `snag` names (`wildfire` design 8) is a trunk too:
+/// its generated tree is hidden from the foliage's rule while it stands.
+pub fn tree_or_snag_on_ray(
     fine: &PlanetFine,
     eye: Vec3,
     look: Vec3,
     before_m: f32,
     standing: impl Fn(u32) -> bool,
+    snag: impl Fn(u32) -> bool,
 ) -> Option<u32> {
     let reach = before_m.min(aim::REACH_M);
     let toward = eye.normalize_or(Vec3::Y);
@@ -1219,11 +1315,11 @@ pub fn tree_on_ray(
             continue;
         };
         if up.dot(toward) < near
-            || !pbd_core::flora::grows_tree(
+            || !(pbd_core::flora::grows_tree(
                 &pbd_app::planet::terrain_config().trees,
                 record.spare[0],
                 record.metadata[1],
-            )
+            ) || snag(record.key()))
         {
             continue;
         }

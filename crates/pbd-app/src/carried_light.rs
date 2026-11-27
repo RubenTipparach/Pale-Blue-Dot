@@ -129,6 +129,7 @@ pub fn gather(
     frame: Option<Res<crate::planet::PlanetRenderFrame>>,
     crafts: Option<Res<crate::vehicles::lamps::CraftLamps>>,
     near: Option<Res<NearLights>>,
+    torch_out: Option<Res<crate::wildfire::TorchOut>>,
     mut lights: ResMut<CarriedLights>,
 ) {
     let mut next = Vec::new();
@@ -148,7 +149,15 @@ pub fn gather(
         });
         let mut sources = Vec::new();
         let lit = dusk.is_some_and(|d| d.lit);
-        if let Some(light) = held.0.and_then(carried_light).filter(|l| l.lit(lit)) {
+        // A torch the rain put out gives no light (`wildfire` design 9).
+        let out = torch_out.is_some_and(|o| o.held)
+            && held.0 == Some(Item::Block(pbd_core::terrain::Material::Torch));
+        if let Some(light) = held
+            .0
+            .filter(|_| !out)
+            .and_then(carried_light)
+            .filter(|l| l.lit(lit))
+        {
             let colour = light.colour().map(|c| c * at.flicker.max(0.0));
             sources.push((eye_at + rotation * at.eye, colour));
         }

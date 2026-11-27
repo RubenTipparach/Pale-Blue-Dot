@@ -936,3 +936,178 @@ fn the_bill_falls_a_gravel_a_cell_paved_and_a_short_good_is_red() {
         None
     );
 }
+
+/// `townsfolk` design 42o: the planner's ghost of a bridged cell is the
+/// bridge piece paving builds (its deck, the posts down to the bed and the
+/// rails), not a flat top; a lamp post stands in it on its cell's ground up
+/// to the lantern's height; a post already holding its lamp is not drawn.
+#[test]
+fn the_ghost_carries_a_bridge_s_deck_and_rail_and_leg_cards_and_its_lamp_posts() {
+    use pbd_core::roads::planner::LaidCell;
+    use std::collections::BTreeSet;
+    let radius = crate::planet::terrain_config().radius_m;
+    let key = roads::nearest_key(Vec3::new(0.3, 0.6, 0.7)).unwrap();
+    let ahead = roads::neighbours(key)[0];
+    let cell = |deck: Option<i32>| LaidCell {
+        key,
+        centre: key,
+        lane: 0,
+        before: None,
+        after: Some(ahead),
+        low_m: 10,
+        base_m: 10,
+        raised: false,
+        ford: false,
+        deck,
+        bed: Default::default(),
+        up: None,
+        from: None,
+        clash: None,
+    };
+    let centre = roads::centre(key).unwrap() * radius;
+    let heights = |mesh: &Mesh| -> Vec<f32> {
+        let Some(bevy::mesh::VertexAttributeValues::Float32x3(p)) =
+            mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+        else {
+            panic!("positions");
+        };
+        p.iter()
+            .map(|p| (Vec3::from_array(*p) + centre).length() - radius)
+            .collect()
+    };
+    let road: BTreeSet<u32> = [key, ahead].into();
+    let flat = heights(&planner::ghost_mesh(
+        &[&cell(None)],
+        &road,
+        &[],
+        radius,
+        centre,
+    ));
+    let bridged = heights(&planner::ghost_mesh(
+        &[&cell(Some(14))],
+        &road,
+        &[],
+        radius,
+        centre,
+    ));
+    assert!(
+        bridged.len() > flat.len() * 2,
+        "the deck and its sides: {} vertices against the top's {}",
+        bridged.len(),
+        flat.len()
+    );
+    // The rail and leg cards (design 42p), each in its own texture, the
+    // same cards paving cuts: legs under the deck, rails over it.
+    let [rails, legs] = planner::ghost_cards(&[&cell(Some(14))], &road, radius, centre);
+    let (rails, legs) = (heights(&rails), heights(&legs));
+    assert!(!rails.is_empty() && !legs.is_empty());
+    let low = legs.iter().copied().fold(f32::MAX, f32::min);
+    let high = rails.iter().copied().fold(f32::MIN, f32::max);
+    assert!(
+        low < 14.0 - roads::piece::DECK_M,
+        "legs under the deck: {low}"
+    );
+    assert!(
+        high > 14.0 + 0.5 * roads::piece::RAIL_M,
+        "rails over it: {high}"
+    );
+    let [none, _] = planner::ghost_cards(&[&cell(None)], &road, radius, centre);
+    assert!(heights(&none).is_empty(), "no cards off a bridge");
+    // A lamp post on its ground, the lantern up to about 1.9 m.
+    let ground = |k: u32| {
+        Some(roads::Ground {
+            top_m: if k == ahead { 12 } else { 10 },
+            water: roads::Water::Dry,
+            town: false,
+            player: false,
+        })
+    };
+    let lamps = planner::ghost_lamps([ahead, key], &|k| k == key, &ground);
+    assert_eq!(lamps, vec![(ahead, 12)], "the standing lamp is not drawn");
+    let lamp = heights(&planner::ghost_mesh(&[], &road, &lamps, radius, centre));
+    assert!(!lamp.is_empty());
+    let (low, high) = lamp
+        .iter()
+        .fold((f32::MAX, f32::MIN), |(l, h), &v| (l.min(v), h.max(v)));
+    assert!((low - 12.0).abs() < 0.05, "on its ground: {low}");
+    assert!((high - 13.9).abs() < 0.05, "the lantern's top: {high}");
+}
+
+/// Design 42p (the owner's survey P7): the bridge's rail and leg cards are
+/// drawn in the timber's and the plank's own colours, with clear holes at
+/// alpha 0 and no other alpha, and the manifest cuts both.
+#[test]
+fn the_bridge_cards_are_drawn_in_the_timber_s_palette() {
+    let read = |name: &str| {
+        let path = crate::paths::assets_dir().join(format!("textures/settlement/{name}.png"));
+        image::open(&path)
+            .unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+            .to_rgba8()
+    };
+    let wood: std::collections::BTreeSet<[u8; 4]> = ["timber", "plank"]
+        .iter()
+        .flat_map(|n| read(n).pixels().map(|p| p.0).collect::<Vec<_>>())
+        .collect();
+    let cut = crate::towns::cut_textures();
+    for name in planner::CARDS {
+        assert!(cut.contains(name), "{name} is cut in the manifest");
+        let card = read(name);
+        assert_eq!(card.dimensions(), (64, 32), "{name}");
+        let clear = card.pixels().filter(|p| p.0[3] == 0).count();
+        let total = (card.width() * card.height()) as usize;
+        assert!(
+            clear > total / 4 && clear < total * 3 / 4,
+            "{name}: {clear} clear"
+        );
+        for p in card.pixels().filter(|p| p.0[3] != 0) {
+            assert_eq!(p.0[3], 255, "{name}: cut, not blended");
+            assert!(wood.contains(&p.0), "{name}: {:?} is not the wood's", p.0);
+            assert!(
+                p.0[0] as u32 + p.0[1] as u32 + p.0[2] as u32 > 120,
+                "no outline"
+            );
+        }
+    }
+}
+
+/// Design 42p's measure (a measuring instrument, run by hand): at the bridge
+/// capture's spot (`road-bridge.jpg`), the far river sheet's surface and the
+/// ground under it at each fine level, and the generated column's water, so
+/// the drawn river's height can be told from the deck's.
+#[test]
+#[ignore]
+fn measure_the_river_at_the_bridge_capture() {
+    let cfg = crate::planet::terrain_config();
+    let d = pbd_core::geo::direction(pbd_core::geo::LatLon {
+        lat: 14.31677f32.to_radians(),
+        lon: 59.09392f32.to_radians(),
+    });
+    let road = [1061057443u32, 1061057445, 1061057448];
+    for &k in &road {
+        let (lat, lon) = crate::place::at_flag(roads::centre(k).unwrap());
+        println!("cell {k}: --at {lat:.5} {lon:.5}");
+    }
+    for (name, d) in [("spot", d)].into_iter().chain(
+        road.iter()
+            .map(|&k| ("road end", roads::centre(k).unwrap())),
+    ) {
+        let ground = crate::planet::surface_height(d);
+        let column = pbd_core::column::generate_solid(cfg, d);
+        let top = column.surface().unwrap();
+        let water = (top + 1..pbd_core::column::LAYERS)
+            .take_while(|&l| column.material(l).is_water())
+            .count();
+        println!(
+            "{name}: ground {ground:.2}, column top {:.0}, water layers {water}",
+            pbd_core::column::layer_altitude(top) + 1.0
+        );
+        for level in 0..6u32 {
+            let cell_m = 2.833 * (1u32 << level) as f32;
+            println!(
+                "  cell {cell_m:.1} m: far surface {:?}, flood top {:?}",
+                pbd_core::rivers::far_surface(cfg, d, cell_m),
+                pbd_core::rivers::flood_top(cfg, d)
+            );
+        }
+    }
+}

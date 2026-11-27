@@ -108,6 +108,9 @@ pub struct Sample {
     /// The wind the sea state has caught up with, m/s: the speed that sets
     /// the waves' height, lagging the wind by `sea_build_s`. Zero over land.
     pub sea: f32,
+    /// How wet the ground is, 0..1 (`wildfire` design 2): raised by rain,
+    /// dried by sun, warmth and dry air. One over the sea.
+    pub ground_wet: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -141,6 +144,14 @@ pub struct Atmosphere {
     pub current: Vec<Vec3>,
     /// The wind speed the waves have caught up with, m/s; zero on land.
     pub sea: Vec<f32>,
+    /// How wet the ground is, 0..1 (`wildfire` design 2): what the rain left
+    /// and the sun has not dried. One over the sea and under lying snow.
+    /// Saved after the thermostat; a state from before it restores at the
+    /// biome's wetness (`surface.wetness`).
+    pub ground_wet: Vec<f32>,
+    /// How the ground wets and dries: `fire.ron`'s, held here and not in
+    /// `settings`, which the shipped settled climates are matched against.
+    pub wet_rates: crate::fire::GroundWetRates,
     /// The thermostat's integral: the part of the sun's trim a steady error
     /// has built up (`climate-balance` decision 4). Saved with the weather.
     pub trim_integral: f32,
@@ -202,6 +213,8 @@ impl Atmosphere {
             eta: vec![0.0; n],
             current: vec![Vec3::ZERO; n],
             sea: vec![0.0; n],
+            ground_wet: vec![0.0; n],
+            wet_rates: crate::fire::FireConfig::shipped().ground_wet,
             trim_integral: 0.0,
             balance_absorbed: 0.0,
             balance_greenhouse: 0.0,
@@ -230,6 +243,7 @@ impl Atmosphere {
             let saturated = atmosphere.saturation(atmosphere.ground_k[cell]);
             atmosphere.vapour[cell] = saturated * 0.5 * atmosphere.surface.wetness[cell].max(0.3);
         }
+        atmosphere.ground_wet = atmosphere.surface.wetness.clone();
         atmosphere.refresh_mesoscale();
         atmosphere
     }
@@ -389,6 +403,7 @@ impl Atmosphere {
             } else {
                 0.0
             },
+            ground_wet: weighted(&self.ground_wet, cells, w).clamp(0.0, 1.0),
         }
     }
 
@@ -446,7 +461,7 @@ impl Atmosphere {
     /// Bit-exact state for the save: the prognostic fields in a fixed order.
     pub fn to_bytes(&self) -> Vec<u8> {
         let n = self.grid.len();
-        let mut out = Vec::with_capacity(16 + n * 4 * 14);
+        let mut out = Vec::with_capacity(16 + n * 4 * 15);
         out.extend_from_slice(MAGIC);
         out.extend_from_slice(&self.settings.level.to_le_bytes());
         out.extend_from_slice(&(n as u32).to_le_bytes());
@@ -470,6 +485,10 @@ impl Atmosphere {
         ] {
             out.extend_from_slice(&v.to_le_bytes());
         }
+        // The ground's wetness, after everything older saves carry.
+        for v in &self.ground_wet {
+            out.extend_from_slice(&v.to_le_bytes());
+        }
         out
     }
 
@@ -482,14 +501,19 @@ impl Atmosphere {
         // before the thermostat (`PBDATM01` and `PBDATM02`) has no trim, and
         // starts with none built up; one from before its balance
         // (`PBDATM03`) has the integral alone, and its averages start afresh.
-        let (scalars_saved, thermostat_saved) = match &bytes[..MAGIC.len().min(bytes.len())] {
-            m if m == MAGIC => (SCALARS, 3),
-            m if m == MAGIC_V3 => (SCALARS, 1),
-            m if m == MAGIC_V2 => (SCALARS, 0),
-            m if m == MAGIC_V1 => (SCALARS - 1, 0),
-            _ => return Err("weather state has an unknown header".into()),
-        };
-        let want = MAGIC.len() + 16 + n * 4 * (scalars_saved + 6) + 4 * thermostat_saved;
+        // One from before the ground's wetness (`PBDATM04` and older) starts
+        // it at the biome's wetness (`wildfire` design 2).
+        let (scalars_saved, thermostat_saved, wet_saved) =
+            match &bytes[..MAGIC.len().min(bytes.len())] {
+                m if m == MAGIC => (SCALARS, 3, 1),
+                m if m == MAGIC_V4 => (SCALARS, 3, 0),
+                m if m == MAGIC_V3 => (SCALARS, 1, 0),
+                m if m == MAGIC_V2 => (SCALARS, 0, 0),
+                m if m == MAGIC_V1 => (SCALARS - 1, 0, 0),
+                _ => return Err("weather state has an unknown header".into()),
+            };
+        let want =
+            MAGIC.len() + 16 + n * 4 * (scalars_saved + 6 + wet_saved) + 4 * thermostat_saved;
         if bytes.len() != want {
             return Err(format!(
                 "weather state is {} bytes, expected {want}",
@@ -517,9 +541,11 @@ impl Atmosphere {
             .collect();
         let mut thermostat = read(thermostat_saved);
         thermostat.resize(3, 0.0);
+        let wet = read(n * wet_saved);
         if scalars.iter().flatten().any(|v| !v.is_finite())
             || vectors.iter().flatten().any(|v| !v.is_finite())
             || thermostat.iter().any(|v| !v.is_finite())
+            || wet.iter().any(|v| !v.is_finite())
         {
             return Err("weather state holds a non-finite value".into());
         }
@@ -547,6 +573,11 @@ impl Atmosphere {
             self.balance_absorbed,
             self.balance_greenhouse,
         ] = [thermostat[0], thermostat[1], thermostat[2]];
+        self.ground_wet = if wet.len() == n {
+            wet
+        } else {
+            self.surface.wetness.clone()
+        };
         // The mesoscale noise is not saved: it is a function of the step it
         // was last refreshed at, so it is refreshed again as of that step.
         // The step refreshes it when it begins on a multiple of the period;
@@ -590,7 +621,8 @@ impl Atmosphere {
     }
 }
 
-const MAGIC: &[u8; 8] = b"PBDATM04";
+const MAGIC: &[u8; 8] = b"PBDATM05";
+const MAGIC_V4: &[u8; 8] = b"PBDATM04";
 const MAGIC_V3: &[u8; 8] = b"PBDATM03";
 const MAGIC_V2: &[u8; 8] = b"PBDATM02";
 const MAGIC_V1: &[u8; 8] = b"PBDATM01";

@@ -236,7 +236,8 @@ const PHASES = [
       { id: 'phase-2-checks.4', text: 'Frame cost on your machine: flow and its smoothing, the fall\'s mist, light under water, carried light, a mountain walk, the beavers and otters.' },
       { id: 'phase-2-checks.5', text: 'Videos of phase 2 (the batch), then your playtest.' } ] },
   ] },
-  { id: 'phase-3', num: '3', name: 'Townsfolk', qs: [], issues: [
+  { id: 'phase-3', num: '3', name: 'Townsfolk', qs: [
+    ], issues: [
   ], tests: [
     { id: 'phase-3-test-npcs', step: 'NPCs', items: [
       { id: 'phase-3-test-npcs.1', text: 'Their motion captured in a sequence: walking, working, talking.' } ] },
@@ -255,7 +256,8 @@ const PHASES = [
       { id: 'phase-3b-launcher.1', blocking: true, text: 'The game is Private on itch, so nothing can check it for updates yet.' },
       { id: 'phase-3b-launcher.2', blocking: true, text: 'How a free game downloads from itch is not documented. A spike comes first.' } ] },
   ] },
-  { id: 'phase-4', num: '4', name: 'Town building, civil engineering and survival', qs: [], issues: [] },
+  { id: 'phase-4', num: '4', name: 'Town building, civil engineering and survival', qs: [
+    ], issues: [] },
   { id: 'phase-5', num: '5', name: 'Mass transportation', qs: [], issues: [] },
   { id: 'phase-6', num: '6', name: 'Age of flight and industry', qs: [], issues: [] },
   { id: 'phase-7', num: '7', name: 'Nuclear and rocketry', qs: [], issues: [] },
@@ -267,6 +269,16 @@ const PHASES = [
 
 // The "Already decided" list, newest first. Rows to 2026-10-02 are the first survey's (the Claude Doc), copied as they stood.
 const DECIDED = [
+  {"date": "2026-11-27", "phase": "3", "id": "P8", "text": "A new bridge's deck is set from the river as it settles, not the generated one; existing bridges keep theirs, and full rivers stay 0.2 m under their banks.", "where": "townsfolk (design 42p)"},
+  {"date": "2026-11-26", "phase": "4", "id": "G11", "text": "\"Go right into survival after pack is opened (if survival mode is active)\": the Survival branch hangs off \"Open the pack\", and in a Survival world its first mission is the goal right after it.", "where": "survival-mode (design 18)"},
+  {"date": "2026-11-26", "phase": "4", "id": "G10", "text": "The weapons' looks approved as drawn (spear, bow and arrows, hunting axe, sword), for the animation step.", "where": "survival-mode (design 16)"},
+  {"date": "2026-11-26", "phase": "4", "id": "G8", "text": "Heat stroke as drawn (a warm edge from 38 C, then passing out for 30 s), and \"Just show stroke warning above hot bar. See G 7 for data\". Being written into the design and the mockup.", "where": "survival-mode (design 14)"},
+  {"date": "2026-11-26", "phase": "4", "id": "G7", "text": "The bars stack at the left edge, and \"Don't need to show food or water till it's 50% or lower. You can check in pack these stats at any time..if stats are full hide them.\" Being written into the design and the mockup.", "where": "survival-mode (design 9)"},
+  {"date": "2026-11-26", "phase": "4", "id": "G6", "text": "The stamina and food numbers stay as drawn, and \"Some sort of js animation would be nice to see this in action. Add an expand button to lazy load\": the Stamina tab gets an animation behind an Expand button.", "where": "survival-mode (design 12)"},
+  {"date": "2026-11-26", "phase": "3", "id": "P7", "text": "The bridge keeps its solid look, and \"You should use a texture with alpha cutout instead of adding geom (single sided, hand rails and posts and the land parts)\": rails, posts and the land ends become cut-out textured cards. Being built.", "where": "townsfolk (design 42o)"},
+  {"date": "2026-11-26", "phase": "3", "id": "P6", "text": "\"River surface seems to be right on the surface of top of terrain hex. You could offset water surface a bit to account for that instead of raising bridge\": a full river's surface is drawn a little below its bank instead of raising bridges. Being built.", "where": "townsfolk (design 42o)"},
+  {"date": "2026-11-26", "phase": "3", "id": "P5", "text": "Old towns get their forge, only where it touches nothing you built (a new town layout version). Being built.", "where": "playtest-fixes (design 6)"},
+  {"date": "2026-11-26", "phase": "4", "id": "G9", "text": "\"Let's not spread fire too much for now, consider lots of factors like dryness of plants\": fires stay small and slow, green plants do not burn, and each cell burns by how dry its plants are (kind, season, rain, humidity, shade, water nearby). Being written into the design, with the mockup's Fire tab redone to show it.", "where": "wildfire"},
   {"date": "2026-11-24", "phase": "3", "id": "P1", "text": "Trading stays in baskets (YOU TAKE, YOU GIVE, DEAL), as built. And \"One thing id improve is framing. Move the camera so the merchant is on left, and the trade UI is on the right\": the talk and trade panels sit on the right, and the view turns so the townsperson stands in the left of the frame. Being built.", "where": "townsfolk design 37a, task 11.3"},
   {"date": "2026-11-24", "phase": "3", "id": "P2", "text": "The road planner's ghost is stronger, 55%. And \"Can we something like a slightly aerial view? Let's say something like 10-20 m off the ground?\": while the planner is open the camera lifts to about 15 m above you, looking down the way you face, and comes back down when it closes. Being built.", "where": "townsfolk design 42"},
   {"date": "2026-11-24", "phase": "3", "id": "P3", "text": "\"The night is too faint, please make it glow a bit more at night\": the building site's ghost glows more after dark (ghost_night raised from 0.05). Being built.", "where": "building-planner design"},

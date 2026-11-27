@@ -58,6 +58,76 @@ pub const CHORD_LAYOUT: u32 = 2;
 /// 26a): a town stored at layout 1 or 2 is cut with no smithy and no forge
 /// lamp, as it was played.
 pub const FORGE_LAYOUT: u32 = 3;
+/// A town laid at layout 2 and given its smithies after (`playtest-fixes`
+/// design 6, the owner's survey P5, 2026-11-26): the chord, the smithies.
+pub const RAISED_CHORD_LAYOUT: u32 = 4;
+/// A town laid at layout 1 and given its smithies after: layout 1's dot
+/// lookup, the smithies. Its own number, so its ground never moves.
+pub const RAISED_DOT_LAYOUT: u32 = 5;
+
+/// Whether a town at `layout` finds a direction's cell by the nearest
+/// chord: every layout from 2 but the raised layout-1 town's.
+pub fn finds_by_chord(layout: u32) -> bool {
+    layout >= CHORD_LAYOUT && layout != RAISED_DOT_LAYOUT
+}
+
+/// Whether a town at `layout` stands its template's smithies: laid at 3,
+/// or raised (4, 5).
+pub fn stands_smithies(layout: u32) -> bool {
+    layout >= FORGE_LAYOUT
+}
+
+/// The layout an old town is raised to once it is given its smithies, or
+/// `None` for a town that has them (or a layout this build does not know).
+pub fn raised_layout(layout: u32) -> Option<u32> {
+    match layout {
+        1 => Some(RAISED_DOT_LAYOUT),
+        2 => Some(RAISED_CHORD_LAYOUT),
+        _ => None,
+    }
+}
+
+/// The exact cell keys an old town's smithies would stand on (each
+/// smithy's cells and its forge's cell), or `None` where its template has
+/// no smithy, or one of those cells is off the town's stored footprint.
+pub fn smithy_keys(town: &Town, template: &Template) -> Option<BTreeSet<u32>> {
+    if template.smithies.is_empty() {
+        return None;
+    }
+    let cell_m = template.grid.cell_m;
+    let keys: BTreeMap<(i32, i32), u32> = town.cells.iter().map(|t| ((t.0, t.1), t.2)).collect();
+    let mut out = BTreeSet::new();
+    for s in &template.smithies {
+        let forge = s.forge_cell(cell_m);
+        for at in s.cells.iter().map(|&[c, r]| (c, r)).chain([forge]) {
+            out.insert(*keys.get(&at)?);
+        }
+    }
+    Some(out)
+}
+
+/// An old town given its smithies (`playtest-fixes` design 6): the same
+/// town at its raised layout, every other field as stored, or `None` where
+/// it has them already, its template has none, or any cell they would
+/// stand on is `touched` (holds anything the player made).
+pub fn raise_forge(
+    town: &Town,
+    template: &Template,
+    touched: &dyn Fn(u32) -> bool,
+) -> Option<Town> {
+    let layout = raised_layout(town.layout)?;
+    if template.scene != town.template {
+        return None;
+    }
+    let keys = smithy_keys(town, template)?;
+    if keys.iter().any(|&k| touched(k)) {
+        return None;
+    }
+    Some(Town {
+        layout,
+        ..town.clone()
+    })
+}
 /// Rings of layout cells round the built ones that are terraced with them,
 /// so the yards between the houses are level too.
 pub const YARD_RINGS: usize = 2;
@@ -634,7 +704,7 @@ pub fn ground_of(
         })
         .collect();
     let ground = TownGround::terraced(patch, radius_m, &footprint, natural)
-        .by_chord(town.layout >= CHORD_LAYOUT);
+        .by_chord(finds_by_chord(town.layout));
     Ok((chart, ground))
 }
 
@@ -699,7 +769,7 @@ pub fn lamps_of(town: &Town, template: &Template, chart: &Chart, patch: &Patch) 
             template
                 .smithies
                 .iter()
-                .filter(|_| town.layout >= FORGE_LAYOUT)
+                .filter(|_| stands_smithies(town.layout))
                 .filter_map(|s| {
                     let (c, r) = s.forge_cell(cell_m);
                     lamp(c, r, None, Material::Brazier)
@@ -1051,7 +1121,7 @@ pub fn build_town_yielding(
     // Its smithies (`townsfolk` design 26a), from layout 3, each on its
     // forge cell's terrace, with no rooms and no lights of its own: its fire
     // is a lamp in the field.
-    if let Some(template) = template.filter(|_| town.layout >= FORGE_LAYOUT) {
+    if let Some(template) = template.filter(|_| stands_smithies(town.layout)) {
         let cell_m = template.grid.cell_m;
         for s in &template.smithies {
             let (c, r) = s.forge_cell(cell_m);
@@ -1197,6 +1267,14 @@ pub fn to_records(town: &Town) -> Vec<Record> {
         },
     ));
     records
+}
+
+/// The settlement record alone, as [`to_records`] writes it: what a raised
+/// town rewrites, its buildings untouched.
+pub fn settlement_record(town: &Town) -> Record {
+    to_records(town)
+        .pop()
+        .expect("the settlement record comes last")
 }
 
 /// A site left unsettled (task 4.4): the player had changed its ground

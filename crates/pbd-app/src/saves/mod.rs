@@ -150,6 +150,17 @@ pub fn list(root: &Path) -> Vec<Slot> {
 /// anything has been played in it. A name already taken gets a suffix rather
 /// than opening somebody else's world.
 pub fn create(root: &Path, name: &str, seed: u64) -> std::io::Result<Slot> {
+    create_in(root, name, seed, pbd_core::survival::WorldMode::Explorer)
+}
+
+/// [`create`], a world of `mode` (`survival-mode` design 1: fixed once
+/// chosen).
+pub fn create_in(
+    root: &Path,
+    name: &str,
+    seed: u64,
+    mode: pbd_core::survival::WorldMode,
+) -> std::io::Result<Slot> {
     let name = &name[..name.len().min(NAME_MAX)];
     let base = slot_id(name);
     let mut id = base.clone();
@@ -159,7 +170,12 @@ pub fn create(root: &Path, name: &str, seed: u64) -> std::io::Result<Slot> {
         suffix += 1;
     }
     let file = WorldFile::new(name.to_string(), seed, now_unix_s());
-    let identity = Identity::new(seed);
+    // An Explorer world's identity is written as before modes were.
+    let identity = if mode.is_survival() {
+        Identity::new_in(seed, mode)
+    } else {
+        Identity::new(seed)
+    };
     std::fs::create_dir_all(root.join(&id))?;
     // The identity first and with a barrier, so a slot in the list always
     // says what it is.
@@ -377,6 +393,9 @@ impl pbd_server::Store for SaveStore<'_> {
     fn commit_pick(&mut self, author: &Author, id: u64, left: u16, carried: &Slots) -> bool {
         debug_assert_eq!(*author, Author::Player(0));
         self.save.record_pick(id, left, carried)
+    }
+    fn commit_record(&mut self, author: &Author, record: StoredRecord) -> bool {
+        self.save.store(author, vec![record]).is_some()
     }
 }
 
@@ -775,8 +794,108 @@ impl WorldSave {
         };
         let joined = server.join(0, &hello, carried.clone());
         debug_assert_eq!(joined, Some(0), "single player is player 0");
+        // Survival (`survival-mode` task 4.1): the bars the world's record
+        // holds, full for a new Survival world, none in Explorer.
+        server.set_vitals(
+            0,
+            pbd_server::survival::vitals_of(
+                crate::survival::rules(),
+                self.identity.mode(),
+                &self.records,
+                0,
+            ),
+        );
         server.drain();
         server
+    }
+
+    /// The world's mode (`survival-mode` design 1): Explorer for a world
+    /// from before modes.
+    pub fn mode(&self) -> pbd_core::survival::WorldMode {
+        self.identity.mode()
+    }
+
+    /// Tick the player's survival bars on single player's server by `dt_s`
+    /// of play (`survival-mode` task 4.1): `None` in an Explorer world, and
+    /// on a game joined to another's, whose server keeps them.
+    pub fn survive(
+        &mut self,
+        conditions: &pbd_core::survival::Conditions,
+        dt_s: f32,
+    ) -> Option<pbd_core::survival::Tick> {
+        if self.joined() || !self.mode().is_survival() {
+            return None;
+        }
+        let carried = self.carried.clone().unwrap_or_default();
+        let tick = self.with_server(&carried, None, |server, store| {
+            server.survive(store, crate::survival::rules(), 0, conditions, dt_s)
+        });
+        self.note_vitals_kind();
+        tick
+    }
+
+    /// Something happened to the player (a hit, a meal, a sip, a jump):
+    /// decided on single player's server and journaled at once. `None` in
+    /// Explorer.
+    pub fn survival_act(
+        &mut self,
+        act: pbd_server::survival::Act,
+    ) -> Option<pbd_server::survival::Acted> {
+        if self.joined() || !self.mode().is_survival() {
+            return None;
+        }
+        let carried = self.carried.clone().unwrap_or_default();
+        let acted = self.with_server(&carried, None, |server, store| {
+            server.survival_act(store, crate::survival::rules(), 0, act)
+        });
+        self.note_vitals_kind();
+        acted
+    }
+
+    /// The player's survival bars as the server holds them: `None` in
+    /// Explorer. Made from the record when the server is not up yet.
+    pub fn vitals(&self) -> Option<pbd_core::survival::Vitals> {
+        if !self.mode().is_survival() {
+            return None;
+        }
+        match self.local.as_ref() {
+            Some(server) => server.vitals(0).cloned(),
+            None => pbd_server::survival::vitals_of(
+                crate::survival::rules(),
+                self.mode(),
+                &self.records,
+                0,
+            ),
+        }
+    }
+
+    /// Drop single player's server, so the next decision makes it again
+    /// from the records: a capture instrument that sets the records.
+    pub fn reset_server(&mut self) {
+        self.local = None;
+    }
+
+    /// MEASUREMENT (a capture instrument, `survival-mode` 4.6): set the
+    /// player's bars on the server as they are, journaling them.
+    pub fn put_vitals(&mut self, vitals: pbd_core::survival::Vitals) {
+        let carried = self.carried.clone().unwrap_or_default();
+        self.with_server(&carried, None, |server, store| {
+            server.set_vitals(0, Some(vitals));
+            server.commit_vitals(store, 0);
+        });
+    }
+
+    fn note_vitals_kind(&mut self) {
+        if self
+            .records
+            .get(pbd_server::survival::VITALS_KIND, 0)
+            .is_some()
+        {
+            self.note_record_kinds(&[(
+                pbd_server::survival::VITALS_KIND,
+                pbd_server::survival::VITALS_SCHEMA,
+            )]);
+        }
     }
 
     /// Each region's last sequence and digest.

@@ -89,6 +89,8 @@ pub fn block_art(material: Material) -> Option<BlockArt> {
         // The gravel stations (`townsfolk` design 41): their blocks are the
         // workbench's timber; their slots draw their own pictures.
         Material::Grinder | Material::Mixer => one(1., 3.),
+        // Survival's stations: their slots draw their own pictures.
+        Material::TanningRack | Material::Still => one(1., 3.),
         // A chest (`storage-chests` design 1): the workbench's boards; its
         // slot draws its own picture.
         Material::Chest => one(1., 3.),
@@ -150,6 +152,9 @@ pub struct ItemIcons {
     /// The grinder's and the mixer's (`townsfolk` design 41).
     pub grinder: Handle<Image>,
     pub mixer: Handle<Image>,
+    /// The tanning rack's and the still's (`survival-mode` design 17, 18).
+    pub tanning_rack: Handle<Image>,
+    pub still: Handle<Image>,
     /// A chest's (`storage-chests` design 1).
     pub chest: Handle<Image>,
     /// Each tool at stone, bronze and iron, in `Tool::ALL` order; steel
@@ -232,6 +237,8 @@ pub fn load_icons(
         drafting: assets.load("items/stations/drafting-table.png"),
         grinder: assets.load("items/stations/grinder.png"),
         mixer: assets.load("items/stations/mixer.png"),
+        tanning_rack: assets.load("items/stations/tanning-rack.png"),
+        still: assets.load("items/stations/still.png"),
         chest: assets.load("items/stations/chest.png"),
         tiered: pbd_core::inventory::Tool::ALL
             .iter()
@@ -387,6 +394,8 @@ pub fn own_icon(item: Item, items: &ItemIcons) -> Option<Handle<Image>> {
         Item::Block(Material::DraftingTable) => Some(items.drafting.clone()),
         Item::Block(Material::Grinder) => Some(items.grinder.clone()),
         Item::Block(Material::Mixer) => Some(items.mixer.clone()),
+        Item::Block(Material::TanningRack) => Some(items.tanning_rack.clone()),
+        Item::Block(Material::Still) => Some(items.still.clone()),
         Item::Block(Material::Chest) => Some(items.chest.clone()),
         Item::Block(material) => Material::LAMPS
             .iter()
@@ -694,6 +703,8 @@ mod tests {
             drafting: Handle::default(),
             grinder: Handle::default(),
             mixer: Handle::default(),
+            tanning_rack: Handle::default(),
+            still: Handle::default(),
             chest: Handle::default(),
             tiered: Vec::new(),
         };

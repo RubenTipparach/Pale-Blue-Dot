@@ -94,6 +94,14 @@ pub enum Shape {
         side: u8,
         kind: crate::furniture::Kind,
     },
+    /// A ridge beam across the tops of the posts at the corners `a < b`,
+    /// both standing on `layer` (`coop-missions` design 5): it needs a post
+    /// at each end.
+    Beam {
+        a: [u32; 3],
+        b: [u32; 3],
+        layer: u16,
+    },
 }
 
 /// A piece's class: what the slot rule and the palette speak of.
@@ -107,6 +115,7 @@ pub enum Class {
     Roof,
     Door,
     Furniture,
+    Beam,
 }
 
 impl Class {
@@ -121,6 +130,7 @@ impl Class {
             Class::Roof => "roof",
             Class::Door => "door",
             Class::Furniture => "furniture",
+            Class::Beam => "beam",
         }
     }
 }
@@ -136,6 +146,7 @@ impl Shape {
             Shape::Roof { .. } => Class::Roof,
             Shape::Door { .. } => Class::Door,
             Shape::Furniture { .. } => Class::Furniture,
+            Shape::Beam { .. } => Class::Beam,
         }
     }
 
@@ -148,7 +159,8 @@ impl Shape {
             | Shape::Post { layer, .. }
             | Shape::Lantern { layer, .. }
             | Shape::Roof { layer, .. }
-            | Shape::Door { layer, .. } => *layer,
+            | Shape::Door { layer, .. }
+            | Shape::Beam { layer, .. } => *layer,
             Shape::Furniture { layer, .. } => *layer,
         }
     }
@@ -163,6 +175,12 @@ impl Shape {
             Shape::Stair { foot, head, .. } => vec![*foot, *head],
             Shape::Post { cells, .. } => cells.to_vec(),
             Shape::Roof { cells, .. } => cells.clone(),
+            Shape::Beam { a, b, .. } => {
+                let mut cells: Vec<u32> = a.iter().chain(b).copied().collect();
+                cells.sort_unstable();
+                cells.dedup();
+                cells
+            }
         }
     }
 
@@ -185,6 +203,10 @@ impl Shape {
             Shape::Furniture {
                 cell, layer, side, ..
             } => format!("furniture:{cell}:{side}:{layer}"),
+            Shape::Beam { a, b, layer } => format!(
+                "beam:{}:{}:{}:{}:{}:{}:{layer}",
+                a[0], a[1], a[2], b[0], b[1], b[2]
+            ),
         }
     }
 
@@ -224,6 +246,18 @@ impl Shape {
         }
     }
 
+    /// A beam between the posts at corners `a` and `b`, each sorted and
+    /// the pair in order.
+    pub fn beam(mut a: [u32; 3], mut b: [u32; 3], layer: u16) -> Self {
+        a.sort_unstable();
+        b.sort_unstable();
+        Shape::Beam {
+            a: a.min(b),
+            b: a.max(b),
+            layer,
+        }
+    }
+
     /// A post at `cells`' corner, sorted.
     pub fn post(mut cells: [u32; 3], layer: u16) -> Self {
         cells.sort_unstable();
@@ -255,6 +289,11 @@ impl Piece {
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct PieceBody {
     pub piece: Option<Piece>,
+    /// The players who co-own it (`coop-missions` design 5): a house the
+    /// crew built names every player who built it. Absent from a record
+    /// written before, which is no one's in particular.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub owners: Vec<u32>,
 }
 
 /// The id of a player's door's open-or-shut record (design B8): the towns'
@@ -274,6 +313,7 @@ pub fn placed(piece: &Piece) -> Record {
         PIECE_SCHEMA,
         &PieceBody {
             piece: Some(piece.clone()),
+            owners: Vec::new(),
         },
     )
 }
@@ -284,7 +324,10 @@ pub fn removed(piece: &Piece) -> Record {
         PIECE_RECORD,
         piece.id(),
         PIECE_SCHEMA,
-        &PieceBody { piece: None },
+        &PieceBody {
+            piece: None,
+            owners: Vec::new(),
+        },
     )
 }
 

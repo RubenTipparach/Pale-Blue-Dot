@@ -28,6 +28,9 @@ pub struct MissionLine;
 pub struct TrackerTitleIcon;
 #[derive(Component)]
 pub struct TrackerTitle;
+/// The chosen path's name over the title (`survival-mode` design 18).
+#[derive(Component)]
+pub struct TrackerPath;
 /// An objective's row, its icon and its words, by the objective's place.
 #[derive(Component)]
 pub struct TrackerRow(pub usize);
@@ -108,6 +111,14 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
             // should maybe not place an icon in front of it, and make the
             // header bold and appera like a header").
             tracker.spawn((
+                KitText::new(Localized::empty(), ui_kit::RUNE).shadow(ui_kit::INK),
+                Node {
+                    display: Display::None,
+                    ..default()
+                },
+                TrackerPath,
+            ));
+            tracker.spawn((
                 KitText::new(Localized::empty(), ui_kit::TITLE).outline(ui_kit::INK),
                 TrackerTitle,
             ));
@@ -166,6 +177,22 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
         });
 }
 
+/// The tracked job as the tracker shows it (playtest-fixes design 2): its
+/// mission row, named, since a job's own has no title or labels; `None`
+/// when no taken job is tracked.
+pub fn tracked_job_mission(
+    eco: &pbd_app::economy::Economy,
+    towns: &pbd_app::towns::Towns,
+) -> Option<pbd_core::missions::Mission> {
+    let job = pbd_app::economy::tracked_job(eco)?;
+    let mut m = job.mission();
+    m.title = pbd_app::economy::job_title(job, &eco.jobs, towns).into_string();
+    for o in &mut m.objectives {
+        o.label = tr("jobs.track_row").into_string();
+    }
+    Some(m)
+}
+
 /// The HUD line: the current mission, or the one just done, unless the
 /// player hid it or a menu is open.
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -187,7 +214,25 @@ pub fn show_line(
         (Without<TrackerIcon>, Without<TrackerTitleIcon>),
     >,
     mut tracker: Query<&mut Visibility, With<MissionLine>>,
-    mut title: Query<&mut KitText, (With<TrackerTitle>, Without<TrackerText>)>,
+    (mut title, mut path_line): (
+        Query<
+            &mut KitText,
+            (
+                With<TrackerTitle>,
+                Without<TrackerText>,
+                Without<TrackerPath>,
+            ),
+        >,
+        Query<
+            (&mut KitText, &mut Node),
+            (
+                With<TrackerPath>,
+                Without<TrackerText>,
+                Without<TrackerRow>,
+                Without<TrackerIcon>,
+            ),
+        >,
+    ),
     mut title_icon: Query<&mut ImageNode, (With<TrackerTitleIcon>, Without<TrackerIcon>)>,
     mut rows: Query<(&TrackerRow, &mut Node), Without<TrackerIcon>>,
     mut texts: Query<(&TrackerText, &mut KitText), Without<TrackerTitle>>,
@@ -200,7 +245,17 @@ pub fn show_line(
         Option<Res<pbd_app::town_missions::TownMissions>>,
         Option<Res<pbd_app::town_missions::TownChain>>,
     ),
+    (eco, towns): (
+        Option<Res<pbd_app::economy::Economy>>,
+        Option<Res<pbd_app::towns::Towns>>,
+    ),
 ) {
+    // A tracked job first (playtest-fixes design 2): its mission row named
+    // for the tracker, since a job's own has no title or labels.
+    let job = eco
+        .as_deref()
+        .zip(towns.as_deref())
+        .and_then(|(eco, towns)| tracked_job_mission(eco, towns).map(|m| (m, &eco.jobs.progress)));
     // One focus across the two trees (`town-missions-tree` design 6): a
     // town mission picked on its tree, else the starter tree's, else the
     // town tree's first open one.
@@ -212,7 +267,10 @@ pub fn show_line(
             .and_then(|_| p.focused(c))
             .map(|m| (m, p))
     });
-    let mission = town_focus
+    let mission = job
+        .as_ref()
+        .map(|(m, p)| (m, *p))
+        .or(town_focus)
         .or_else(|| {
             missions
                 .progress
@@ -224,9 +282,19 @@ pub fn show_line(
                 .zip(town_tree)
                 .and_then(|(p, c)| p.focused(c).map(|m| (m, p)))
         });
+    // In a Survival world past the fire with no path to follow, the line
+    // asks for one (`survival-mode` design 18), unless a job or a town
+    // mission is what it shows.
+    let starter = job.is_none() && town_focus.is_none();
+    let choosing = starter && missions.choosing(&chain.0);
+    // The chosen path's name over its Now.
+    let on_path = mission.filter(|_| starter && !choosing).and_then(|(m, _)| {
+        let path = missions.progress.path.as_deref()?;
+        (m.branch == path).then(|| super::mission_tree::branch_name(path))
+    });
     let (mission, progress) = match mission {
-        Some((m, p)) => (Some(m), Some(p)),
-        None => (None, None),
+        Some((m, p)) if !choosing => (Some(m), Some(p)),
+        _ => (None, None),
     };
     let notice = missions
         .notice
@@ -240,7 +308,7 @@ pub fn show_line(
     let shown = settings.mission_line
         && *screen == Screen::Playing
         && walking.is_some_and(|w| w.active)
-        && (mission.is_some() || notice.is_some());
+        && (mission.is_some() || notice.is_some() || choosing);
     for mut visibility in &mut tracker {
         let want = if shown {
             Visibility::Inherited
@@ -268,8 +336,25 @@ pub fn show_line(
             None,
         ),
         (None, Some(m)) => (Localized::verbatim(m.title.clone()), ui_kit::TITLE, Some(m)),
+        (None, None) if choosing => (tr("mission_path.choose_hud"), ui_kit::TITLE, None),
         (None, None) => return,
     };
+    let over = on_path.filter(|_| notice.is_none());
+    for (mut words, mut node) in &mut path_line {
+        let display = if over.is_some() {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        if node.display != display {
+            node.display = display;
+        }
+        if let Some(name) = &over
+            && words.text != *name
+        {
+            words.text = name.clone();
+        }
+    }
     for mut words in &mut title {
         set(&mut words, heading.clone(), colour);
     }
@@ -457,7 +542,7 @@ pub fn press_tabs(
 
 /// One step of the capture instrument's chain: a message the game raises.
 #[derive(Clone, Debug)]
-enum Scripted {
+pub(super) enum Scripted {
     Gained(pbd_core::inventory::Item, u16, pbd_app::hotbar::How),
     Did(pbd_core::missions::Kind, &'static str),
     Planted(&'static str),
@@ -470,7 +555,7 @@ enum Scripted {
 /// `n`, one every few frames). It plays no fishing or farming: it raises
 /// the messages, so the counting, the record, the HUD line and the tab are
 /// the game's own.
-fn script() -> Vec<Scripted> {
+pub(super) fn script() -> Vec<Scripted> {
     use Scripted as S;
     use pbd_app::hotbar::How::*;
     use pbd_app::husbandry::Deed;
@@ -581,7 +666,7 @@ fn script() -> Vec<Scripted> {
 const SCRIPT_EVERY: u32 = 2;
 
 /// Write one scripted step as the message its system raises.
-fn raise(step: Scripted, world: &mut World) {
+pub(super) fn raise(step: Scripted, world: &mut World) {
     match step {
         Scripted::Gained(item, count, how) => {
             world.write_message(pbd_app::hotbar::Gained { item, count, how });
@@ -706,6 +791,143 @@ pub fn night_watch(
             "light",
             1,
         ));
+    }
+}
+
+/// The hour a night seen through ends (`survival-mode` design 18).
+pub const DAWN_HOUR: f32 = 6.0;
+
+/// `dawn` (`survival-mode` design 18, "The first night"): the clock passes
+/// 20:00 with the world open, then reaches 06:00 with nothing having broken
+/// the watch (a world closed, or a death in Survival). Raised once a night.
+pub fn dawn_watch(
+    sun: Res<pbd_app::sky::Sun>,
+    save: Option<Res<pbd_app::saves::WorldSave>>,
+    mut watch: ResMut<pbd_app::missions::DawnWatch>,
+    mut did: MessageWriter<pbd_app::missions::Did>,
+    mut was: Local<Option<(u64, f32)>>,
+) {
+    let Some(save) = save else {
+        return;
+    };
+    let hour = sun.clock.hour();
+    let serial = save.serial();
+    let last = was.replace((serial, hour));
+    let Some((last_serial, last_hour)) = last else {
+        return;
+    };
+    if last_serial != serial {
+        // Another world, or this one opened again: no night is carried over.
+        watch.since_dusk = false;
+        return;
+    }
+    if crossed(last_hour, hour, NIGHT_HOUR) {
+        watch.since_dusk = true;
+    }
+    if crossed(last_hour, hour, DAWN_HOUR) && watch.since_dusk {
+        watch.since_dusk = false;
+        info!("the night seen through at {hour:.2}");
+        did.write(pbd_app::missions::Did::new(
+            pbd_core::missions::Kind::Dawn,
+            "night",
+            1,
+        ));
+    }
+}
+
+/// Whether the clock went from `from` to `to` through `mark`, round
+/// midnight too.
+pub fn crossed(from: f32, to: f32, mark: f32) -> bool {
+    if to >= from {
+        from < mark && to >= mark
+    } else {
+        from < mark || to >= mark
+    }
+}
+
+/// Seconds under water that count as holding the breath.
+pub const DIVE_S: f32 = 15.0;
+/// Metres of fall that count, ten layers.
+pub const FALL_M: f32 = 10.0;
+/// Water at least this deep under the walker breaks a fall, metres.
+pub const DEEP_M: f32 = 3.0;
+
+/// What [`water_watch`] carries between frames.
+#[derive(Default)]
+pub struct WaterWatch {
+    /// Seconds the eye has been under water.
+    under_s: f32,
+    /// The highest the feet have been since they were last on the ground or
+    /// in the water, metres over the sea's level.
+    peak: Option<f32>,
+}
+
+/// `dive` and `fall` (`survival-mode` design 18, In the water): 15 s or
+/// more with the eye under water, then surfacing; and a fall of 10 layers
+/// or more ending in deep water (`water`) or on the ground (`ground`). Read
+/// off the walker as the game already places it, the eye's water as the
+/// sound and the line know it.
+#[allow(clippy::too_many_arguments)]
+pub fn water_watch(
+    time: Res<Time>,
+    walking: Option<Res<pbd_app::walking::WalkingReadout>>,
+    walkers: Query<&avian3d::prelude::Position, With<pbd_app::walking::Walker>>,
+    cameras: Query<&GlobalTransform, With<pbd_app::walking::WalkingCamera>>,
+    eye_water: Option<Res<pbd_app::planet::EyeWaterState>>,
+    water: Option<Res<pbd_app::config::WaterSettings>>,
+    mut did: MessageWriter<pbd_app::missions::Did>,
+    mut state: Local<WaterWatch>,
+    space: pbd_app::SimSpace,
+) {
+    use pbd_app::missions::Did;
+    use pbd_app::planet::{PLANET_RADIUS, surface_height};
+    use pbd_core::missions::Kind;
+    let Some(walking) = walking.filter(|w| w.active) else {
+        *state = WaterWatch::default();
+        return;
+    };
+    let (Ok(feet), Ok(eye)) = (walkers.single(), cameras.single()) else {
+        return;
+    };
+    let o = space.origin();
+    // The breath held: the eye under the sheet, counted until it comes up.
+    let sheet = PLANET_RADIUS - water.as_deref().map_or(0.5, |w| w.depth_offset_m);
+    let under = pbd_app::audio::hooks::eye_under_water(
+        o.query_point(eye.translation()),
+        eye_water.as_deref(),
+        sheet,
+    );
+    if under {
+        state.under_s += time.delta_secs();
+    } else {
+        if state.under_s >= DIVE_S {
+            info!("surfaced after {:.1} s under", state.under_s);
+            did.write(Did::new(Kind::Dive, "water", 1));
+        }
+        state.under_s = 0.0;
+    }
+    // A fall: the feet's highest since they last stood or swam, against
+    // where they come to.
+    let at = o.query_point(feet.0);
+    let up = at.normalize_or(Vec3::Y);
+    let altitude = at.length() - PLANET_RADIUS;
+    let ground = surface_height(up);
+    let in_water = ground < -1.0 && altitude < -0.3;
+    if walking.grounded || in_water {
+        if let Some(peak) = state.peak.take() {
+            let drop = peak - altitude;
+            if drop >= FALL_M {
+                let what = if in_water && ground < -DEEP_M {
+                    "water"
+                } else {
+                    "ground"
+                };
+                info!("a fall of {drop:.1} m into {what}");
+                did.write(Did::new(Kind::Fall, what, 1));
+            }
+        }
+    } else {
+        state.peak = Some(state.peak.map_or(altitude, |p| p.max(altitude)));
     }
 }
 

@@ -38,3 +38,10 @@ commit updated.
 `heart.png` (11 x 10, `taming-hearts`) is drawn by hand as a pixel grid, not
 copied from the mockup: the hearts that rise over an animal fed from the hand,
 an emote with the 1 px outline of an inventory icon.
+
+`survival/` (`survival-mode` task 4.6) holds the survival HUD's 16 x 16
+icons - `heart`, `stamina`, `roast-meat`, `water-drop`, `breath`, `sun`,
+`snowflake`, `campfire` - copied unchanged from the approved HUD mockup's
+set (`docs/mockups/mission-tree/items/`, drawn by
+`tools/mockup_survival_icons.py`), so the game's left stack shows exactly
+the icons the owner approved (survey G7).

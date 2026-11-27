@@ -60,6 +60,12 @@ pub struct CompassPlace(usize);
 /// Pins for lost villagers, ahead of the waypoints' (`town-missions-tree`
 /// design 10).
 pub const LOST_PINS: usize = 2;
+/// Pins for escort jobs' traders, after the lost villagers' (`townsfolk`
+/// design 42o).
+pub const TRADER_PINS: usize = 2;
+/// Pins for picked-up parcels' towns, after the traders' (`townsfolk`
+/// design 47).
+pub const PARCEL_PINS: usize = 2;
 /// Pins for the building site's next piece and the next cell to pave.
 const TICK_PINS: usize = 2;
 
@@ -186,7 +192,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                         ));
                     }
                     // Spawned after the studs, so a pin stands over a town.
-                    for k in 0..MARKS_MAX + LOST_PINS + TICK_PINS {
+                    for k in 0..MARKS_MAX + LOST_PINS + TRADER_PINS + PARCEL_PINS + TICK_PINS {
                         inner.spawn((
                             CompassWaypoint(k),
                             ImageNode::new(pin.clone()),
@@ -269,10 +275,11 @@ pub fn update(
     >,
     mut name: Query<&mut KitText, (With<CompassName>, Without<CompassMark>)>,
     mut read: Local<(String, Vec<Mark>)>,
-    (eco, site_tick, pave_tick): (
+    (eco, site_tick, pave_tick, held_towns): (
         Option<Res<pbd_app::economy::Economy>>,
         Option<Res<super::construction::SiteTick>>,
         Option<Res<pbd_app::roads::paving::PaveTick>>,
+        Option<Res<pbd_app::towns::Towns>>,
     ),
 ) {
     let Ok(mut visibility) = root.single_mut() else {
@@ -375,6 +382,21 @@ pub fn update(
         _ => Vec::new(),
     };
     let lost = &lost[..lost.len().min(LOST_PINS)];
+    // A taken escort job's trader, after the lost.
+    let traders: Vec<Vec3> = match (eco.as_deref(), save.as_deref()) {
+        (Some(eco), Some(save)) => pbd_app::economy::road_jobs::escort_directions(eco, save),
+        _ => Vec::new(),
+    };
+    let traders = &traders[..traders.len().min(TRADER_PINS)];
+    // Then each picked-up parcel's town (`townsfolk` design 47).
+    let parcels: Vec<Vec3> = match (eco.as_deref(), held_towns.as_deref()) {
+        (Some(eco), Some(towns)) => pbd_app::economy::parcel_directions(eco, towns),
+        _ => Vec::new(),
+    };
+    let parcels = &parcels[..parcels.len().min(PARCEL_PINS)];
+    let lost_n = lost.len();
+    let traders_n = lost_n + traders.len();
+    let jobs_n = traders_n + parcels.len();
     // The site's next piece (`building-planner` design 6), after the lost.
     let tick: Option<Vec3> = site_tick
         .as_deref()
@@ -390,6 +412,8 @@ pub fn update(
     let waypoints: Vec<Place> = lost
         .iter()
         .copied()
+        .chain(traders.iter().copied())
+        .chain(parcels.iter().copied())
         .chain(tick)
         .chain(pave)
         .chain(read.1.iter().map(|m| m.direction()))
@@ -408,19 +432,27 @@ pub fn update(
     }
     if let Ok(mut text) = name.single_mut() {
         let line = match compass::named_ahead(heading, &waypoints, &places) {
-            Some(Named::Waypoint(i)) if i < lost.len() => compass::name_line(
+            Some(Named::Waypoint(i)) if i < lost_n => compass::name_line(
                 &pbd_app::ui_kit::tr("jobs.lost_marker"),
                 waypoints[i].distance_m,
             ),
-            Some(Named::Waypoint(i)) if i < lost.len() + ticks => {
+            Some(Named::Waypoint(i)) if i < traders_n => compass::name_line(
+                &pbd_app::ui_kit::tr("jobs.escort_marker"),
+                waypoints[i].distance_m,
+            ),
+            Some(Named::Waypoint(i)) if i < jobs_n => compass::name_line(
+                &pbd_app::ui_kit::tr("jobs.parcel_marker"),
+                waypoints[i].distance_m,
+            ),
+            Some(Named::Waypoint(i)) if i < jobs_n + ticks => {
                 compass::name_line(&pbd_app::ui_kit::tr("site.next"), waypoints[i].distance_m)
             }
-            Some(Named::Waypoint(i)) if i < lost.len() + ticks + paves => compass::name_line(
+            Some(Named::Waypoint(i)) if i < jobs_n + ticks + paves => compass::name_line(
                 &pbd_app::ui_kit::tr("roads.pave.next"),
                 waypoints[i].distance_m,
             ),
             Some(Named::Waypoint(i)) => compass::name_line(
-                &read.1[i - lost.len() - ticks - paves].label(),
+                &read.1[i - jobs_n - ticks - paves].label(),
                 waypoints[i].distance_m,
             ),
             Some(Named::Place(i)) => compass::name_line(towns[i].0, towns[i].1.distance_m),

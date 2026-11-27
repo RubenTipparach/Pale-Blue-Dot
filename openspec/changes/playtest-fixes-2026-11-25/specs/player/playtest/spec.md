@@ -39,3 +39,22 @@ and flame.
 
 - **WHEN** the player places the torch they carry
 - **THEN** the torch on the ground has the same haft, head and flame
+
+### Requirement: An old town gains its forge where the player built nothing
+
+A town laid before forges were added (layout 1 or 2) SHALL be given its
+smithy (the forge, the anvil and the shed) the first time it is stood,
+by the world through the durable path, keeping the rest of the town where
+it stands; and SHALL NOT be given it while any of the smithy's cells holds
+anything the player made.
+
+#### Scenario: An old village
+
+- **WHEN** a world saved with a village at layout 2 is opened
+- **THEN** the village's smith works at a forge, its record names layout 4,
+  and its ground and houses stand where they stood
+
+#### Scenario: The player built there
+
+- **WHEN** the player had placed a block on one of the smithy's cells
+- **THEN** the village stays at its old layout, with no smithy

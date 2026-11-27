@@ -35,6 +35,7 @@ impl Atmosphere {
             self.force(*f, dt);
         }
         self.water(&broad, dt);
+        self.wet_ground(dt);
         self.lightning(dt);
         self.seed_storms(dt);
         let every = (self.settings.mesoscale_every_s / dt).max(1.0) as u64;
@@ -310,6 +311,40 @@ impl Atmosphere {
             self.rain_rate[i] = landed / dt;
             self.charge[i] += s.charge_rate * (condensed / dt) * lift * dt;
             self.charge[i] /= 1.0 + dt / s.charge_decay_s;
+        }
+    }
+
+    /// The ground's wetness after a step (`wildfire` design 2): each
+    /// millimetre that fell adds `per_mm`; it dries by `dry_per_hour` an
+    /// in-game hour, times the sun, the air's dryness and its warmth. Snow
+    /// lying keeps it at one, and so does the sea.
+    pub(super) fn wet_ground(&mut self, dt: f32) {
+        let r = self.wet_rates;
+        let hour_s = DAY_S / 24.0;
+        for i in 0..self.grid.len() {
+            if self.surface.ocean[i] || self.surface.snowy[i] {
+                self.ground_wet[i] = 1.0;
+                continue;
+            }
+            let elevation = self.surface.elevation[i];
+            let air_c = self.air_k[i] - self.settings.lapse_k_per_m * elevation;
+            let humidity = self.humidity_of(self.vapour[i], self.air_k[i], elevation);
+            let rained = self.rain_rate[i] * dt;
+            let dried = r.dry_per_hour * dt / hour_s
+                * (0.5 + self.sunlight[i] / r.sun_ref_wm2)
+                * (1.0 - humidity)
+                * ((air_c + r.dry_from_c) / r.dry_span_c).clamp(0.0, 1.0);
+            let snowing = air_c <= 0.0 && rained > 0.0;
+            let wet = if snowing {
+                1.0
+            } else {
+                (self.ground_wet[i] + r.per_mm * rained - dried).clamp(0.0, 1.0)
+            };
+            // The guard's rule for every field: a value gone non-finite is
+            // not kept.
+            if wet.is_finite() {
+                self.ground_wet[i] = wet;
+            }
         }
     }
 

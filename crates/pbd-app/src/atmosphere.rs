@@ -661,11 +661,18 @@ mod settled_tests {
         let opening = Clock::default().seconds;
         assert!((opening.rem_euclid(YEAR_DAYS * f64::from(DAY_S)) - settled_at_s()).abs() < 1e-6);
         let air = Air::open(settings, terrain_config().seed, None, opening);
+        // Opened on the shipped state as it is: every field the shipped
+        // file holds comes back byte for byte (after its eight-byte header,
+        // which a state saved now writes as the newer layout), and the
+        // ground's wetness, which it does not hold (`wildfire` 2.1), starts
+        // at the biome's.
+        let opened = air.now.to_bytes();
         assert_eq!(
-            air.now.to_bytes(),
-            shipped,
+            &opened[8..shipped.len()],
+            &shipped[8..],
             "opened on the shipped state as it is"
         );
+        assert_eq!(air.now.ground_wet, air.now.surface.wetness);
         let mean = air.now.mean_surface_c();
         assert!(
             (mean - 15.0).abs() < 0.5,

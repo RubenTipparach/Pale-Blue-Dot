@@ -142,6 +142,58 @@ pub const GOODS: &[GoodRow] = &[
     // ---- building-planner design 6: the mallet a site's pieces are struck
     // with, carried in the pack.
     row("mallet", 1, "items/goods/mallet.png"),
+    // ---- sea-gathering design 1: each sea-floor model is its own good, in
+    // `pbd_core::sea_gather::SeaPiece` order; the grinder's fertiliser and
+    // the campfire's two sea dishes (design 6, 7).
+    row("staghorn-coral", 16, "items/goods/staghorn-coral.png"),
+    row("finger-coral", 16, "items/goods/finger-coral.png"),
+    row("brain-coral", 16, "items/goods/brain-coral.png"),
+    row("table-coral", 16, "items/goods/table-coral.png"),
+    row("soft-coral", 16, "items/goods/soft-coral.png"),
+    row("tube-sponge", 16, "items/goods/tube-sponge.png"),
+    row("barrel-sponge", 16, "items/goods/barrel-sponge.png"),
+    row("sea-fan", 16, "items/goods/sea-fan.png"),
+    row("sea-anemone", 16, "items/goods/sea-anemone.png"),
+    row("sea-lettuce", 32, "items/goods/sea-lettuce.png"),
+    row("coral-rubble", 32, "items/goods/coral-rubble.png"),
+    row("mussels", 32, "items/goods/mussels.png"),
+    row("kelp", 32, "items/goods/kelp.png"),
+    row("fertilizer", 32, "items/goods/fertilizer.png"),
+    row("steamed-mussels", 16, "items/goods/steamed-mussels.png"),
+    row("kelp-crisps", 16, "items/goods/kelp-crisps.png"),
+    // ---- survival-mode design 15 to 17 (task 4.10): what a kill gives, the
+    // straw, the weapons (made, held and thrown as goods, one a slot, their
+    // wear the survival rules'), the arrows, what is worn and the bedroll,
+    // and the stew. Saved by code; Explorer offers none of their recipes.
+    row("raw-meat", 32, "items/goods/raw-meat.png"),
+    row("hide", 16, "items/goods/hide.png"),
+    row("bone", 32, "items/goods/bone.png"),
+    row("feather", 64, "items/goods/feather.png"),
+    row("straw", 1, "items/goods/straw.png"),
+    row("stone-spear", 1, "items/goods/stone-spear.png"),
+    row("bronze-spear", 1, "items/goods/bronze-spear.png"),
+    row("iron-spear", 1, "items/goods/iron-spear.png"),
+    row("bow", 1, "items/goods/bow.png"),
+    row("stone-arrow", 32, "items/goods/stone-arrow.png"),
+    row("bone-arrow", 32, "items/goods/bone-arrow.png"),
+    row("bronze-arrow", 32, "items/goods/bronze-arrow.png"),
+    row(
+        "bronze-hunting-axe",
+        1,
+        "items/goods/bronze-hunting-axe.png",
+    ),
+    row("iron-hunting-axe", 1, "items/goods/iron-hunting-axe.png"),
+    row("bronze-sword", 1, "items/goods/bronze-sword.png"),
+    row("iron-sword", 1, "items/goods/iron-sword.png"),
+    row("straw-hat", 1, "items/goods/straw-hat.png"),
+    row("wool-cloak", 1, "items/goods/wool-cloak.png"),
+    row("bedroll", 1, "items/goods/bedroll.png"),
+    row("meat-stew", 16, "items/goods/meat-stew.png"),
+    // survival-mode design 15: a bucket filled at the sea (salt, undrinkable);
+    // every `water-bucket` an older save holds stays fresh.
+    row("sea-bucket", 1, "items/goods/sea-bucket.png"),
+    // wildfire design 8: what a burnt tree's snag gives the axe.
+    row("charcoal", 32, "items/goods/charcoal.png"),
 ];
 
 /// The row a code names, at compile time: a constant that cannot point at the
@@ -218,6 +270,30 @@ impl Good {
     pub const DOOR: Good = by_code_const("door");
     // building-planner: the mallet.
     pub const MALLET: Good = by_code_const("mallet");
+    // sea-gathering design 6.
+    pub const FERTILIZER: Good = by_code_const("fertilizer");
+    // survival-mode design 15 to 17.
+    pub const RAW_MEAT: Good = by_code_const("raw-meat");
+    pub const HIDE: Good = by_code_const("hide");
+    pub const BONE: Good = by_code_const("bone");
+    pub const FEATHER: Good = by_code_const("feather");
+    pub const STRAW: Good = by_code_const("straw");
+    pub const STONE_SPEAR: Good = by_code_const("stone-spear");
+    pub const BRONZE_SPEAR: Good = by_code_const("bronze-spear");
+    pub const IRON_SPEAR: Good = by_code_const("iron-spear");
+    pub const BOW: Good = by_code_const("bow");
+    pub const STONE_ARROW: Good = by_code_const("stone-arrow");
+    pub const BONE_ARROW: Good = by_code_const("bone-arrow");
+    pub const BRONZE_ARROW: Good = by_code_const("bronze-arrow");
+    pub const BRONZE_HUNTING_AXE: Good = by_code_const("bronze-hunting-axe");
+    pub const IRON_HUNTING_AXE: Good = by_code_const("iron-hunting-axe");
+    pub const BRONZE_SWORD: Good = by_code_const("bronze-sword");
+    pub const IRON_SWORD: Good = by_code_const("iron-sword");
+    pub const STRAW_HAT: Good = by_code_const("straw-hat");
+    pub const WOOL_CLOAK: Good = by_code_const("wool-cloak");
+    pub const BEDROLL: Good = by_code_const("bedroll");
+    pub const MEAT_STEW: Good = by_code_const("meat-stew");
+    pub const SEA_BUCKET: Good = by_code_const("sea-bucket");
 
     /// Every good, in table order.
     pub fn all() -> impl Iterator<Item = Good> {
@@ -301,6 +377,49 @@ mod tests {
             assert!(row.stack > 0);
             assert!(row.icon.starts_with("items/goods/") && row.icon.ends_with(".png"));
         }
+    }
+
+    /// `survival-mode` task 4.10: the survival goods are appended after
+    /// every older row (`kelp-crisps` was the last), so no saved code moves,
+    /// and each has an icon of its own.
+    #[test]
+    fn survival_goods_are_appended_after_every_older_row() {
+        let last_old = Good::by_code("kelp-crisps").unwrap().index();
+        for code in [
+            "raw-meat",
+            "hide",
+            "bone",
+            "feather",
+            "straw",
+            "stone-spear",
+            "bronze-spear",
+            "iron-spear",
+            "bow",
+            "stone-arrow",
+            "bone-arrow",
+            "bronze-arrow",
+            "bronze-hunting-axe",
+            "iron-hunting-axe",
+            "bronze-sword",
+            "iron-sword",
+            "straw-hat",
+            "wool-cloak",
+            "bedroll",
+            "meat-stew",
+            "sea-bucket",
+        ] {
+            let good = Good::by_code(code).unwrap_or_else(|| panic!("{code}"));
+            assert!(good.index() > last_old, "{code} is appended");
+            assert_eq!(good.icon(), format!("items/goods/{code}.png"));
+            let path = format!(
+                "{}/../../assets/{}",
+                env!("CARGO_MANIFEST_DIR"),
+                good.icon()
+            );
+            assert!(std::path::Path::new(&path).exists(), "{path}");
+        }
+        assert_eq!(Good::RAW_MEAT.code(), "raw-meat");
+        assert_eq!(Good::MEAT_STEW.code(), "meat-stew");
     }
 
     /// The named constants index the rows their names say.

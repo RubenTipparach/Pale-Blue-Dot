@@ -31,6 +31,7 @@ use pbd_core::column;
 use pbd_core::farming::{
     self, Climate, Crop, PLOT_KIND, PLOT_SCHEMA, Picked, Plot, Stage, WILD_KIND, WILD_SCHEMA,
 };
+use pbd_core::goods::Good;
 use pbd_core::inventory::{Item, Tool};
 use pbd_core::locale::{tr, tr_with};
 use pbd_core::records::Record as StoredRecord;
@@ -521,6 +522,11 @@ impl FarmAct {
     /// Its row of `interact::ACTS` and what it is done to.
     pub fn offer(&self) -> Offer {
         match *self {
+            // The still is survival's to use, not a panel to open
+            // (`survival-mode` design 15, 18).
+            FarmAct::Open { row, .. } if row.material == Some(Material::Still) => {
+                Offer::new(Act::UseStill, row.name())
+            }
             FarmAct::Open { row, .. } => Offer::new(Act::Open, row.name()),
             FarmAct::Crop { crop, ripe, .. } => Offer::new(
                 if ripe { Act::Harvest } else { Act::Check },
@@ -683,7 +689,7 @@ pub fn offer(
         Option<Res<pbd_app::config::ScatterSettings>>,
         Option<Res<pbd_app::config::GatherConfig>>,
     ),
-    mut interact: ResMut<Interact>,
+    (mut interact, slots): (ResMut<Interact>, Option<Res<super::slots::Hotbar>>),
     mut last: Local<(
         pbd_app::interact::Recheck,
         Option<PlantHit>,
@@ -726,8 +732,53 @@ pub fn offer(
         sun.clock.seconds,
         axe_logs(gathering.as_deref()),
     ) {
-        interact.offer(act.offer());
+        let fertilizer = slots
+            .as_deref()
+            .is_some_and(|s| s.0.count(Item::Good(Good::FERTILIZER)) > 0);
+        interact.offer(match &act {
+            FarmAct::Crop { plot, crop, .. }
+                if fertilizer && plot.can_feed(&farm.0, sun.clock.seconds) =>
+            {
+                Offer::new(Act::Fertilize, crop.row().name())
+            }
+            _ => act.offer(),
+        });
     }
+}
+
+/// F on a growing crop with fertiliser in the pack (`sea-gathering` design
+/// 6): one used, and the plot written fed, with the pack, in one line.
+/// Whether it was fed.
+#[allow(clippy::too_many_arguments)]
+fn fertilize(
+    save: &mut WorldSave,
+    slots: &mut super::slots::Hotbar,
+    farm: &FarmConfig,
+    cell: u32,
+    plot: &Plot,
+    crop: Crop,
+    now_s: f64,
+    note: &mut FarmNote,
+    wall_s: f32,
+) -> bool {
+    let Some(fed) = plot.fed_at(&farm.0, now_s) else {
+        return false;
+    };
+    let mut moved = slots.0.clone();
+    if !moved.take_item(Item::Good(Good::FERTILIZER), 1) {
+        return false;
+    }
+    if !save.store_with_hands(plot_record(cell, &fed), PLOT_SCHEMA, &moved) {
+        error!("fertilize BLOCKED: the save did not accept it");
+        return false;
+    }
+    slots.0 = moved;
+    note.say(
+        wall_s,
+        tr_with("farm.fertilized", &[("crop", &crop.row().name())]),
+    );
+    info!("FERTILIZED cell {cell} {}", crop.row().code);
+    true
 }
 
 /// The interact key on the farm: does what [`farm_act`] says.
@@ -855,6 +906,17 @@ pub fn use_key(
             return;
         }
         FarmAct::Crop {
+            cell,
+            plot,
+            crop,
+            ripe: false,
+        } if slots.0.count(Item::Good(Good::FERTILIZER)) > 0 && plot.can_feed(&farm.0, now_s) => {
+            fertilize(
+                &mut save, &mut slots, &farm, cell, &plot, crop, now_s, &mut note, wall_s,
+            );
+            return;
+        }
+        FarmAct::Crop {
             cell, plot, crop, ..
         } => {
             harvest(
@@ -971,8 +1033,10 @@ fn harvest(
         return;
     }
     let tuning = farm.0.of(crop);
+    // One more from a fed plot (`sea-gathering` design 6).
+    let produce = plot.produce(&farm.0, crop);
     let mut moved = slots.0.clone();
-    let left = moved.give(Item::Good(row.produce), tuning.produce)
+    let left = moved.give(Item::Good(row.produce), produce)
         + moved.give(Item::Good(row.seed), tuning.seeds);
     if left > 0 {
         note.say(wall_s, tr("farm.no_room_harvest"));
@@ -986,7 +1050,7 @@ fn harvest(
     slots.0 = moved;
     gained.write(Gained {
         item: Item::Good(row.produce),
-        count: tuning.produce,
+        count: produce,
         how: How::Harvested,
     });
     gained.write(Gained {
@@ -999,7 +1063,7 @@ fn harvest(
         tr_with(
             "farm.harvested",
             &[
-                ("produce", &tuning.produce),
+                ("produce", &produce),
                 ("crop", &row.name()),
                 ("seeds", &tuning.seeds),
             ],
@@ -1357,6 +1421,13 @@ pub struct ForgeView {
     leaving: bool,
 }
 
+impl ForgeView {
+    /// The station's cell and layer.
+    pub fn at(&self) -> (u32, u16) {
+        (self.cell, self.layer)
+    }
+}
+
 #[derive(Component)]
 pub struct Flame;
 
@@ -1573,6 +1644,8 @@ pub fn show(
                 | Material::DraftingTable
                 | Material::Grinder
                 | Material::Mixer
+                | Material::TanningRack
+                | Material::Still
                 | Material::Chest
         ) {
             continue;
@@ -1709,13 +1782,18 @@ pub fn show(
                 });
             continue;
         }
-        if matches!(material, Material::Grinder | Material::Mixer) {
-            // The gravel stations (`townsfolk` design 41): shaped forms of
-            // timber, iron and stone, lit as the ground is.
-            let parts = if material == Material::Grinder {
-                &paving.grinder
-            } else {
-                &paving.mixer
+        if matches!(
+            material,
+            Material::Grinder | Material::Mixer | Material::TanningRack | Material::Still
+        ) {
+            // The gravel stations (`townsfolk` design 41) and Survival's
+            // (`survival-mode` design 17, 18): shaped forms of timber,
+            // iron, stone and hide, lit as the ground is.
+            let parts = match material {
+                Material::Grinder => &paving.grinder,
+                Material::Mixer => &paving.mixer,
+                Material::TanningRack => &paving.tanning_rack,
+                _ => &paving.still,
             };
             commands
                 .spawn((
@@ -1780,6 +1858,77 @@ pub fn show(
 }
 
 // ---------------------------------------------------------------- capture rig
+
+/// `--pick-wild-ago <days>` (playtest-fixes design 3): a capture instrument.
+/// Once the ground round the player is in, every wild plant within 20 m is
+/// recorded as picked that many game days ago, the record a pick writes, so
+/// a still shows one picked a day ago gone and one picked over two days ago
+/// grown back. The capture's save is memory-only.
+#[allow(clippy::type_complexity)]
+pub fn scripted_pick_wild(
+    launch: Res<super::Launch>,
+    (cameras, frame): (
+        Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+        Option<Res<pbd_app::planet::PlanetRenderFrame>>,
+    ),
+    refresh: Res<pbd_app::planet::LodRefresh>,
+    (fine, mut save, farm, sun): (
+        Res<PlanetFine>,
+        ResMut<WorldSave>,
+        Res<FarmConfig>,
+        Res<pbd_app::sky::Sun>,
+    ),
+    mut frames: Local<u32>,
+) {
+    let Some(days) = launch.pick_wild_ago else {
+        return;
+    };
+    if *frames == u32::MAX || refresh.in_flight_s().is_some() {
+        return;
+    }
+    *frames += 1;
+    if *frames < 20 {
+        return;
+    }
+    let Some((transform, _)) = cameras.iter().find(|(_, c)| c.is_active) else {
+        return;
+    };
+    *frames = u32::MAX;
+    let eye = pbd_app::render_origin::local_of(frame.as_deref(), transform.translation());
+    let up = eye.normalize_or(Vec3::Y);
+    let now_s = sun.clock.seconds;
+    let picked_s = now_s - days * f64::from(pbd_core::daylight::DAY_S);
+    let mut picked = 0;
+    for record in fine.set.finest_records() {
+        let at = Vec3::from_slice(&record.direction_height[..3]).normalize_or(Vec3::Y);
+        if at.angle_between(up) * PLANET_RADIUS > 20.0 {
+            continue;
+        }
+        let cell = record.key();
+        let Some(index) = digging::record_of(&fine, cell) else {
+            continue;
+        };
+        let Some(top) = fine.set.columns.column(index).and_then(|c| c.surface()) else {
+            continue;
+        };
+        if wild_at(&fine, &save, &farm, cell, top, now_s).is_none() {
+            continue;
+        }
+        let line = StoredRecord::of(
+            WILD_KIND,
+            u64::from(cell),
+            WILD_SCHEMA,
+            &Picked { picked_s },
+        );
+        if save
+            .store(&pbd_core::records::Author::Player(0), vec![line])
+            .is_some()
+        {
+            picked += 1;
+        }
+    }
+    info!("--pick-wild-ago: {picked} wild plants picked {days} game days ago");
+}
 
 /// `--gather-around <metres>` (`gather-by-hand`): a measurement instrument
 /// for the headless captures, which have no hands. Once the ground round the
@@ -1879,11 +2028,12 @@ pub fn scripted(
         MessageWriter<Gained>,
     ),
     mut done: Local<bool>,
-    (net, standing, roads_cfg, planner): (
+    (net, standing, roads_cfg, planner, pin): (
         Option<ResMut<pbd_app::roads::RoadNet>>,
         Option<ResMut<pbd_app::roads::RoadsStanding>>,
         Option<Res<pbd_app::roads::RoadsSettings>>,
         Option<ResMut<pbd_app::roads::planner::Planner>>,
+        Option<ResMut<pbd_app::roads::planner::AimPin>>,
     ),
 ) {
     if *done
@@ -2122,8 +2272,9 @@ pub fn scripted(
         let shot_road = launch
             .road_plan
             .as_deref()
+            .map(|s| s.strip_prefix("ghost-").unwrap_or(s))
             .is_some_and(|s| s.starts_with("slope") || s.starts_with("bridge"));
-        let stations = !shot_road;
+        let stations = !shot_road && launch.road_plan.as_deref() != Some("ghost-lamps");
         for (across, material) in [(-3.2, Material::Grinder), (3.2, Material::Mixer)] {
             if !stations {
                 continue;
@@ -2148,14 +2299,17 @@ pub fn scripted(
         // `lamps`: a three-wide dirt road with lamps, staked, paved and its
         // lamp posts built through the paving's own calls (design 42m).
         let lamps = scene.as_deref() == Some("lamps");
+        // `ghost-lamps`: that road open in the planner from up the view,
+        // nothing staked, so its ghost stands its lamp posts (design 42o).
+        let ghost_lamps = scene.as_deref() == Some("ghost-lamps");
         let how = pbd_core::roads::planner::How {
-            width: if wide || lamps { 3 } else { 1 },
-            surface: if lamps {
+            width: if wide || lamps || ghost_lamps { 3 } else { 1 },
+            surface: if lamps || ghost_lamps {
                 pbd_core::roads::Surface::Dirt
             } else {
                 pbd_core::roads::Surface::Gravel
             },
-            lamps,
+            lamps: lamps || ghost_lamps,
         };
         if lamps {
             slots.give(Item::Good(pbd_core::goods::Good::LOG), 16);
@@ -2177,9 +2331,14 @@ pub fn scripted(
         // `slope:A:B:W` and `bridge:A:B:W` stake that road (cells A to B,
         // width W) as a first run logged it, for a second run from the
         // view it logged.
+        // `ghost-slope:A:B:W` and `ghost-bridge:A:B:W` leave that road open
+        // in the planner from its far end, nothing staked, stakes in hand, so
+        // its ghost runs back to the aim (design 42o).
         if shot_road {
             use pbd_core::roads::planner as core;
-            let name = scene.clone().unwrap_or_default();
+            let full = scene.clone().unwrap_or_default();
+            let ghost = full.starts_with("ghost-");
+            let name = full.strip_prefix("ghost-").unwrap_or(&full).to_string();
             let bridge = name.starts_with("bridge");
             let given: Vec<u32> = name
                 .split(':')
@@ -2303,15 +2462,35 @@ pub fn scripted(
                         // ground 14 m back (`--view column`).
                         for (what, back_m) in [("view", 1.5f32), ("overview", 14.0)] {
                             let back = (ca - along * (back_m / config.radius_m)).normalize();
-                            let (north, east) = pbd_core::geo::north_east(back);
-                            let bearing = (-along.dot(north)).atan2(along.dot(east)).to_degrees();
-                            let yaw = (bearing + 360.0).rem_euclid(360.0) - 180.0;
-                            let (lat, lon) = pbd_core::geo::lat_lon(back).degrees();
+                            // `--yaw` as the launch reads it back
+                            // (`place::yaw_of`, its tested inverse).
+                            let yaw = pbd_app::place::yaw_of(back, along).to_degrees();
+                            let (lat, lon) = pbd_app::place::at_flag(back);
                             info!(
                                 "scripted road {what}: --at {lat:.5} {lon:.5} --yaw {yaw:.1} --road-plan {kind}:{a}:{b}:{}",
                                 how.width
                             );
                         }
+                    }
+                    if ghost {
+                        // Started from its near end and the aim held on its
+                        // far end, the way round it was checked (a bridge is
+                        // laid from the bank it starts on), so the ghost is
+                        // the road checked here, wherever the eye looks.
+                        if let Some(mut planner) = planner {
+                            planner.how = how;
+                            planner.start = Some(a);
+                        }
+                        if let Some(mut pin) = pin {
+                            pin.0 = Some(b);
+                        }
+                        if let Some(i) = (0..10).find(|&i| {
+                            slots.get(i).map(|s| s.item)
+                                == Some(Item::Good(pbd_core::goods::Good::SURVEY_STAKES))
+                        }) {
+                            slots.select(i);
+                        }
+                        return;
                     }
                     match paving::end_road(
                         &mut save,
@@ -2387,7 +2566,7 @@ pub fn scripted(
                         warn!("scripted road plan: refused one wide too: {why:?}");
                     }
                 }
-            } else if !wide {
+            } else if !wide && !ghost_lamps {
                 road(&mut save, &mut slots, a, b);
             }
             let plans = pbd_core::roads::planner::plans(&save.records);
@@ -2474,6 +2653,30 @@ pub fn scripted(
                 (Some(mut planner), Some("wide")) => {
                     planner.how = how;
                     planner.start = Some(b);
+                }
+                // Along a row, where a wide road may climb, as `lamps` is:
+                // three wide where the planner lays it with no red, else
+                // one, the aim held on its near end.
+                (Some(mut planner), Some("ghost-lamps")) => {
+                    use pbd_core::roads::planner as core;
+                    let b = core::along_row(a, b, 11).unwrap_or(b);
+                    let ground = paving::stake_ground(&config, &save.edits, &save.yields);
+                    let clear = |how: core::How| {
+                        let road =
+                            core::PlanRoad::new(core::stake_line(b, a, pcfg.max_segment), how);
+                        let laid = core::lay(&road, &ground, &|_| false, &pcfg, cfg.ford_depth_m);
+                        core::first_clash(&laid).is_none()
+                    };
+                    planner.how = if clear(how) {
+                        how
+                    } else {
+                        core::How { width: 1, ..how }
+                    };
+                    info!("scripted ghost lamps: width {}", planner.how.width);
+                    planner.start = Some(b);
+                    if let Some(mut pin) = pin {
+                        pin.0 = Some(a);
+                    }
                 }
                 _ => {}
             }

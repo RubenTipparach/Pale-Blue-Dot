@@ -499,6 +499,7 @@ pub fn spawn_pack_craft(
                         },
                         ScrollPosition::default(),
                         super::menu::WheelScrolls,
+                        HandList(hand.iter().map(|r| r.code.clone()).collect()),
                     ))
                     .with_children(|list| {
                         for (k, recipe) in hand.iter().enumerate() {
@@ -547,6 +548,46 @@ pub fn spawn_pack_craft(
                     });
                 });
         });
+}
+
+/// The pack's recipe list, with the hands' recipes it was built from.
+#[derive(Component)]
+pub struct HandList(Vec<String>);
+
+/// The pack's recipe list follows the book: a world's mode is applied to
+/// the book after the pack is built, so a Survival world's hand recipes
+/// (the straw, the spear, ...) would be missing and a row would name the
+/// wrong recipe. The rows are rebuilt when the hands' recipes change.
+pub fn rebuild_hand_list(
+    mut commands: Commands,
+    recipes: Res<Recipes>,
+    kit: Option<Res<UiKit>>,
+    icons: Option<Res<super::slots::ItemIcons>>,
+    mut lists: Query<(Entity, &mut HandList)>,
+) {
+    if !recipes.is_changed() {
+        return;
+    }
+    let (Some(kit), Some(icons)) = (kit, icons) else {
+        return;
+    };
+    let hand: Vec<&Recipe> = recipes.0.at("hand").collect();
+    let codes: Vec<String> = hand.iter().map(|r| r.code.clone()).collect();
+    for (entity, mut list) in &mut lists {
+        if list.0 == codes {
+            continue;
+        }
+        info!("craft: the pack's list rebuilt, {} hand recipes", codes.len());
+        list.0 = codes.clone();
+        commands
+            .entity(entity)
+            .despawn_related::<Children>()
+            .with_children(|rows| {
+                for (k, recipe) in hand.iter().enumerate() {
+                    recipe_row(rows, &kit, &icons.atlas, k, recipe);
+                }
+            });
+    }
 }
 
 /// The column's height for `rows` recipes: the lintel, the list, and the

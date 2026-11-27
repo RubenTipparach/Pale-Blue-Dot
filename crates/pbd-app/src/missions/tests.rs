@@ -83,6 +83,7 @@ fn every_kind_counts_from_its_message() {
         ("till", objective(Kind::Till, "any", 1)),
     ];
     let file = MissionFile {
+        crew: None,
         awaited: vec![],
         missions: rows
             .iter()
@@ -97,6 +98,7 @@ fn every_kind_counts_from_its_message() {
                 branch: String::new(),
                 icon: String::new(),
                 coins: 0,
+                mode: None,
             })
             .collect(),
     };

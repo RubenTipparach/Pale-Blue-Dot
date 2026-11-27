@@ -111,4 +111,4 @@ for 4.1, their missions reading NOT YET.
 
 ## 7. A toast when the tree opens (design 12)
 
-- [ ] 7.1 `TownMissions::opened_toast` raised where the record opens; the desktop shows "Town missions unlocked" in the toast column. Verify: a toasts test that a note toast keeps its own row beside an item's; the bot's "Find a town" shot logs `TOAST town missions`.
+- [x] 7.1 `TownMissions::opened_toast` raised where the record opens; the desktop shows "Town missions unlocked" in the toast column. Verify: a toasts test that a note toast keeps its own row beside an item's; the bot's "Find a town" shot logs `TOAST town missions`. Built (2026-11-23, design 12): `town_missions` raises it where the record opens, `desktop::toasts::gather` shows it once; test `desktop::toasts::tests::a_note_toast_is_its_own_row`; the bot's town run on `tree-run-8` logged "TOAST town missions unlocked" (`mission-playthrough` tasks, 2026-11-23). Ticked 2026-11-25 on that record.

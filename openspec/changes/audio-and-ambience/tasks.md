@@ -153,6 +153,15 @@
  Done 2026-11-15: `every_cue_the_code_names_is_in_the_book` and
   `every_file_exists_and_placed_files_are_mono` (beds stereo, every bed
   with a level).
+- [x] 5.9 (Built 2026-11-26: `hooks::deeds`, `pbd_core::audio::eat_cue`;
+  `eating_asks_for_a_munch_at_the_eye` and `every_munch_take_decodes`; the
+  sheet is `docs/screenshots/audio/eat-sheet.jpg`. Only the owner's ears
+  approve it.) Eating munches (design, "Eating munches"; owner, 2026-11-26:
+  "eating sounds should have munching sounds"): `eat_crisp` and `eat_soft`,
+  four takes each, cut from CC0 recordings; `Ate` plays the one
+  `pbd_core::audio::eat_cue` names from `mix.ron`'s `crisp_foods`, at the eye,
+  on the Effects bus, in place of `breath`. Verify: a test that `Ate` asks for
+  each cue at the eye, and that every take exists, is mono and decodes.
 ## 6. Ambience, thunder and fire
 
 - [x] 6.1 The `Surroundings` read at 4 Hz and the beds played from 3.4, with
@@ -181,6 +190,11 @@
   Verify: a capture of the screen in `docs/screenshots/audio-and-ambience/`.
  Done 2026-11-15: a SOUND tab (the tabs narrowed to 5 px a side to
   fit six), `docs/screenshots/audio-and-ambience/settings-sound.png`.
+- [ ] 7.5 Master quiets everything (design, "Master does not quiet rain and
+  thunder"): `--frame-log` reads the player's sliders; a mock-engine test
+  plays streamed thunder, the rain loop and a rain bed at master 0 % and
+  hears silence after master.
+
 ## 8. Instruments and cost
 
 - [ ] 8.1 `--audio-log` and the bus meters (a custom kira effect writing peak

@@ -45,6 +45,14 @@ const PAN_SLOPE: f32 = 0.12;
 const SHADER_FLOW: f32 = 0.35;
 /// How far over the water the arrows float, m.
 const ARROW_LIFT: f32 = 0.05;
+/// How far under its rule level a river's drawn top is drawn, metres (a
+/// share of a one-metre layer; `townsfolk` design 42p, the owner's survey
+/// P6, 2026-11-26: "You could offset water surface a bit"): a river running
+/// full to its banks is drawn 0.2 m under the bank's top, at a bridge
+/// deck's underside, instead of level with it. Every corner of a drawn top
+/// is drawn this much lower, except a corner a fall touches
+/// ([`drawn_corner`]). Drawn only: the rule's levels are untouched.
+pub const STILL_DROP: f32 = 0.2;
 /// The kinds of face the sea's fragment is told (`vertex_flowing`).
 const KIND_TOP: f32 = 1.0;
 const KIND_FALLING: f32 = 2.0;
@@ -903,6 +911,46 @@ impl CellFrame {
     }
 }
 
+/// Whether falling water touches the water cell `n` at `layer`: falling in
+/// it, falling on it (a fall's foot), or open there with falling water under
+/// it (a lip). A corner with such a cell round it is drawn whole, so a fall
+/// keeps its lip, its sheet and its foot (the waterfall rule).
+fn near_fall(tier: &ColumnTier, n: usize, layer: usize) -> bool {
+    let m = |l: usize| material_in(tier, n, l);
+    is_falling(m(layer))
+        || is_falling(m(layer + 1))
+        || (layer > 0
+            && !tier.columns.get(n).is_some_and(|c| c.solid(layer))
+            && is_falling(m(layer - 1)))
+}
+
+/// A drawn top's corner, a fraction of its layer, from its rule level
+/// `level` and its three cells round it ([`STILL_DROP`]): the level itself
+/// where a fall touches any of them or the water is within a layer of the
+/// sea's level (so a river mouth meets the sea's sheet, and reads as the
+/// river's, not the sea's),
+/// else `STILL_DROP` lower, into the water under it where there is water
+/// under it, and never under the floor (a hair over it) where there is not.
+/// The same drop for every corner keeps every top's shape and every step
+/// between tops; two cells sharing the corner ask of the same three cells,
+/// so the top has no crack.
+fn drawn_corner(
+    tier: &ColumnTier,
+    slot: usize,
+    cells: [Option<usize>; 3],
+    layer: usize,
+    level: f32,
+) -> f32 {
+    if layer <= sea_layer() || cells.iter().flatten().any(|&n| near_fall(tier, n, layer)) {
+        return level;
+    }
+    if layer > 0 && material_in(tier, slot, layer - 1).is_water() {
+        level - STILL_DROP
+    } else {
+        (level - STILL_DROP).max(level.min(0.02))
+    }
+}
+
 /// The height the water's top at `slot`, `layer` is DRAWN at, metres over
 /// the radius, at the cell's centre: the mean of its corners' levels
 /// (Luanti's corner rule, `corner_level`), as `cell_pieces` meshes it. `None`
@@ -935,7 +983,11 @@ pub fn drawn_top_m(tier: &ColumnTier, slot: usize, layer: usize) -> Option<f32> 
         above_water: false,
     });
     let mean = (0..degree)
-        .map(|i| corner_level(&[me, side_of((i + degree - 1) % degree), side_of(i)]))
+        .map(|i| {
+            let (a, b) = ((i + degree - 1) % degree, i);
+            let level = corner_level(&[me, side_of(a), side_of(b)]);
+            drawn_corner(tier, slot, [Some(slot), sides[a], sides[b]], layer, level)
+        })
         .sum::<f32>()
         / degree.max(1) as f32;
     Some(column::layer_altitude(layer) + mean)
@@ -963,7 +1015,15 @@ fn top_levels(tier: &ColumnTier, f: &CellFrame, slot: usize, layer: usize) -> [f
         *level = if above_water {
             1.0
         } else {
-            corner_level(&[me, side_of((i + degree - 1) % degree), side_of(i)])
+            let (a, b) = ((i + degree - 1) % degree, i);
+            let level = corner_level(&[me, side_of(a), side_of(b)]);
+            drawn_corner(
+                tier,
+                slot,
+                [Some(slot), f.sides[a], f.sides[b]],
+                layer,
+                level,
+            )
         };
     }
     levels
@@ -1167,10 +1227,12 @@ fn cell_pieces(
         } else {
             (0.0, 0.0)
         };
+        // A top drawn under its floor (design 42p's drop over the water
+        // under it) has no side over air: the side is flat at its foot.
         let (top_a, top_z) = if above_water {
             (1.0, 1.0)
         } else {
-            (top_a, top_z)
+            (top_a.max(bottom_a), top_z.max(bottom_z))
         };
         if sheet && layer + 1 == sea {
             // The sea's side at its surface is the sheet's lip.
@@ -1997,6 +2059,88 @@ mod tests {
 
     fn mesh(now: &ColumnTier, before: Option<&ColumnTier>) -> LiquidMesh {
         liquid_mesh_eased(now, before, &ring_cells(), RADIUS)
+    }
+
+    /// `townsfolk` design 42p (the owner's survey P6, 2026-11-26): a full
+    /// pool's top is drawn `STILL_DROP` under its layer's top, at every
+    /// corner, and `drawn_top_m` says so; a fall's lip keeps its corners
+    /// whole, and the fall's own top is as it was.
+    #[test]
+    fn a_full_river_is_drawn_under_its_bank_and_a_fall_is_not_moved() {
+        assert!(AT > sea_layer(), "over the sea");
+        let cells = ring_cells();
+        let full: Vec<_> = (0..7).map(|s| (s, AT, Material::Water)).collect();
+        let tier = ring(&full);
+        let levels = top_levels(&tier, &CellFrame::of(&tier, 0, &cells[0]), 0, AT);
+        for l in levels {
+            assert!((l - (1.0 - STILL_DROP)).abs() < 1e-6, "{levels:?}");
+        }
+        let drawn = drawn_top_m(&tier, 0, AT).expect("a top");
+        let bank = column::layer_altitude(AT) + 1.0;
+        assert!(
+            (bank - drawn - STILL_DROP).abs() < 1e-4,
+            "{drawn} under {bank}"
+        );
+        // The mesh's top is there too.
+        let made = mesh(&tier, None);
+        let high = made
+            .vertices
+            .iter()
+            .filter(|v| v.kind == KIND_TOP)
+            .map(|v| v.position.length() - RADIUS - column::layer_altitude(AT))
+            .fold(f32::MIN, f32::max);
+        assert!((high - (1.0 - STILL_DROP)).abs() < 1e-3, "{high}");
+        // A thin sheet of flowing water over a full layer (a river riding a
+        // hair over its bank's top): drawn the same `STILL_DROP` lower, into
+        // the water under it.
+        let thin = Material::flowing(0, false);
+        let mut over: Vec<_> = (0..7).map(|s| (s, AT, Material::Water)).collect();
+        over.extend((0..7).map(|s| (s, AT + 1, thin)));
+        let tier = ring(&over);
+        let rule = column::layer_altitude(AT + 1) + corner_level(&[side(thin, false); 3]);
+        let drawn = drawn_top_m(&tier, 0, AT + 1).expect("a top");
+        assert!(
+            (rule - drawn - STILL_DROP).abs() < 1e-4,
+            "{drawn} for {rule}"
+        );
+        // A ledge's source falling over into slot 1: the two corners it
+        // shares with the fall stay whole, the others drop; the falling
+        // cell's own top is not scaled at all.
+        let falling = Material::flowing(7, true);
+        let tier = ring(&[
+            (0, AT, Material::Stone),
+            (0, AT + 1, Material::Stone),
+            (0, AT + 2, Material::Stone),
+            (0, AT + 3, Material::Water),
+            (1, AT + 3, falling),
+            (1, AT + 2, falling),
+            (1, AT + 1, falling),
+            (1, AT, Material::Water),
+        ]);
+        let lip = top_levels(&tier, &CellFrame::of(&tier, 0, &cells[0]), 0, AT + 3);
+        assert_eq!(&lip[..2], &[1.0, 1.0], "the lip's corners: {lip:?}");
+        for l in &lip[2..] {
+            assert!((l - (1.0 - STILL_DROP)).abs() < 1e-6, "{lip:?}");
+        }
+        let f = CellFrame::of(&tier, 1, &cells[1]);
+        let fall = top_levels(&tier, &f, 1, AT + 3);
+        let unscaled: Vec<f32> = (0..6)
+            .map(|i| {
+                let at = |s: Option<usize>| {
+                    let n = s?;
+                    Some(Side {
+                        material: material_in(&tier, n, AT + 3),
+                        above_water: material_in(&tier, n, AT + 4).is_water(),
+                    })
+                };
+                corner_level(&[
+                    side(falling, false),
+                    at(f.sides[(i + 5) % 6]),
+                    at(f.sides[i]),
+                ])
+            })
+            .collect();
+        assert_eq!(&fall[..], &unscaled[..], "the fall's top as it was");
     }
 
     /// A fall's foot carries what the proposed mist rule and the pool's

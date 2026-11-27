@@ -1,6 +1,6 @@
 # Audio sources
 
-Every recording Pale Blue Dot's sounds are cut from. 99 packs, every one CC0 or public domain by its own page when `tools/audio/fetch_cc0.py` read it (a pack whose page does not say so is refused), except the few the owner asked for under another licence (`tools/audio/licence_exceptions.json`), each printed with the credit its page asks for, which the game's credits must carry. CC0 asks for no credit; the people who recorded them are named anyway.
+Every recording Pale Blue Dot's sounds are cut from. 105 packs, every one CC0 or public domain by its own page when `tools/audio/fetch_cc0.py` read it (a pack whose page does not say so is refused), except the few the owner asked for under another licence (`tools/audio/licence_exceptions.json`), each printed with the credit its page asks for, which the game's credits must carry. CC0 asks for no credit; the people who recorded them are named anyway.
 
 This file is written by `python3 tools/audio/list_sources.py` (run by `tools/audio/render_sfx.sh`) from `tools/audio/cc0_cues.json` and `tools/audio/cc0_licences.json`: edit those, not this. Each cue's exact files and edits are in `assets/audio/sfx/SOURCES.md` and `assets/audio/ambience/SOURCES.md`. Freesound sounds are taken from the high-quality preview Freesound serves without an account (an MP3), under the same licence as the sound.
 
@@ -14,7 +14,7 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [Rain from inside.wav](https://freesound.org/people/allrealsound/sounds/161705/) | Freesound | allrealsound | CC0 | `amb_rain_roof` |
 | [AMBIENCE NIGHT FIELD CRICKET 01.wav](https://freesound.org/people/sengjinn/sounds/175020/) | Freesound | sengjinn | CC0 | `amb_night_crickets` |
 | [Droplets in a cave](https://freesound.org/people/iampagan/sounds/177031/) | Freesound | iampagan | CC0 | `amb_cave` |
-| [Log Split](https://freesound.org/people/Veridiansunrise/sounds/177045/) | Freesound | Veridiansunrise | CC0 | `break_wood`, `strike_hit_tree` |
+| [Log Split](https://freesound.org/people/Veridiansunrise/sounds/177045/) | Freesound | Veridiansunrise | CC0 | `break_wood`, `strike_hit_tree`, `tool_break` |
 | [Water Dripping in Cave.wav](https://freesound.org/people/Sclolex/sounds/177958/) | Freesound | Sclolex | CC0 | `amb_cave` |
 | [Fire Crackling 01.wav](https://freesound.org/people/kingsrow/sounds/181563/) | Freesound | kingsrow | CC0 | `fire_crackle`, `fire_out` |
 | [Rain heavy 2 (rural)](https://freesound.org/people/jmbphilmes/sounds/200272/) | Freesound | jmbphilmes | CC0 | `amb_rain_heavy` |
@@ -41,6 +41,7 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [MUDDY AND WET FOOTSTEPS.wav](https://freesound.org/people/Alex_hears_things/sounds/376809/) | Freesound | Alex_hears_things | CC0 | `step_wet` |
 | [Footsteps Dirt 01](https://freesound.org/people/aglinder/sounds/264469/) | Freesound | aglinder | CC0 | `step_dirt` |
 | [Swimming.wav](https://freesound.org/people/13FPanska_Marval_Lukas/sounds/379334/) | Freesound | 13FPanska_Marval_Lukas | CC0 | `swim_stroke`, `swim_stroke_under` |
+| [Carrot Crunching.wav](https://freesound.org/people/Leafs67/sounds/379343/) | Freesound | Leafs67 | CC0 | `eat_crisp` |
 | [NIAGARA WATERS ROARING.mp3](https://freesound.org/people/KevinT1001/sounds/379905/) | Freesound | KevinT1001 | CC0 | `fall_roar` |
 | [Huge Waterfall](https://freesound.org/people/deleted_user_7146007/sounds/383732/) | Freesound | deleted_user_7146007 | CC0 | `fall_roar` |
 | [Foot_Step_grit_Sand.wav](https://freesound.org/people/savataivanov/sounds/384082/) | Freesound | savataivanov | CC0 | `jump_sand`, `place_sand`, `step_sand` |
@@ -49,6 +50,7 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [Large rope pulley operated.wav](https://freesound.org/people/mikewest/sounds/394222/) | Freesound | mikewest | CC0 | `sheet_run` |
 | [Splash](https://freesound.org/people/swordofkings128/sounds/398032/) | Freesound | swordofkings128 | CC0 | `water_enter_small` |
 | [owl.wav](https://freesound.org/people/Anthousai/sounds/398734/) | Freesound | Anthousai | CC0 | `owl` |
+| [apple - bite & chew.wav](https://freesound.org/people/Anthousai/sounds/398757/) | Freesound | Anthousai | CC0 | `eat_crisp` |
 | [Village Night Crickets](https://freesound.org/people/savvah/sounds/400353/) | Freesound | savvah | CC0 | `amb_town_night` |
 | [Chopping wood 02](https://freesound.org/people/micahlg/sounds/421929/) | Freesound | micahlg | CC0 | `dig_wood` |
 | [Stone hit](https://freesound.org/people/CamoMano/sounds/431019/) | Freesound | CamoMano | CC0 | `place_stone` |
@@ -70,11 +72,12 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [Angel Fly Fish Reel Slow Wind_1.wav](https://freesound.org/people/paulprit/sounds/507078/) | Freesound | paulprit | CC0 | `reel_loop` |
 | [Rock Smash](https://freesound.org/people/NeoSpica/sounds/512243/) | Freesound | NeoSpica | CC0 | `strike_hit_ground` |
 | [Bubbles.wav](https://freesound.org/people/erkanozan/sounds/51745/) | Freesound | erkanozan | CC0 | `bubbles` |
+| [Apple Munch.wav](https://freesound.org/people/GentlemanWalrus/sounds/518049/) | Freesound | GentlemanWalrus | CC0 | `eat_crisp` |
 | [Medium Waterfall (Loopable).wav](https://freesound.org/people/Osiruswaltz/sounds/530170/) | Freesound | Osiruswaltz | CC0 | `fall_medium` |
 | [Footsteps_Boots_Gritty_Ground_(Gravel).wav](https://freesound.org/people/Nox_Sound/sounds/530589/) | Freesound | Nox_Sound | CC0 | `step_stone` |
 | [Ocean Waves.wav](https://freesound.org/people/Noted451/sounds/531015/) | Freesound | Noted451 | CC0 | `amb_gulls` |
 | [Thunderclap](https://freesound.org/people/Fission9/sounds/534023/) | Freesound | Fission9 | CC0 | `thunder_close` |
-| [Guitar string snap or breaks - various sounds](https://freesound.org/people/khenshom/sounds/537084/) | Freesound | khenshom | CC0 | `line_snap` |
+| [Guitar string snap or breaks - various sounds](https://freesound.org/people/khenshom/sounds/537084/) | Freesound | khenshom | CC0 | `line_snap`, `tool_break` |
 | [Seagulls distant.wav](https://freesound.org/people/Ambientsoundapp/sounds/537854/) | Freesound | Ambientsoundapp | CC0 | `amb_gulls` |
 | [Bubbles 001.wav](https://freesound.org/people/ristooooo1/sounds/539823/) | Freesound | ristooooo1 | CC0 | `bubbles` |
 | [distant_dog.wav](https://freesound.org/people/Heigh-hoo/sounds/54545/) | Freesound | Heigh-hoo | CC0 | `amb_town_night`, `dog_far` |
@@ -96,12 +99,16 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [digging sand with hands.WAV](https://freesound.org/people/schneidi67/sounds/662864/) | Freesound | schneidi67 | CC0 | `break_sand`, `dig_sand` |
 | [Looping Gentle Wind Ambience on an Open Desert Plain.wav](https://freesound.org/people/dhallcomposer/sounds/697217/) | Freesound | dhallcomposer | CC0 | `amb_desert_day`, `amb_night_crickets`, `amb_wind_low` |
 | [Water Paddle Splashing rowing in a canoe](https://freesound.org/people/egeexyz/sounds/702386/) | Freesound | egeexyz | CC0 | `paddle_stroke` |
+| [CHEWING_02_44100](https://freesound.org/people/stevielematt/sounds/707806/) | Freesound | stevielematt | CC0 | `eat_soft` |
+| [CHEWING_03_44100](https://freesound.org/people/stevielematt/sounds/707807/) | Freesound | stevielematt | CC0 | `eat_soft` |
+| [CHEWING_04_44100](https://freesound.org/people/stevielematt/sounds/707808/) | Freesound | stevielematt | CC0 | `eat_soft` |
 | [Fishing Rod Cast - Swoosh](https://freesound.org/people/mwchristian95/sounds/725426/) | Freesound | mwchristian95 | CC0 | `cast_whoosh` |
 | [Axe chopping wood](https://freesound.org/people/xkeril/sounds/753925/) | Freesound | xkeril | CC0 | `dig_wood` |
 | [Closeup Thunder Strike 01](https://freesound.org/people/loganzsound/sounds/840628/) | Freesound | loganzsound | CC0 | `strike_hit_ground`, `strike_hit_tree`, `thunder_crack` |
 | [Splashing Footsteps Shallow Water](https://freesound.org/people/ChristopherJngs/sounds/861369/) | Freesound | ChristopherJngs | CC0 | `jump_shallow`, `land_shallow`, `step_shallow` |
 | [Tumbleweed Firestarter Torch Ignite Denoised 02](https://freesound.org/people/loganzsound/sounds/872960/) | Freesound | loganzsound | CC0 | `fire_ignite` |
 | [SPLASH.wav](https://freesound.org/people/petenice/sounds/9508/) | Freesound | petenice | CC0 | `catch_splash` |
+| [dog_growling 1.wav](https://freesound.org/people/15GPanskaBokstefflova_Nicola/sounds/461519/) | Freesound | 15GPanskaBokstefflova_Nicola | CC0 | `predator_growl` |
 | [Impact Sounds · Kenney](https://kenney.nl/assets/impact-sounds) | Kenney | Kenney | CC0 | `break_dirt`, `break_grass`, `break_snow`, `break_stone`, `dig_grass`, `dig_stone`, `float_dry`, `jump_grass`, `jump_snow`, `jump_stone`, `jump_wood`, `land_dirt`, `land_grass`, `land_hard`, `land_shallow`, `land_snow`, `land_stone`, `land_wood`, `place_dirt`, `place_dry`, `place_grass`, `place_lamp`, `place_sand`, `place_snow`, `place_stone`, `place_wood`, `step_grass`, `step_snow`, `step_stone`, `step_wood` |
 | [RPG Audio · Kenney](https://kenney.nl/assets/rpg-audio) | Kenney | Kenney | CC0 | `amb_town_night`, `break_wood`, `jump_dirt`, `jump_dry`, `jump_grass`, `jump_sand`, `jump_shallow`, `jump_snow`, `jump_stone`, `jump_wood`, `land_dirt`, `place_dirt`, `rigging_creak` |
 

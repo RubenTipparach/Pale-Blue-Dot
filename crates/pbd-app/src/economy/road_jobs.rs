@@ -279,6 +279,20 @@ pub fn trader_point(
     ))
 }
 
+/// Where each taken escort job's trader stands, as directions from the
+/// planet's centre, by job: what the map and the compass mark (design 42o).
+/// None once the trader is home and the record taken back.
+pub fn escort_directions(eco: &Economy, save: &WorldSave) -> Vec<Vec3> {
+    let config = *crate::planet::terrain_config();
+    open_jobs(eco, JobKind::Escort)
+        .iter()
+        .filter_map(|j| escort_of(save, j.id))
+        .filter_map(|e| trader_point(&e, &config))
+        .filter_map(|p| p.try_normalize())
+        .map(|d| d.as_vec3())
+        .collect()
+}
+
 /// The walk between frames.
 #[derive(Default)]
 pub struct LeadWalk {

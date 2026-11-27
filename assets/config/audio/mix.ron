@@ -43,4 +43,7 @@
     fall_merge_m: 10.0,
     fall_fade_s: 1.5,
     fall_hold_db: 3.0,
+    // Eating (design "Eating munches"): the dishes that crunch, by good
+    // code, play `eat_crisp`; every other dish is chewed, `eat_soft`.
+    crisp_foods: ["glowing-mushroom", "kelp-crisps"],
 )

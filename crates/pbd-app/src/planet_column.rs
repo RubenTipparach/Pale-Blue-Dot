@@ -248,10 +248,24 @@ pub struct ColumnTier {
     /// The water's queue and what it needs to name a slot's cell
     /// (`water-flow` E3).
     pub water: TierWater,
+    /// What fire changes in the field (`wildfire` 4.2 and 4.3): the cells
+    /// burning, which light it, and the placed torches the rain put out,
+    /// which do not.
+    fire: TierFire,
     /// Whether an edit has changed the columns since the light was baked:
     /// the relight is baked off the main thread (`river-hitches` design 7,
     /// `planet::lod::relight_edits`), and swapped in when it is done.
     light_stale: bool,
+}
+
+/// The tier's fire (`wildfire` design 9 and 13), by cell key, in key order:
+/// what [`ColumnTier::set_fire`] relights from.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TierFire {
+    /// Each burning cell and the light level its flames give (0..15).
+    pub burning: Vec<(u32, u8)>,
+    /// Each placed torch that is out, `(key, layer)`.
+    pub out: Vec<(u32, u16)>,
 }
 
 /// The tier's water (`water-flow` E3, `volumetric-water` phase 2): the
@@ -855,6 +869,7 @@ impl ColumnTier {
             sides: Vec::new(),
             relit: 0,
             lamps: Vec::new(),
+            fire: TierFire::default(),
             light_stale: false,
             water: TierWater::default(),
         }
@@ -882,6 +897,50 @@ impl ColumnTier {
     /// Whether the dusk-lit lamps are lit in this tier's field.
     pub fn dusk(&self) -> bool {
         self.dusk
+    }
+
+    /// Light the field from `fire` (`wildfire`): a burning cell is a lamp
+    /// over its top, a torch the rain put out is dark. Relights only when it
+    /// changes; true when it did.
+    pub fn set_fire(&mut self, fire: TierFire) -> bool {
+        if self.fire == fire {
+            return false;
+        }
+        self.fire = fire;
+        self.relight();
+        true
+    }
+
+    pub fn fire(&self) -> &TierFire {
+        &self.fire
+    }
+
+    /// The placed torches the rain put out, where they stand, at level
+    /// nought: not in [`lamps`](Self::lamps), which light; still drawn.
+    pub fn out_torches(&self) -> Vec<LampSpot> {
+        if self.fire.out.is_empty() {
+            return Vec::new();
+        }
+        let mut found = Vec::new();
+        for (slot, &key) in self.water.keys.iter().enumerate() {
+            let from = self.fire.out.partition_point(|o| o.0 < key);
+            for &(_, layer) in self.fire.out[from..].iter().take_while(|o| o.0 == key) {
+                let (Some(column), Some(&direction)) =
+                    (self.columns.get(slot), self.centres.get(slot))
+                else {
+                    continue;
+                };
+                if column.material(layer as usize) == Material::Torch {
+                    found.push(LampSpot {
+                        slot,
+                        direction,
+                        altitude: column::layer_altitude(layer as usize) + 0.5,
+                        level: 0,
+                    });
+                }
+            }
+        }
+        found
     }
 
     /// Light or put out the dusk-lit lamps, re-baking the field when that
@@ -1360,6 +1419,15 @@ impl ColumnTier {
             for layer in 0..LAYERS {
                 let material = column.material(layer);
                 let level = material.emission();
+                // A torch the rain put out gives no light (`wildfire` 4.3).
+                if material == Material::Torch
+                    && !self.fire.out.is_empty()
+                    && self.water.keys.get(slot).is_some_and(|&key| {
+                        self.fire.out.binary_search(&(key, layer as u16)).is_ok()
+                    })
+                {
+                    continue;
+                }
                 // A street lantern by day is an unlit lantern.
                 if level > 0 && (self.dusk || !material.dusk_lit()) {
                     found.push(light::Emitter {
@@ -1378,6 +1446,20 @@ impl ColumnTier {
                     column: slot as u32,
                     layer: layer as u16,
                     level: flora::GLOW_FLOWER_LEVEL,
+                });
+            }
+            // A burning cell (`wildfire` 4.2): its flames, a layer over its
+            // top, as any lamp.
+            if !self.fire.burning.is_empty()
+                && let Some(&key) = self.water.keys.get(slot)
+                && let Ok(i) = self.fire.burning.binary_search_by_key(&key, |b| b.0)
+                && let Some(top) = column.surface()
+                && top + 1 < LAYERS
+            {
+                found.push(light::Emitter {
+                    column: slot as u32,
+                    layer: (top + 1) as u16,
+                    level: self.fire.burning[i].1,
                 });
             }
         }
@@ -1435,6 +1517,7 @@ impl ColumnTier {
             sides: Vec::new(),
             relit: 0,
             lamps: Vec::new(),
+            fire: TierFire::default(),
             light_stale: false,
             water: TierWater {
                 queue: liquid::Queue::new(),
@@ -2218,6 +2301,7 @@ pub fn build_with(
         sides: Vec::new(),
         relit: 0,
         lamps: Vec::new(),
+        fire: TierFire::default(),
         light_stale: false,
         water: TierWater {
             queue: liquid::Queue::new(),
@@ -3487,6 +3571,7 @@ mod tests {
             sides: Vec::new(),
             relit: 0,
             lamps: Vec::new(),
+            fire: TierFire::default(),
             light_stale: false,
             water: TierWater::default(),
         };
@@ -3799,6 +3884,7 @@ mod tests {
             sides: Vec::new(),
             relit: 0,
             lamps: Vec::new(),
+            fire: TierFire::default(),
             light_stale: false,
             water: TierWater::default(),
         };
@@ -3900,6 +3986,7 @@ mod water_tier_tests {
             sides: Vec::new(),
             relit: 0,
             lamps: Vec::new(),
+            fire: TierFire::default(),
             light_stale: false,
             water: TierWater {
                 queue: liquid::Queue::new(),

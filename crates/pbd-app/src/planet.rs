@@ -169,7 +169,7 @@ pub(crate) const NEAR_LIST_BYTES: u64 = NEAR_SPECIES * trees::NEAR_CAP as u64 * 
 #[cfg(test)]
 pub(crate) fn column_vertices() -> u32 {
     let runs = pbd_core::column::MAX_RUNS as u32;
-    // ...and a lamp: a torch's post and head, or two boxes of 36.
+    // ...and a lamp: two boxes of 36 (a torch's body is an entity, `held::placed`).
     runs * (18 + 18) + 6 * runs * (runs + 1) * 6 + 72
 }
 /// Where the column branch starts: after the clutter.

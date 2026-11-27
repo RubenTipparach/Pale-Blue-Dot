@@ -1116,9 +1116,34 @@ pub fn arrive_new(world: &mut World, direction: Vec3) {
     let sea = world
         .get_resource::<crate::sea::Sea>()
         .map_or(crate::planet::terrain::PLANET_RADIUS, |sea| sea.radius);
-    let up = new_world_up(world.resource::<PlanetContact>(), sea, direction, exact);
+    let mut up = new_world_up(world.resource::<PlanetContact>(), sea, direction, exact);
+    // A new Survival world starts near fresh water (`survival-mode` design
+    // 15): its first arrival only, so no spawn a world has had ever moves.
+    let survival = world
+        .get_resource::<crate::saves::WorldSave>()
+        .is_some_and(|save| save.mode().is_survival());
+    if survival && !exact {
+        up = survival_start(world.resource::<PlanetContact>(), sea, up);
+    }
     world.resource_mut::<WalkingState>().spawn_direction = up;
     place_walker(world, up, None);
+}
+
+/// A new Survival world's start from today's `start`: near fresh water
+/// where any lies within reach (`survival::places::start_near_fresh_water`).
+pub fn survival_start(ground: &PlanetContact, sea_radius: f32, start: Vec3) -> Vec3 {
+    let cfg = crate::planet::terrain_config();
+    let found = crate::survival::places::start_near_fresh_water(
+        start,
+        cfg.radius_m,
+        |d| pbd_core::planet_gen::fresh_water_at(cfg, d),
+        |d| new_world_up(ground, sea_radius, d, false),
+        |d| ground.find_land_near(d),
+    );
+    if found != start {
+        info!("SURVIVAL_START moved near fresh water");
+    }
+    found
 }
 
 /// Put the walker on the nearest dry land to `direction` (body-local),
@@ -1338,8 +1363,25 @@ fn drive_walker(
     roads: Option<Res<crate::roads::RoadPieces>>,
     pace: Option<Res<Pace>>,
     space: crate::SimSpace,
+    survival: (
+        Option<Res<crate::survival::WalkerLimits>>,
+        Option<ResMut<crate::survival::Activity>>,
+    ),
 ) {
     let o = space.origin();
+    // Survival (`survival-mode` task 4.9): winded, passed out and dazed
+    // limit the walker; what it does is reported for the stamina rule.
+    let (limits, mut activity) = survival;
+    let limits = limits.as_deref().copied().unwrap_or_default();
+    if !limits.control.controls {
+        state.axes = Vec2::ZERO;
+        state.jump = false;
+        state.jump_held = false;
+        state.sprinting = false;
+    }
+    if !limits.can_sprint() {
+        state.sprinting = false;
+    }
     // Stride (`cooking` design S5): sprinting and swimming are faster while
     // it runs; walking is not.
     let stride = meals.as_deref().map_or(1.0, |m| m.stride);
@@ -1393,7 +1435,7 @@ fn drive_walker(
             config.sprint_speed * stride
         } else {
             config.walk_speed
-        };
+        } * limits.control.walk_mult;
         // A road under the feet (`townsfolk` design 10): gravel is walked
         // faster.
         if ground.grounded
@@ -1406,7 +1448,7 @@ fn drive_walker(
             speed = speed.min(cap.max(0.0));
         }
         if wet.body {
-            speed *= config.water_movement_mult;
+            speed *= config.water_movement_mult * limits.stamina.swim_speed_mult;
             if !state.sprinting {
                 speed *= stride;
             }
@@ -1422,7 +1464,26 @@ fn drive_walker(
         let planar = (right * state.axes.x + state.heading * state.axes.y) * speed + drift;
         let mut vertical = velocity.0.dot(up);
         let swimming = (wet.eyes && !wading) || (wet.body && !ground.grounded);
-        if state.jump || (state.jump_held && swimming) {
+        // Winded or passed out in deep water the body floats head out
+        // (design 12, 14): it rises while the eyes are under.
+        let floating = limits.floats() && swimming && wet.eyes;
+        if let Some(activity) = activity.as_deref_mut() {
+            let moving = state.axes.length() > 0.1;
+            activity.head_in_water = wet.eyes;
+            activity.in_deep_water = swimming && !wading;
+            activity.effort = if swimming && !wading {
+                match (moving, state.sprinting) {
+                    (true, true) => pbd_core::survival::stamina::Effort::SwimSprint,
+                    (true, false) => pbd_core::survival::stamina::Effort::Swim,
+                    (false, _) => pbd_core::survival::stamina::Effort::Tread,
+                }
+            } else if ground.grounded && state.sprinting && moving {
+                pbd_core::survival::stamina::Effort::Sprint
+            } else {
+                pbd_core::survival::stamina::Effort::None
+            };
+        }
+        if state.jump || ((state.jump_held || floating) && swimming) {
             if swimming {
                 // Continuous while held, as the reference does it. The second
                 // arm is this project's own: with no jetpack behind it, a
@@ -1432,7 +1493,11 @@ fn drive_walker(
                 vertical =
                     (vertical + config.water_swim_force * dt).min(config.water_swim_max_rise);
             } else if ground.grounded {
+                if let Some(activity) = activity.as_deref_mut() {
+                    activity.jumps += 1;
+                }
                 vertical = config.jump_speed
+                    * limits.jump_speed_mult()
                     * if wet.body && !wading {
                         config.water_submerged_jump_mult
                     } else {
@@ -1904,10 +1969,13 @@ fn resolve_ground(
     mut walkers: Query<(&mut Position, &mut LinearVelocity, &mut GroundState), With<Walker>>,
     space: crate::SimSpace,
     mut lift: ResMut<Lift>,
+    limits: Option<Res<crate::survival::WalkerLimits>>,
 ) {
     if !state.active {
         return;
     }
+    // A winded swimmer cannot climb out (`survival-mode` design 12).
+    let can_climb_out = limits.is_none_or(|l| l.stamina.can_climb_out);
     let o = space.origin();
     let o = &o;
     // A block set under the feet: up onto it, no speed from it.
@@ -2084,6 +2152,7 @@ fn resolve_ground(
         // Pressing into a low bank from the water climbs it (`swimming` 4).
         if let Some(face) = face
             && config.auto_step
+            && can_climb_out
             && wet.body
             && state.axes.y > 0.0
             && let Some(to) = water_climb(
@@ -2561,6 +2630,76 @@ mod tests {
         assert!(
             spawn_now.angle_between(fresh.world().resource::<WalkingState>().spawn_direction)
                 < 1e-5
+        );
+    }
+
+    /// `survival-mode` design 15: a NEW Survival world's first arrival
+    /// starts near fresh water where any is in reach; an Explorer world's
+    /// does not move; and a world already played reopens at its own saved
+    /// pose, its spawn untouched, whatever its mode.
+    #[test]
+    fn a_new_survival_world_starts_near_fresh_water_and_an_old_worlds_spawn_never_moves() {
+        let spawn = FlightViewConfig::default().spawn_direction;
+        let explorer = {
+            let mut app = app_with_terrain_at(PlanetContact::test_planet(5), spawn);
+            app.insert_resource(crate::saves::WorldSave::memory_only());
+            arrive_new(app.world_mut(), spawn);
+            app.world().resource::<WalkingState>().spawn_direction
+        };
+        let plain = {
+            let app = app_with_terrain_at(PlanetContact::test_planet(5), spawn);
+            let ground = app.world().resource::<PlanetContact>();
+            new_world_up(ground, PLANET_RADIUS, spawn, false)
+        };
+        assert!(
+            explorer.angle_between(plain) < 1e-5,
+            "Explorer's start is today's"
+        );
+        let mut app = app_with_terrain_at(PlanetContact::test_planet(5), spawn);
+        let mut save = crate::saves::WorldSave::memory_only();
+        save.identity.mode = Some(pbd_core::survival::WorldMode::Survival);
+        app.insert_resource(save);
+        // A world already played: its saved pose, and its spawn, stand.
+        let body = app.world().resource::<WalkingState>().body;
+        let spawn_was = app.world().resource::<WalkingState>().spawn_direction;
+        let pose_at = plain * (PLANET_RADIUS + 40.0);
+        restore(
+            app.world_mut(),
+            RestoredPose {
+                position: pose_at,
+                heading: Vec3::Z,
+                pitch: 0.0,
+            },
+        );
+        assert_eq!(
+            app.world().resource::<WalkingState>().spawn_direction,
+            spawn_was,
+            "reopening never moves a spawn"
+        );
+        let o = crate::sim_origin::origin_of(app.world());
+        let stood = o.query_point(app.world().entity(body).get::<Position>().unwrap().0);
+        assert!(
+            stood.normalize().angle_between(plain) < 1e-4,
+            "at its own pose"
+        );
+        // A new Survival world: near fresh water, or today's start where
+        // none is in reach.
+        arrive_new(app.world_mut(), spawn);
+        let started = app.world().resource::<WalkingState>().spawn_direction;
+        let cfg = crate::planet::terrain_config();
+        let fresh = |d: Vec3| pbd_core::planet_gen::fresh_water_at(cfg, d);
+        let near = (0..=10).any(|k| {
+            let r = k as f32 * 15.0 / cfg.radius_m;
+            (0..24).any(|i| {
+                let t = i as f32 / 24.0 * std::f32::consts::TAU;
+                let a = started.any_orthonormal_vector();
+                let b = started.cross(a);
+                fresh((started * r.cos() + (a * t.cos() + b * t.sin()) * r.sin()).normalize())
+            })
+        });
+        assert!(
+            near || started.angle_between(plain) < 1e-5,
+            "{started} {plain}"
         );
     }
 
@@ -4835,6 +4974,98 @@ mod tests {
             deepest < 2.9 - BODY_RADIUS + 0.05,
             "into the wall to {deepest}"
         );
+    }
+
+    /// `player-building` task 4.4: the village's cottage, charted by the
+    /// blueprint slot's own `blueprint` on the real cells and filled whole,
+    /// cut as the game cuts the player's builds (`builds::cut_plots`), is
+    /// walked into through its doorway; the same walk at one of its solid
+    /// walls is stopped outside.
+    #[test]
+    fn a_cottage_blueprint_filled_is_walked_into_through_its_doorway() {
+        use pbd_core::building::blueprint::{blueprint, plain};
+        use pbd_core::building::{Opening, Piece, Shape};
+        use std::collections::{BTreeMap, BTreeSet};
+        let (terrain, flat) = PlanetContact::test_flat_land(5);
+        let template = crate::towns::load_template("village");
+        let kits = crate::towns::load_kits();
+        let def = template
+            .buildings
+            .iter()
+            .find(|b| b.name == "Cottage")
+            .expect("the village's cottage")
+            .clone();
+        let kit = kits.get(&def.kit).expect("its kit");
+        assert!(plain(&def, kit), "a blueprint the slot offers");
+        // Off the test land's pentagon, on the same flat cell.
+        let site = (flat + flat.any_orthonormal_vector() * (25.0 / PLANET_RADIUS)).normalize();
+        let patch = crate::builds::patch_round(site, crate::builds::PATCH_REACH_M);
+        let at = patch.nearest(site).unwrap();
+        // The ground floor on the ground's first air layer, as the slot sets
+        // it over the heightfield (`build_mode::ground_top`).
+        let surface = terrain.sample(site).floor_radius - PLANET_RADIUS;
+        let base = (pbd_core::column::layer_at(surface - 0.5).unwrap() + 1) as u16;
+        let pieces = blueprint(&patch, &def, kit, at, 0, base).expect("charted");
+        let floors: BTreeSet<u32> = pieces
+            .iter()
+            .filter(|p| matches!(p.shape, Shape::Floor { .. }))
+            .flat_map(|p| p.shape.cells())
+            .collect();
+        let walls: Vec<(u32, u32, Opening)> = pieces
+            .iter()
+            .filter_map(|p| match p.shape {
+                Shape::Wall { a, b, opening, .. } if floors.contains(&a) != floors.contains(&b) => {
+                    Some(if floors.contains(&a) {
+                        (a, b, opening)
+                    } else {
+                        (b, a, opening)
+                    })
+                }
+                _ => None,
+            })
+            .collect();
+        let door = walls
+            .iter()
+            .find(|w| w.2 == Opening::Door)
+            .copied()
+            .expect("a doorway");
+        let blank = walls
+            .iter()
+            .find(|w| w.2 == Opening::None && w.0 == door.0)
+            .copied()
+            .expect("a solid wall of the same room");
+        let map: BTreeMap<u64, Piece> = pieces.iter().map(|p| (p.id(), p.clone())).collect();
+        let records = crate::saves::WorldSave::memory_only().records;
+        let cuts = crate::builds::cut_plots(&map, &kits, &|_| 2.0, &records, &|_| Some(base));
+        assert_eq!(cuts.len(), 1, "one house");
+        let house = cuts[0].solids.clone();
+        let plan = |key: u32| {
+            let d = pbd_core::cell_key::key_direction(key).unwrap();
+            let l = house.frame.local(d * house.frame.origin.length());
+            Vec2::new(l.x, l.z)
+        };
+        let feet = surface - (house.frame.origin.length() - PLANET_RADIUS) + 0.05;
+        let walk_in = |(inside, outside, _): (u32, u32, Opening)| {
+            let (into, from) = (plan(inside), plan(outside));
+            let mut app = app_with_terrain_at(PlanetContact::test_flat_land(5).0, flat);
+            app.insert_resource(Structures(vec![house.clone()]));
+            stand_in(&mut app, &house, from.x, feet, from.y);
+            let w = walk_house(
+                &mut app,
+                &house,
+                move |at| (into - at).normalize_or_zero(),
+                move |l| (Vec2::new(l.x, l.z) - into).length() < 0.4,
+                240,
+            );
+            (Vec2::new(w.end.x, w.end.z) - into).length()
+        };
+        let through = walk_in(door);
+        assert!(
+            through < 0.4,
+            "in through the doorway: {through} m from the middle"
+        );
+        let stopped = walk_in(blank);
+        assert!(stopped > 1.0, "the solid wall held: {stopped} m out");
     }
 
     /// A door (slice 2b): shut, it stops the walker at its doorway; E in

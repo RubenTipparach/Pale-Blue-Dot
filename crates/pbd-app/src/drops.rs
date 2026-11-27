@@ -253,6 +253,10 @@ pub fn gather(
     }
 }
 
+/// A weapon's parts lying in the world, and how they are laid about its
+/// middle.
+pub type LaidModel = (Vec<(Handle<Mesh>, Handle<StandardMaterial>)>, Transform);
+
 /// What each item's drop looks like: a block's prism, its faces' tiles in
 /// its mesh, and the material they are drawn with; a light's card wears its
 /// icon. An item with no look is not drawn, which is a missing picture rather
@@ -261,6 +265,11 @@ pub fn gather(
 pub struct DropLooks {
     pub prisms: HashMap<Item, (Handle<Mesh>, Handle<StandardMaterial>)>,
     pub cards: HashMap<Item, Handle<StandardMaterial>>,
+    /// A weapon lies as its own model (`survival-mode` design 16: a thrown
+    /// spear lands as a drop), laid on its flat side about its middle by
+    /// the transform: its parts' meshes and materials. Drawn in place of
+    /// its card.
+    pub models: HashMap<Item, LaidModel>,
 }
 
 /// Where in a texture each face of a prism is drawn from, as UV rectangles:
@@ -416,7 +425,8 @@ fn draw(
     for (entity, view, mut transform) in &mut views {
         match by_id.get(&view.0) {
             Some(drop) => {
-                let card = looks.cards.contains_key(&drop.item);
+                let card =
+                    !looks.models.contains_key(&drop.item) && looks.cards.contains_key(&drop.item);
                 *transform = pose(drop, centre, t, card, eye);
                 drawn.insert(view.0);
             }
@@ -425,6 +435,27 @@ fn draw(
     }
     for drop in &drops.live {
         if drawn.contains(&drop.id) {
+            continue;
+        }
+        if let Some((parts, laid)) = looks.models.get(&drop.item) {
+            commands
+                .spawn((
+                    Name::new(format!("drop {}", drop.id)),
+                    DropView(drop.id),
+                    crate::field_light::LitByField,
+                    crate::field_light::LitLikeTerrain,
+                    pose(drop, centre, t, false, eye),
+                    Visibility::default(),
+                ))
+                .with_children(|root| {
+                    for (mesh, material) in parts {
+                        root.spawn((
+                            Mesh3d(mesh.clone()),
+                            MeshMaterial3d(material.clone()),
+                            *laid,
+                        ));
+                    }
+                });
             continue;
         }
         let (mesh, material, card) =

@@ -280,11 +280,10 @@ fn log_road(road: &Road) {
             if back {
                 along = -along;
             }
-            let (north, east) = pbd_core::geo::north_east(c);
-            // `--yaw` turns from the walker's default heading, which faces the
-            // other way from this bearing (measured on the capture: 0 faced west).
-            let bearing = (-along.dot(north)).atan2(along.dot(east)).to_degrees();
-            let yaw = (bearing + 360.0).rem_euclid(360.0) - 180.0;
+            // `--yaw` as the launch reads it back (`place::yaw_of`, its
+            // tested inverse; a bearing worked here by hand turned north
+            // and south the wrong way round).
+            let yaw = crate::place::yaw_of(c, along).to_degrees();
             let (lat, lon) = pbd_core::geo::lat_lon(c).degrees();
             Some([lat, lon, yaw])
         };
@@ -584,12 +583,21 @@ fn spawn_chunk(world: &mut World, meshes: &Meshes) -> Entity {
     let centre = world
         .get_resource::<PlanetRenderFrame>()
         .map_or(Vec3::ZERO, |f| f.center.as_vec3());
-    let parts: Vec<(Mesh, Handle<Image>)> = {
+    // A bridge's rail and leg cards are cut out where their texture is
+    // clear (design 42p), as the manifest says.
+    let cut = crate::towns::cut_textures();
+    let parts: Vec<(Mesh, Handle<Image>, bool)> = {
         let assets = world.resource::<AssetServer>();
         meshes
             .iter()
             .filter(|(_, b)| !b.positions.is_empty())
-            .map(|(name, buf)| (to_mesh(buf), crate::towns::texture(assets, name)))
+            .map(|(name, buf)| {
+                (
+                    to_mesh(buf),
+                    crate::towns::texture(assets, name),
+                    cut.contains(name),
+                )
+            })
             .collect()
     };
     let root = world
@@ -603,9 +611,9 @@ fn spawn_chunk(world: &mut World, meshes: &Meshes) -> Entity {
             Visibility::default(),
         ))
         .id();
-    for (mesh, image) in parts {
+    for (mesh, image, cut) in parts {
         let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
-        let material = crate::towns::town_material(world, Some(image), false);
+        let material = crate::towns::town_material(world, Some(image), cut);
         let child = world
             .spawn((
                 Mesh3d(mesh),
@@ -1201,6 +1209,7 @@ impl Plugin for RoadsPlugin {
             .init_resource::<planner::Planner>()
             .init_resource::<planner::PlannerMenu>()
             .init_resource::<planner::PlannerAim>()
+            .init_resource::<planner::AimPin>()
             .init_resource::<planner::Ghost>()
             .init_resource::<planner::PlannerLift>()
             .add_message::<paving::RoadWork>()

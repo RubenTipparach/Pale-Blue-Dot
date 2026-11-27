@@ -34,6 +34,7 @@ pub fn tile_rect(sheet: u32, tile: Vec2) -> Rect {
 pub fn dress(
     mut commands: Commands,
     icons: Res<ItemIcons>,
+    assets: Res<AssetServer>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
@@ -90,6 +91,50 @@ pub fn dress(
                 .prisms
                 .insert(item, (meshes.add(prism(faces)), atlas.clone()));
         }
+    }
+    // A weapon lies as its model (`survival-mode` design 16), on its flat
+    // side about its middle, in the mockup's own textures, lit by the
+    // world as the ground is.
+    let mut worn: std::collections::HashMap<(&'static str, bool), Handle<StandardMaterial>> =
+        Default::default();
+    for good in pbd_app::weapon_models::WEAPONS {
+        let Some((parts, _)) = pbd_app::weapon_models::model(good) else {
+            continue;
+        };
+        let half = pbd_app::weapon_models::length(&parts) * 0.5;
+        let turn = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)
+            * Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2);
+        let laid = Transform {
+            translation: -(turn * (Vec3::Y * half)),
+            rotation: turn,
+            scale: Vec3::ONE,
+        };
+        let drawn = parts
+            .iter()
+            .map(|part| {
+                let material = worn
+                    .entry((part.texture, part.two_sided))
+                    .or_insert_with(|| {
+                        materials.add(StandardMaterial {
+                            base_color_texture: Some(pbd_app::towns::texture(
+                                &assets,
+                                part.texture,
+                            )),
+                            perceptual_roughness: 0.85,
+                            double_sided: part.two_sided,
+                            cull_mode: if part.two_sided {
+                                None
+                            } else {
+                                Some(bevy::render::render_resource::Face::Back)
+                            },
+                            ..default()
+                        })
+                    })
+                    .clone();
+                (meshes.add(part.mesh()), material)
+            })
+            .collect();
+        looks.models.insert(Item::Good(good), (drawn, laid));
     }
     commands.insert_resource(looks);
 }

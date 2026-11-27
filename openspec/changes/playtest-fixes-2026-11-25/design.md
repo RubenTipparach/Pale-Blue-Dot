@@ -30,16 +30,33 @@ face, so a walker keeps walking their route mid-sentence.
 - The Missions screen has two tabs, STARTER and TOWN.
 
 **Change.**
-- **A JOBS tab** beside them lists every taken job, one row each: its name
-  (the board's own line for it), its town, its objectives with counts, and
-  its reward.
-- **TRACK.** A TRACK plaque on each row makes that job the active
-  mission, saved in `TakenJobs`'s progress focus. Tracking a mission on
-  either tree clears it.
-- **The tracker** shows the tracked job first, its title the job's line
-  and its rows its objectives.
-- **A job handed in or dropped** clears the focus, and the tracker falls
-  back to the trees.
+- **A JOBS tab** beside them (`ShownTree::Jobs`, a third plaque in the
+  `TreeTabs` row, shown with the other two once the town tree is open).
+  Shown, it takes the tree's place: the tree layer is despawned and a list
+  of `Economy::jobs.taken` stands instead, one row each: the job's item in
+  a slot well, its board line (`economy::job_line`, which carries its
+  counts), the town that posted it, its reward, and a TRACK plaque. With
+  no job taken the list says so in one line. It is rebuilt whenever the
+  jobs change.
+- **TRACK.** The plaque sets `jobs.progress.focus` to the job's
+  `mission_id()` and stores the `town_jobs` record as `Shop::take` does
+  (the player's author, the record's kind noted). It clears both trees'
+  focus, so the HUD has one. The tracked job's plaque is latched; pressing
+  it again stops tracking it. Picking an open card on either tree (the
+  `focus_on` calls in `steer`) clears the job's focus and stores it.
+- **The tracker** (`desktop/missions.rs`, `show_line`) looks at the job
+  focus first. A job's `Mission` has an empty title and empty labels
+  (`Job::mission`), so the tracker fills them: the title is the job's name
+  without counts (`jobs.track.<kind>`, "Take the parcel to {town}"), or
+  "Hand it in at {town}" once it is done; each objective's row reads
+  "Done {n}/{count}".
+- **A job handed in or abandoned** clears the focus (`TakenJobs::abandon`
+  already does; `hand_in` now does too), and the tracker falls back to the
+  trees. The focus is in the existing `town_jobs` record, so no save
+  changes.
+- **Tests.** An app test: a taken job tracked through its TRACK press is
+  the tracker's title and row; a press on a tree card clears it. A core
+  test: handing a tracked job in clears the focus.
 
 ## 3. Wild plants grow back
 
@@ -69,22 +86,44 @@ face, so a walker keeps walking their route mid-sentence.
 ## 4. The placed torch is the held torch
 
 **Today.** A placed torch is drawn in the terrain shader's column pass
-(`planet_surface.wgsl`, the lamp section): a four-sided post 0.55 m tall and
-a two-triangle cap at full lamp.
+(`planet_surface.wgsl`, the lamp section, `LAMP_TORCH`, `t < 30u`): a
+four-sided post 0.55 m tall and a two-triangle cap at full lamp, 0.16 m
+high. The held torch (`held/light.rs`) is a six-sided bark haft, a wound
+rag head and three pixel flame cards on frames of one sheet.
 
 **Change.**
-- Placed torches within the clutter's reach are drawn as entities built from
-  `held/light.rs`'s meshes: the six-sided bark haft, the wound rag head and
-  the pixel flame cards on their frames.
-  - They are lit by the field (`LitByField`, `LitLikeTerrain`).
-  - The flame flickers on the same `flicker` as the held one, seeded by the
-    cell, so no two burn in step.
-  - The model is scaled so its foot is on the floor and its head is where
-    the shader's head was. The light the torch casts does not move.
-- The shader no longer draws a torch's post and cap. Every other lamp keeps
-  its shader body.
-- A torch past the reach keeps the light it casts, as now; at that distance
-  its body was under a pixel.
+- Placed torches within the clutter's reach (`scatter.ron`'s
+  `clutter_radius_m`, 120 m) are drawn as entities built from
+  `held/light.rs`'s meshes: `haft()`, `torch_head()` and the flame cards
+  (`flame_cards`) on the flame sheet.
+  - Which torches: the column tier's lamp spots (`ColumnTier::lamps`, the
+    lamps the field lights from) whose cell holds `Material::Torch`, so a
+    torch the player placed and a torch a town stands (the tundra's) are
+    both found, from the same list the light comes from. Rebuilt when the
+    tier is re-lit or the fine set moves, and looked through four times a
+    second for the near ones.
+  - The haft and head are the held meshes with their normals made smooth
+    round the haft (the held ones are flat per face, and the owner does not
+    want flat shading in the world) and their baked shading taken out, so
+    the field shades them. Their textures are the held torch's own
+    (`assets/textures/held_light/haft.png`, `head.png`), nearest sampled.
+  - Each torch root carries `LitByField`, `LitLikeTerrain` and `Faded`,
+    and fades in and out over 0.6 s as a crop does, so nothing pops.
+  - The flame is the held flame's three cards, unlit as a lamp's flame is,
+    facing the eye about the torch's up, rebuilt each frame for the torches
+    in reach. It flickers on the held torch's `flicker`, seeded by the
+    torch's cell, so no two burn in step.
+  - The model is scaled by 1.4 so its foot is on the floor and the head is
+    where the shader's head was (0.55 to 0.71 m up); the torch is turned
+    about its up by its cell so a row of them is not all alike.
+- The shader no longer draws a torch's post and cap: its branch goes, and
+  the torch's 30 vertices are left degenerate as every unused lamp vertex
+  is. Every other lamp keeps its shader body.
+- The light the torch casts does not change: it is the field's and the
+  shader's lamp terms, which read the column record, not the drawn body.
+- A torch past the reach keeps its light, as now; at that distance its
+  body was under a pixel.
+- Nothing is saved; this is drawn only.
 
 ## 5. A sleeper's eyes are shut (owner, 2026-11-25: "do the dudes not have their eyes closed when they sleep?")
 
@@ -97,3 +136,112 @@ standing: it blinks, glances about and keeps its expression's lids.
   closed.
 - A person lying in a bed is asleep, except while the player talks to them:
   then they open their eyes and talk.
+
+## 6. The blacksmith's station (owner, 2026-11-25: "the black smith doesnt have hist station")
+
+**Finding (from the code).**
+- A smithy (its open shed, the anvil and the forge, a brazier in the field)
+  is stood only in a town whose stored record names layout 3 or later
+  (`pbd_core::settlement::record::FORGE_LAYOUT`). Layout 3 came in on
+  2026-11-24 (`f7ec99f5`, "the town forge, for towns laid from now on").
+- A town is laid once, when the world first reaches it, and keeps the
+  layout it was laid with (saves survive). Every town in a world played
+  before 2026-11-24 is at layout 1 or 2, so it has no smithy, by design.
+- The smith is a person of the template (`village.json` and `town.json`
+  both have one, at work with a hammer beside the smithy's cells). People
+  are derived, not stored, so the smith stands in every village and town,
+  old or new, at the place the smithy would be. In an old town that place
+  is bare ground: the owner's report.
+- In a town laid at layout 3 the forge stands (see the captures). So this
+  is not a bug in layout 3.
+
+**Recommendation (for the survey, with the two captures).** Old towns
+gain their smithy, without touching anything the player built:
+- a new layout, 4, that a town at 1 or 2 is moved up to in place, the
+  smithy being the only thing layout 3 added; its record is rewritten by
+  the world (`Author::World`) through the durable path;
+- the smithy's cells are checked first against the player's edits and
+  builds (the yield set), and a smithy any of whose cells the player has
+  touched is not stood, so nothing the player made is moved or covered;
+- the rest of the town (its ground, buildings and terrace) is read by the
+  rules it was laid with, so it does not move.
+
+Until the owner answers, nothing changes: old towns keep no smithy.
+
+Captures (lavapipe, 11:00, the same spot by Holbrook's smith, a capture
+world laid fresh and then reopened with Holbrook's stored record set back
+to layout 2, nothing else changed):
+- `docs/design/img/blacksmith-old-layout.jpg`: layout 2, the smith at work
+  on bare ground, no shed, no anvil, no forge: the owner's report;
+- `docs/design/img/blacksmith-layout3.jpg`: layout 3, the forge, the anvil
+  and the shed round the smith.
+
+**Owner's answer (survey P5, 2026-11-26): "Give old towns their forge,
+only where it touches nothing you built"** (the recommendation). Written
+here before the code; as built below once it is.
+
+- **The layout ladder.** Layout 3 differs from layout 2 only by its
+  smithies, but layout 2 differs from layout 1 by how its ground finds a
+  direction's cell (the chord, `CHORD_LAYOUT`), so a raised layout-1 town
+  must keep layout 1's lookup or its ground would move. So two new
+  layouts, each read by the rules it names, never by `>=` alone:
+  - **4**: a town laid at layout 2 and given its smithies later (the
+    chord, the smithies);
+  - **5**: a town laid at layout 1 and given its smithies later (the dot
+    lookup, the smithies).
+  `record::finds_by_chord(layout)` and `record::stands_smithies(layout)`
+  are the two questions every reader asks. A new world's towns are still
+  laid at layout 3, which already has its forge.
+- **When.** The first time a build that knows layouts 4 and 5 reads an old
+  town from its save to stand it (`towns::ensure`), and only a town whose
+  template has smithies (the village and the walled town).
+- **What is checked.** Every exact cell key the template's smithies stand
+  on (each smithy's cells and its forge's cell) against everything a
+  player made: a cell with any edit in the save (a dug or placed block,
+  the player's or not: anything that changed the cell since the town was
+  laid), a cell in the save's yield set, a cell any of the player's built
+  pieces stands on (`piece` records), and a cell any construction site's
+  plan stands on (`building-site` records). One such cell anywhere under
+  the town's smithies and the town stays at its old layout, with no
+  smithy, and is asked again on the next opening (the player may have dug
+  the block back out). A smithy cell off the town's stored footprint is
+  not the town's to stand on, and also leaves it as it is.
+- **How it is written.** Only the settlement record changes, its `layout`
+  field: proposed by the world (`Author::World`, process `towns`, kind
+  `settlement`, the site's id) through `WorldSave::propose`, the durable
+  path with its yield check. Its buildings, cells, terrace and levels are
+  untouched, so the town's ground, houses and terrace stand exactly where
+  they stood (a test holds the ground cell for cell). A save whose writer
+  has failed writes nothing and the town is stood at its old layout.
+- **Old saves otherwise.** A town at layout 3, a town at layout 1 or 2
+  whose template has no smithy (the harbour, the desert, the tundra, the
+  jungle) and an unsettled site are read and stood as before, and nothing
+  is written for them.
+- **Tests (core):** the ladder's two questions for layouts 1 to 5; a
+  layout-2 town raised to 4 and a layout-1 town to 5 with every other
+  field equal; a smithy cell touched refuses it. **(app):** an old-layout
+  village saved and reopened gains its smithy (its record at 4, the smithy
+  stood); one with a block of the player's on a smithy cell does not, and
+  its record is unchanged; the raised town's ground is the old town's
+  ground, cell for cell; a layout-3 town writes nothing.
+
+**As built (2026-11-26).** As written above. The smithy's cells are six
+(the shed's two rows of three; the forge's cell is one of them).
+- Core: `record::RAISED_CHORD_LAYOUT` (4), `RAISED_DOT_LAYOUT` (5),
+  `finds_by_chord`, `stands_smithies`, `raised_layout`, `smithy_keys`,
+  `raise_forge` and `settlement_record`; test
+  `settlement::tests::an_old_town_is_raised_to_its_forge_unless_its_cells_are_touched`.
+- App: `towns::raise_forge`, called from `towns::ensure` on a stored town,
+  logging `TOWN_FORGE`, authored `@wtowns:settlement/<site>`; test
+  `towns::tests::an_old_town_gains_its_forge_unless_something_is_built_on_it`.
+- Captures (lavapipe, no frame times) in `docs/screenshots/playtest-fixes/`,
+  from the forge spot of `smith-forge-2045.jpg` at 11:00, in one capture
+  world laid fresh and its Holbrook record then set back to layout 2:
+  `old-town-forge-before.jpg` (the build before this, the smith at work on
+  bare ground) and `old-town-forge-after.jpg` (this build: the log says
+  `TOWN_FORGE site 10215 raised from layout 2 to 4`, and the forge, the
+  anvil and the shed stand round him on the same ground).
+
+## 7. A parcel's pick-up and drop-off
+
+The design is `townsfolk` design 47.

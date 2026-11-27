@@ -834,3 +834,22 @@ pack, and nothing tells a new player where it is.
 - Tests: the chain's count (44); the event script and the app's walkthrough
   open the pack after gathering; after "Gather by hand" the line is "Open
   your pack 0/1", then "Craft an axe 0/1".
+
+## A Survival branch (owner, 2026-11-26; reshaped 2026-11-27)
+
+The owner: "we're gonna work on survival mode which will add new branch to
+starter missions to handle survival". The shape was then set on
+2026-11-27: "Survival: consist of the starter tree today then (in the game)
+then branch off to all survival stuff like eating and drinking, hunting
+etc.", and "after making a fire present players with the tree and show them
+options on what branch to take. Then when they click on that topic show them
+the tree branch, then the tree continues along their chosen path".
+
+So a Survival world runs this change's trunk unchanged up to `fire`; after
+it the Missions screen offers the paths (eat and drink, hunting, fishing,
+farming and the rest) and the one picked is the current goal. The survival
+missions are marked `mode: survival` and shown only in Survival worlds. This
+supersedes the owner's G11 answer of 2026-11-26 ("Off Open the pack"). The
+design is `survival-mode` design 18, mocked up on M33's Survival tab
+(`docs/mockups/mission-tree.html#survival`); its tasks are `survival-mode`'s
+section 6. Nothing in an Explorer world's tree moves for it.

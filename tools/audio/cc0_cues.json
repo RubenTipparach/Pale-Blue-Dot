@@ -1,5 +1,5 @@
 {
- "_about": "Recorded cues for tools/audio/cut_cc0.py (format from Crab Breeze, unchanged). A layer is {src: 'pack:file'} or {synth: '<gen_sfx layer or cue>'}, with optional shot (n-th shot of a multi-shot take), start, dur (s), pitch (tape-speed ratio), gain (dB after the layer is peak-normalised), lp, hp (Hz, steep), fadein, fadeout, delay (s), repeat. A cue may set len, drive (tanh), hp, lp (gentle, 12 dB/octave), distance (compressor, lowpass and reverb that push a bed into the background), loop, stereo, group, peak_db, what and edits. A cue whose what ends in (loops) loops in the game. A cue may also set scatter: a list of groups, each placing count short sounds picked from pick (layer specs) at seeded times inside within seconds (from 0, no closer than min_gap), with gain, pitch ranges and a pan width; scattered sounds are mixed after the distance treatment (this repository, 2026-11-06). A cue's lp_order (default 2, 12 dB/octave) makes its lp steeper: 4 is Crab Breeze's sealed-cockpit filter (two 2-pole passes at 4 kHz), used here for every weapon heard from the bridge through the hull, written 6 dB down (peak_db -7) (2026-11-07). A cue's hp_order (default 2) makes its hp steeper, as lp_order does its lp. Added in Pale Blue Dot (2026-11-14): takes, a list of objects, each merged over the cue's first layer (or over the cue when it has its own layers), writing <name>_1, <name>_2, ... (a footstep or a dig has several takes and the game picks one); group is this game's (Steps, Ground, Water, Weather, Craft, Fishing, Fauna, Menu, Ambience); every source is CC0 or public domain by its own page (a Freesound sound is freesound/<id>:<id>.mp3).",
+ "_about": "Recorded cues for tools/audio/cut_cc0.py (format from Crab Breeze, unchanged). A layer is {src: 'pack:file'} or {synth: '<gen_sfx layer or cue>'}, with optional shot (n-th shot of a multi-shot take), start, dur (s), pitch (tape-speed ratio), gain (dB after the layer is peak-normalised), lp, hp (Hz, steep), fadein, fadeout, delay (s), repeat. A cue may set len, drive (tanh), hp, lp (gentle, 12 dB/octave), distance (compressor, lowpass and reverb that push a bed into the background), loop, stereo, group, peak_db, what and edits. A cue whose what ends in (loops) loops in the game. A cue may also set scatter: a list of groups, each placing count short sounds picked from pick (layer specs) at seeded times inside within seconds (from 0, no closer than min_gap), with gain, pitch ranges and a pan width; scattered sounds are mixed after the distance treatment (this repository, 2026-11-06). A cue's lp_order (default 2, 12 dB/octave) makes its lp steeper: 4 is Crab Breeze's sealed-cockpit filter (two 2-pole passes at 4 kHz), used here for every weapon heard from the bridge through the hull, written 6 dB down (peak_db -7) (2026-11-07). A cue's hp_order (default 2) makes its hp steeper, as lp_order does its lp. Added in Pale Blue Dot (2026-11-14): takes, a list of objects, each merged over the cue's first layer (or over the cue when it has its own layers), writing <name>_1, <name>_2, ... (a footstep or a dig has several takes and the game picks one); group is this game's (Steps, Ground, Water, Weather, Craft, Fishing, Fauna, Body, Menu, Ambience); every source is CC0 or public domain by its own page (a Freesound sound is freesound/<id>:<id>.mp3).",
  "step_stone": {
   "group": "Steps",
   "what": "A boot on stone, rock or ore: hard and short, with a little grit under the sole.",
@@ -3411,5 +3411,175 @@
   "loop_fade": 1.0,
   "peak_db": -1.0,
   "edits": "nine seconds of Niagara's roar, with a big waterfall 4 dB under and a huge waterfall 10 dB under for its spray; 30 Hz high pass, 6 kHz low pass so the low roar leads; looped over a 1 s crossfade (8 s)"
+ },
+ "eat_crisp": {
+  "group": "Body",
+  "what": "Eating something crisp (a raw mushroom, kelp crisps, later fruit and raw veg): a bite that crunches, then a chew or two.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/518049:518049.mp3",
+      "start": 0.0,
+      "dur": 1.2,
+      "fadein": 0.005,
+      "fadeout": 0.25
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/398757:398757.mp3",
+      "start": 0.0,
+      "dur": 1.2,
+      "fadein": 0.005,
+      "fadeout": 0.25
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/398757:398757.mp3",
+      "start": 1.45,
+      "dur": 1.1,
+      "fadein": 0.005,
+      "fadeout": 0.25
+     }
+    ],
+    "peak_db": -8.0
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/379343:379343.mp3",
+      "start": 4.25,
+      "dur": 1.2,
+      "fadein": 0.005,
+      "fadeout": 0.25
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/518049:518049.mp3",
+    "start": 0.0,
+    "dur": 1.2,
+    "fadein": 0.005,
+    "fadeout": 0.25
+   }
+  ],
+  "len": 1.25,
+  "hp": 90,
+  "peak_db": -3.0,
+  "edits": "four bites with their first chews, about 1.1 to 1.25 s each, from recordings of an apple munched (518049), an apple bitten and chewed (398757, twice) and a raw carrot crunched (379343, its third and fourth bites); 90 Hz high pass for handling rumble; faded out over 0.25 s; the third take written 5 dB lower so its louder chewing sits with the others"
+ },
+ "eat_soft": {
+  "group": "Body",
+  "what": "Eating a cooked dish: two or three soft, closed-mouth chews.",
+  "takes": [
+   {
+    "layers": [
+     {
+      "src": "freesound/707806:707806.mp3",
+      "start": 0.0,
+      "dur": 1.25,
+      "fadein": 0.005,
+      "fadeout": 0.25
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/707806:707806.mp3",
+      "start": 1.45,
+      "dur": 1.2,
+      "fadein": 0.005,
+      "fadeout": 0.25
+     }
+    ]
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/707807:707807.mp3",
+      "start": 1.0,
+      "dur": 1.25,
+      "fadein": 0.005,
+      "fadeout": 0.25
+     }
+    ],
+    "peak_db": -9.0
+   },
+   {
+    "layers": [
+     {
+      "src": "freesound/707808:707808.mp3",
+      "start": 0.0,
+      "dur": 1.2,
+      "fadein": 0.005,
+      "fadeout": 0.25
+     }
+    ]
+   }
+  ],
+  "layers": [
+   {
+    "src": "freesound/707806:707806.mp3",
+    "start": 0.0,
+    "dur": 1.25,
+    "fadein": 0.005,
+    "fadeout": 0.25
+   }
+  ],
+  "len": 1.25,
+  "hp": 90,
+  "peak_db": -3.0,
+  "edits": "four windows of two or three chews, about 1.2 s each, from a set of close chewing recordings (707806 twice, 707807, 707808); 90 Hz high pass for handling rumble; faded out over 0.25 s; the third take written 6 dB lower so its louder chewing sits with the others"
+ },
+ "tool_break": {
+  "group": "Body",
+  "what": "A worn tool breaking in the hand (`survival-mode` design 11): a short dry crack of its wooden haft and a snap.",
+  "layers": [
+   {
+    "src": "freesound/177045:177045.mp3",
+    "dur": 0.35,
+    "pitch": 1.3,
+    "fadeout": 0.15
+   },
+   {
+    "src": "freesound/537084:537084.mp3",
+    "shot": 1,
+    "dur": 0.3,
+    "gain": -12,
+    "lp": 3000,
+    "fadeout": 0.15
+   }
+  ],
+  "len": 0.4,
+  "hp": 120,
+  "peak_db": -2.0,
+  "edits": "the first 0.35 s of a log split (177045) sped up 1.3 times to a haft's size, and a string snap (537084) 12 dB down under 3 kHz for the break's edge; 120 Hz high pass"
+ },
+ "predator_growl": {
+  "group": "Fauna",
+  "what": "A red fox or a dust hound warning before it attacks (`survival-mode` design 6): a low throaty growl from its crouch, held about a second.",
+  "layers": [
+   {
+    "src": "freesound/461519:461519.mp3",
+    "start": 14.6,
+    "dur": 1.3,
+    "pitch": 1.15,
+    "fadein": 0.03,
+    "fadeout": 0.3
+   }
+  ],
+  "len": 1.2,
+  "hp": 90,
+  "peak_db": -3.0,
+  "edits": "the growl at 14.6 s of a dog growling take (461519), 1.3 s sped up 1.15 times to a fox's size, faded in 30 ms and out over 0.3 s; 90 Hz high pass"
  }
 }

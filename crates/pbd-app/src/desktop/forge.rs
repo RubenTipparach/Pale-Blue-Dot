@@ -194,6 +194,8 @@ pub fn spawn(
                 });
             super::craft::spawn_bench(layer, kit, &atlas, &recipes);
             super::craft::spawn_carpenter(layer, kit, &atlas, &recipes);
+            // Survival's repair, beside the workbench (`survival-mode` 4.8).
+            super::survival_panels::spawn_bench_repair(layer, kit, &atlas);
         });
 }
 

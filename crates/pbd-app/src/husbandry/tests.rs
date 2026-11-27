@@ -550,6 +550,12 @@ fn the_herd_is_built_blocky_with_its_head_at_the_grass() {
         ("plodder", 200),
         ("woolback", 168),
         ("meadow-hen", 180),
+        // `survival-mode` 4.11: the game, of the same family.
+        ("hare", 156),
+        ("ridge-goat", 204),
+        ("rootling", 156),
+        ("red-fox", 168),
+        ("dust-hound", 168),
     ] {
         let sp = find(id);
         let mut b = Builder::default();
@@ -591,4 +597,41 @@ fn the_herd_is_built_blocky_with_its_head_at_the_grass() {
     for (id, tris, triangles) in counted {
         assert_eq!(tris, triangles, "{id}'s triangles");
     }
+}
+
+/// `wildfire` 4.4: an animal within the flight's reach of a burning cell
+/// runs from it along the ground, wherever the local origin stands; one
+/// beyond it does not, and with no fire nothing runs.
+#[test]
+fn animals_run_from_a_burning_cell() {
+    use crate::wildfire::{FireNow, Flame};
+    use bevy::math::DVec3;
+    let cfg = pbd_core::fire::FireConfig::shipped();
+    let up = DVec3::new(0.31, 0.8, 0.51).normalize();
+    let east = DVec3::Y.cross(up).normalize();
+    let flame_at = up * f64::from(crate::planet::PLANET_RADIUS);
+    let now = FireNow {
+        flames: vec![Flame {
+            key: 1,
+            at: flame_at,
+            plant: pbd_core::fire::Plant::Grass,
+            crown: false,
+            left: 1.0,
+        }],
+        ..Default::default()
+    };
+    // The origin a few cells off the fire, as play has it.
+    let o = SimOrigin::new(crate::sim_origin::HOME, flame_at + east * 37.0);
+    let local = |planet: DVec3| (planet - o.origin).as_vec3();
+    let near = local(flame_at + east * 20.0);
+    let goal = fire_goal(&cfg, &now, &o, near).expect("20 m off, it runs");
+    let ran = o.to_world(goal).pos - (flame_at + east * 20.0);
+    assert!(ran.normalize().dot(east) > 0.95, "away from the fire");
+    assert!((ran.length() - 12.0).abs() < 0.01);
+    let far = local(flame_at + east * 60.0);
+    assert!(
+        fire_goal(&cfg, &now, &o, far).is_none(),
+        "60 m off, it does not"
+    );
+    assert!(fire_goal(&cfg, &FireNow::default(), &o, near).is_none());
 }

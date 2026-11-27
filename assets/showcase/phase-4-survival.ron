@@ -1,0 +1,69 @@
+// The phase-4 Survival showcase (`survival-mode` 6.4, design 18 "The
+// bot"): in a new Survival world, a bot plays the starter trunk to the
+// fire, then picks the paths on the path picker as a player does, in the
+// design's order: Eat and drink, Hunting, Shelter and weather, In the
+// water. Every act is the player's own input; nothing is set.
+//
+// The start is the phase-1 trunk's: a level pasture with the sea within
+// thirty metres.
+(
+    goal: "Goal: survive the first night in Survival",
+    at: Some((11.5085, -25.0992)),
+    hour: 10.0,
+    survival: true,
+    shots: [
+        (
+            caption: "Gather by hand: stones and fibre off the ground with F, then soil",
+            until: ["gather"],
+            max_s: 240.0,
+            acts: [Focus("gather"), PickUp(Have("fibre", 8)), Still, PickUp(Have("stone", 9)), Dig(Mission("gather"), 2), Still],
+        ),
+        (
+            caption: "Open your pack with Tab",
+            until: ["pack"],
+            max_s: 30.0,
+            acts: [Focus("pack"), Pack(3.0), Still],
+        ),
+        (
+            caption: "Craft an axe",
+            until: ["axe"],
+            max_s: 90.0,
+            acts: [Focus("axe"), Chop(Have("log", 1)), Craft("stone-axe", 1), Still],
+        ),
+        (
+            caption: "Gather wood",
+            until: ["wood"],
+            max_s: 240.0,
+            acts: [Focus("wood"), Hand("axe"), Chop(Mission("wood")), Still],
+        ),
+        (
+            caption: "Make planks and rope",
+            until: ["planks-rope"],
+            max_s: 240.0,
+            acts: [Focus("planks-rope"), Craft("planks", 2), Hand("hand"), PickUp(Have("fibre", 6)), Craft("rope", 2), Still],
+        ),
+        (
+            caption: "Build a crafting bench",
+            until: ["crafting-table"],
+            max_s: 90.0,
+            acts: [Focus("crafting-table"), Craft("workbench", 1), Place("block:workbench"), Look(-150.0, -10.0, 1.2), Still],
+        ),
+        (
+            caption: "Stone tools at the bench",
+            until: ["stone-tools"],
+            max_s: 300.0,
+            acts: [Focus("stone-tools"), Craft("planks", 1), Dig(Have("stone", 6), 2), Bench("stone-shovel", 1), Bench("stone-pickaxe", 1), Still],
+        ),
+        (
+            caption: "Make a fire by the water",
+            until: ["fire"],
+            max_s: 300.0,
+            acts: [Focus("fire"), Hand("axe"), Chop(Have("log", 2)), Hand("shovel"), Dig(Have("stone", 5), 2), Craft("campfire", 1), Shore, Place("block:campfire"), Still],
+        ),
+        (
+            caption: "Choose a path: Eat and drink",
+            max_s: 40.0,
+            acts: [Path("eat-drink")],
+        ),
+    ],
+)

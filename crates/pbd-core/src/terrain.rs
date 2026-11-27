@@ -146,6 +146,16 @@ pub enum Material {
     /// it. What it holds is a record of its own (`pbd_core::chest`). Code 42:
     /// 30 to 39 are the paving's stations, 40 the carpenter's bench, 41 the drafting table.
     Chest = 42,
+    /// The tanning rack (`survival-mode` design 17): the station a hide is
+    /// tanned into leather at, a hide laced in a timber frame. Solid, drawn
+    /// in the local trees' wood with the frame and the hide stood on it.
+    /// Code 48: 48 to 51 are Survival's stations, clear of the blocks'
+    /// run other branches append to.
+    TanningRack = 48,
+    /// The still (`survival-mode` design 15 and 18): a stone pot with a lid
+    /// and a cane spout that turns sea water into fresh beside a lit
+    /// campfire. Solid, drawn as its stone pot and spout stood on its cell.
+    Still = 49,
     /// Flowing water (`water-flow`): Luanti's flowing liquid on the hex grid,
     /// at a level from 7 (beside its source) down to 0, a thin film. A
     /// `Fall` is the same with Luanti's "flowing down" set: the cell below is
@@ -304,7 +314,7 @@ impl Material {
     /// Every material, in code order. Codes need not be contiguous: two
     /// branches each take their own numbers, and a gap is a code another
     /// build holds.
-    pub const ALL: [Material; 33] = [
+    pub const ALL: [Material; 35] = [
         Material::Air,
         Material::Stone,
         Material::Soil,
@@ -338,6 +348,8 @@ impl Material {
         Material::Carpenter,
         Material::DraftingTable,
         Material::Chest,
+        Material::TanningRack,
+        Material::Still,
     ];
 
     /// Every light, in material order. The column pass's lamp kind is the
@@ -468,6 +480,9 @@ pub fn material_code(material: Material) -> u8 {
         Material::DraftingTable => 41,
         // A chest (`storage-chests` design 1): the next free code.
         Material::Chest => 42,
+        // `survival-mode` design 17 and 18: Survival's stations, 48 on.
+        Material::TanningRack => 48,
+        Material::Still => 49,
         // Flowing water (`water-flow` E4): 64 + level, 72 + level falling,
         // the material's own code, far from the blocks' run.
         flowing @ crate::flowing_water!() => flowing as u16 as u8,
@@ -509,6 +524,8 @@ pub fn material_of(code: u8) -> Option<Material> {
         40 => Material::Carpenter,
         41 => Material::DraftingTable,
         42 => Material::Chest,
+        48 => Material::TanningRack,
+        49 => Material::Still,
         64..=79 => Material::flowing((code - 64) % 8, code >= 72),
         _ => return None,
     })

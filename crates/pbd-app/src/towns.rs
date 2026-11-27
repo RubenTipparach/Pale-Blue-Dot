@@ -329,7 +329,10 @@ pub fn ensure(
     config: &TerrainConfig,
 ) -> Result<(Option<Town>, u64), String> {
     match stored(save, site.id) {
-        Stored::Town(town) => Ok((Some(town), 0)),
+        Stored::Town(town) => Ok(match raise_forge(save, &town, template) {
+            Some((raised, seq)) => (Some(raised), seq),
+            None => (Some(town), 0),
+        }),
         Stored::Unsettled => Ok((None, 0)),
         Stored::Damaged(why) => Err(why),
         Stored::None => {
@@ -351,6 +354,74 @@ pub fn ensure(
             }
             let seq = store(save, &town).ok_or("the save refused the town")?;
             Ok((Some(town), seq))
+        }
+    }
+}
+
+/// The author an old town's smithy is raised by (`playtest-fixes` design 6):
+/// `@wtowns:settlement/<site>`.
+pub fn forge_author(site: u32) -> Author {
+    Author::World {
+        process: "towns".into(),
+        kind: record::SETTLEMENT_RECORD.into(),
+        id: u64::from(site),
+    }
+}
+
+/// The exact cell keys the player's built pieces and their construction
+/// sites' plans stand on.
+pub fn built_cells(save: &WorldSave) -> BTreeSet<u32> {
+    let mut out = BTreeSet::new();
+    for piece in pbd_core::building::from_records(&save.records).values() {
+        out.extend(piece.shape.cells());
+    }
+    for body in pbd_core::building::site::sites(&save.records).values() {
+        out.insert(body.chart.origin);
+        if let Some((_, charted)) = crate::construction::chart_site(body) {
+            out.extend(charted.iter().flat_map(|(_, p)| p.shape.cells()));
+        }
+    }
+    out
+}
+
+/// An old town (layout 1 or 2) given its smithy (`playtest-fixes` design 6,
+/// the owner's survey P5, 2026-11-26): its settlement record moved to its
+/// raised layout by the world through the durable path, where none of the
+/// smithy's cells holds anything made since. The raised town and the
+/// sequence to wait for, or `None` where it is left as it is (it has its
+/// forge, its template has none, a cell is taken, or the save refused).
+pub fn raise_forge(save: &mut WorldSave, town: &Town, template: &Template) -> Option<(Town, u64)> {
+    record::raised_layout(town.layout)?;
+    record::smithy_keys(town, template)?;
+    // Anything made there since the town was laid: an edit of any author, a
+    // cell the player's lines touched, a piece or a site's plan.
+    let built = built_cells(save);
+    let raised = record::raise_forge(town, template, &|k| {
+        built.contains(&k) || !save.edits.for_cell(k).is_empty() || save.yields.has_cell(k)
+    });
+    let Some(raised) = raised else {
+        info!(
+            "TOWN_FORGE site {} stays at layout {}: something made stands on its smithy",
+            town.site, town.layout
+        );
+        return None;
+    };
+    let proposal = pbd_core::records::Proposal {
+        edits: Vec::new(),
+        records: vec![record::settlement_record(&raised)],
+    };
+    match save.propose(&forge_author(town.site), proposal) {
+        Ok(Some(seq)) => {
+            info!(
+                "TOWN_FORGE site {} raised from layout {} to {}: its smithy stands",
+                town.site, town.layout, raised.layout
+            );
+            Some((raised, seq))
+        }
+        Ok(None) => None,
+        Err(refusal) => {
+            info!("TOWN_FORGE site {} refused: {refusal:?}", town.site);
+            None
         }
     }
 }

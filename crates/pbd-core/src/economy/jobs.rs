@@ -214,6 +214,7 @@ impl Job {
             branch: String::new(),
             icon: String::new(),
             coins: 0,
+            mode: None,
         }
     }
 
@@ -529,6 +530,11 @@ pub struct TakenJobs {
     /// Every job handed in, by id: never posted again.
     #[serde(default)]
     pub handed_in: BTreeSet<u64>,
+    /// The deliveries whose parcel still waits with the posting town's
+    /// trader (`townsfolk` design 47). A record written before it has none,
+    /// so every delivery in it reads as picked up.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub waiting: BTreeSet<u64>,
 }
 
 /// Why taking or handing in a job was refused.
@@ -566,8 +572,40 @@ impl TakenJobs {
         if self.gone().contains(&job.id) {
             return Err(JobRefused::Taken);
         }
+        // A delivery's parcel waits with the trader (`townsfolk` design 47).
+        if job.kind == JobKind::Deliver {
+            self.waiting.insert(job.id);
+        }
         self.taken.push(job);
         Ok(())
+    }
+
+    /// Whether a delivery's parcel still waits with its trader.
+    pub fn is_waiting(&self, id: u64) -> bool {
+        self.waiting.contains(&id)
+    }
+
+    /// The deliveries posted at `site` whose parcel waits there, in the
+    /// order taken.
+    pub fn waiting_at(&self, site: u32) -> Vec<u64> {
+        self.taken
+            .iter()
+            .filter(|j| j.site == site && self.waiting.contains(&j.id))
+            .map(|j| j.id)
+            .collect()
+    }
+
+    /// A waiting parcel handed to the player: whether it was waiting.
+    pub fn pick_up(&mut self, id: u64) -> bool {
+        self.waiting.remove(&id)
+    }
+
+    /// The deliveries picked up and not yet done: their parcel is in the
+    /// player's pack, bound for [`Job::to`].
+    pub fn carried(&self) -> impl Iterator<Item = &Job> {
+        self.taken.iter().filter(|j| {
+            j.kind == JobKind::Deliver && !self.waiting.contains(&j.id) && !self.is_done(j.id)
+        })
     }
 
     /// Count one happening against every taken job, by the starter
@@ -615,6 +653,7 @@ impl TakenJobs {
             .position(|j| j.id == id)
             .ok_or(JobRefused::NotTaken)?;
         let job = self.taken.remove(at);
+        self.waiting.remove(&job.id);
         let mission = job.mission_id();
         self.progress.done.remove(&mission);
         self.progress.counts.remove(&mission);
@@ -640,7 +679,11 @@ impl TakenJobs {
             return Err(JobRefused::NotDone);
         }
         let job = self.taken.remove(at);
-        self.progress.done.remove(&job.mission_id());
+        let mission = job.mission_id();
+        self.progress.done.remove(&mission);
+        if self.progress.focus.as_deref() == Some(mission.as_str()) {
+            self.progress.focus = None;
+        }
         self.handed_in.insert(job.id);
         Ok(job)
     }

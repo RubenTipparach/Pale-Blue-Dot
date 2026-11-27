@@ -693,8 +693,18 @@ pub fn offer_talk(
     }
 }
 
-/// Open the talk with `talker`: who they are to their town, and any parcel
-/// owed there handed over.
+/// The parcels waiting with `town`'s trader handed over (`townsfolk`
+/// design 47): what the talk says, if anything was waiting.
+fn pick_up_line(shop: &mut Shop, town: &TownInfo) -> Option<Localized> {
+    match shop.pick_up(town) {
+        Ok(n) if n > 0 => Some(tr("talk.parcel_given")),
+        Ok(_) => None,
+        Err(why) => Some(why.words()),
+    }
+}
+
+/// Open the talk with `talker`: who they are to their town, any parcel owed
+/// there handed over, and any waiting with its trader picked up.
 #[allow(clippy::too_many_arguments)]
 pub fn open_talk(
     talker: Talker,
@@ -718,6 +728,10 @@ pub fn open_talk(
             Ok(n) if n > 0 => said = Some(tr("talk.parcel_thanks")),
             Err(why) => said = Some(why.words()),
             _ => {}
+        }
+        // The trader hands over the parcels waiting with them.
+        if trader {
+            said = pick_up_line(shop, &town).or(said);
         }
     }
     *talking = Talking {
@@ -916,7 +930,13 @@ pub fn press(
                     fish_ids: &ids,
                     now_s: sun.clock.seconds,
                 };
-                act(&mut shop, &with.town, other)
+                let said = act(&mut shop, &with.town, other);
+                // A delivery taken from a trader who gives the jobs too:
+                // its parcel is handed over at once (`townsfolk` design 47).
+                match (other, with.trader) {
+                    (TalkAction::Take(_), true) => pick_up_line(&mut shop, &with.town).or(said),
+                    _ => said,
+                }
             }
         };
         talking.said = said;
@@ -985,7 +1005,12 @@ fn line(parent: &mut ChildSpawnerCommands, text: Localized, colour: Color) {
 }
 
 /// A coin amount: the coin and the number.
-fn coins(parent: &mut ChildSpawnerCommands, n: u64, colour: Color, coin: &Handle<Image>) {
+pub(super) fn coins(
+    parent: &mut ChildSpawnerCommands,
+    n: u64,
+    colour: Color,
+    coin: &Handle<Image>,
+) {
     parent
         .spawn(Node {
             align_items: AlignItems::Center,
@@ -1021,7 +1046,7 @@ fn icon(
 }
 
 /// [`icon`], or an icon of its own where a job has one and no good.
-fn icon_or(
+pub(super) fn icon_or(
     parent: &mut ChildSpawnerCommands,
     kit: &UiKit,
     item: Option<pbd_core::inventory::Item>,
@@ -1067,7 +1092,7 @@ fn icon_or(
 /// The good a job asks for, for its well: its thing (the first of a
 /// choice), a delivery's parcel, a repair's planks (design 29 mends with
 /// them); none for a job with no good (a lost villager, lamps).
-fn job_item(job: &Job, ids: &[String]) -> Option<pbd_core::inventory::Item> {
+pub(super) fn job_item(job: &Job, ids: &[String]) -> Option<pbd_core::inventory::Item> {
     use pbd_core::economy::jobs::JobKind;
     match job.kind {
         JobKind::Deliver => return item_of("parcel", ids),
@@ -1096,6 +1121,9 @@ pub struct PaintParams<'w> {
     body: Res<'w, pbd_app::fish::Body>,
     coin: Option<Res<'w, CoinIcon>>,
     lost: Option<Res<'w, LostIcon>>,
+    /// The tool in hand, for a trader's or smith's repair price
+    /// (`survival-mode` design 11).
+    tools: Option<Res<'w, pbd_app::fish::ToolSlot>>,
 }
 
 /// Rebuild the open panel when what it shows changes.
@@ -1112,9 +1140,25 @@ pub fn paint(
     if !matches!(open, Screen::Talk | Screen::Trade | Screen::Board) {
         return;
     }
+    // A Survival town's repair price for the tool in hand, if any.
+    let repair = match (
+        p.talking.with.as_ref(),
+        p.save.as_deref(),
+        p.tools.as_deref(),
+    ) {
+        (Some(with), Some(save), Some(tools)) => super::survival_panels::town_repair_price(
+            save,
+            &p.hotbar,
+            tools,
+            &p.cfg,
+            with.trader,
+            &with.talker.role,
+        ),
+        _ => None,
+    };
     // What the panel shows, as one line: it is rebuilt only when this moves.
     let now = format!(
-        "{open:?}|{:?}|{}|{:?}|{:?}|{}|{}",
+        "{open:?}|{:?}|{}|{:?}|{:?}|{}|{}|{repair:?}",
         p.talking,
         p.eco.purse.coins,
         p.eco.jobs,
@@ -1148,7 +1192,7 @@ pub fn paint(
     let ids = fish_ids(&p.fauna, &p.body.0);
     let now_s = p.sun.clock.seconds;
     commands.entity(body).with_children(|panel| match open {
-        Screen::Talk => paint_talk(panel, kit, with, &p.talking.said, &p.eco),
+        Screen::Talk => paint_talk(panel, kit, with, &p.talking.said, &p.eco, repair, coin),
         Screen::Trade => paint_trade(
             panel,
             kit,
@@ -1177,6 +1221,8 @@ fn paint_talk(
     with: &TalkWith,
     said: &Option<Localized>,
     eco: &Economy,
+    repair: Option<u32>,
+    coin: &Handle<Image>,
 ) {
     menu::lintel(panel, kit, Localized::verbatim(with.town.name.clone()));
     line(panel, role_name(&with.talker.role), ui_kit::TEXT_DIM);
@@ -1206,6 +1252,9 @@ fn paint_talk(
             }
             if with.giver || ready {
                 button(row, kit, tr("talk.work"), TalkAction::Work, 60.0);
+            }
+            if let Some(coins) = repair {
+                super::survival_panels::spawn_town_repair(row, kit, coins, coin);
             }
             button(row, kit, tr("talk.bye"), TalkAction::Bye, 50.0);
         });
@@ -2127,16 +2176,22 @@ pub fn scripted_press(
                         | ("abandon", TalkAction::Abandon(_))
                 )
         };
-        // A lost villager's TAKE: the button whose row is a lost job.
-        let lost = |a: &TalkAction, parent: Option<&ChildOf>| {
+        // A kind's TAKE, `take-<kind>`: the button whose row is a job of
+        // that kind (`take-lost`, `take-deliver`).
+        let kind = what.strip_prefix("take-").and_then(|code| {
+            pbd_core::economy::jobs::JobKind::ALL
+                .into_iter()
+                .find(|k| k.code() == code)
+        });
+        let of_kind = |a: &TalkAction, parent: Option<&ChildOf>| {
             matches!(a, TalkAction::Take(_))
                 && parent
                     .and_then(|p| rows.get(p.parent()).ok())
-                    .is_some_and(|r| r.0 == pbd_core::economy::jobs::JobKind::Lost)
+                    .is_some_and(|r| Some(r.0) == kind)
         };
         let found = buttons.iter_mut().find(|(_, a, parent)| {
-            if what == "take-lost" {
-                lost(a, *parent)
+            if kind.is_some() {
+                of_kind(a, *parent)
             } else {
                 wanted(a)
             }

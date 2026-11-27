@@ -33,6 +33,7 @@ use pbd_core::inventory::{CARRIED, Equipment, Item, SLOTS, Slots, Stack, Tier, T
 use pbd_core::locale::tr_with;
 use pbd_core::planet_gen::TerrainConfig;
 use pbd_core::records::{Author, Record as StoredRecord, split_author};
+use pbd_core::survival::WorldMode;
 use pbd_core::terrain::{GENERATOR_VERSION, TOPOLOGY_VERSION};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -527,6 +528,11 @@ pub struct Identity {
     /// built; a world this build makes is Planned.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub building: Option<BuildingSetting>,
+    /// How the world plays (`survival-mode` design 1): absent in every world
+    /// made before modes, which reads as Explorer; chosen on the new-world
+    /// screen and fixed after.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<WorldMode>,
 }
 
 /// The `tools` a world this build makes is marked with.
@@ -543,7 +549,21 @@ impl Identity {
             records: BTreeMap::new(),
             tools: TOOLS_VERSION,
             building: Some(BuildingSetting::NEW_WORLD),
+            mode: None,
         }
+    }
+
+    /// A world this build makes, in `mode`.
+    pub fn new_in(seed: u64, mode: WorldMode) -> Self {
+        Self {
+            mode: Some(mode),
+            ..Self::new(seed)
+        }
+    }
+
+    /// How the world plays: missing reads Explorer (`survival-mode` 1).
+    pub fn mode(&self) -> WorldMode {
+        WorldMode::of_saved(self.mode)
     }
 
     /// How the world builds: missing reads Free (`building-planner` 11).
@@ -568,6 +588,7 @@ impl Identity {
             records: BTreeMap::new(),
             tools: 0,
             building: None,
+            mode: None,
         }
     }
 
@@ -1054,8 +1075,10 @@ mod tests {
         ] {
             assert_eq!(material_of(material_code(material)), Some(material));
         }
-        // `storage-chests`: the chest takes the next code after desert sand.
-        assert_eq!(material_code(Material::Chest), 30);
+        // `storage-chests`: the chest is 42, past the paving's stations (30
+        // to 39), the carpenter's bench (40) and the drafting table (41).
+        assert_eq!(material_code(Material::Chest), 42);
+        assert_eq!(material_code(Material::Grinder), 30);
         assert_eq!(material_code(Material::ReefRock), 24);
         assert_eq!(material_code(Material::Sticks), 28);
         // `sand-tiles` design 5: desert sand takes the next code, and sand
@@ -1235,6 +1258,22 @@ mod tests {
             None,
             "an unmigrated log is migrated, not refused"
         );
+    }
+
+    /// `survival-mode` 2.1: a world saved before modes opens as Explorer; a
+    /// Survival world reopens as Survival.
+    #[test]
+    fn an_old_save_opens_as_explorer_and_survival_reopens_as_survival() {
+        let bare = "(seed: 7, generator: 4, topology: 1, keys: 1)";
+        assert_eq!(
+            Identity::from_ron(bare).unwrap().mode(),
+            WorldMode::Explorer
+        );
+        assert_eq!(Identity::new(7).mode(), WorldMode::Explorer);
+        let made = Identity::new_in(7, WorldMode::Survival);
+        let back = Identity::from_ron(&made.to_ron()).expect("reads back");
+        assert_eq!(back.mode(), WorldMode::Survival);
+        assert_eq!(back, made);
     }
 
     /// A world made by a version this build does not have is refused, and the

@@ -40,8 +40,11 @@ use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
 pub mod light;
+pub mod placed;
 pub mod punch;
 pub mod stroke;
+pub mod weapon;
+pub mod weapon_swing;
 use stroke::{
     DigBeat, Gear, Meets, Motion, PunchSettings, ShovelSettings, StrokeClock, StrokeSettings,
     StrokeTool, SwingSettings,
@@ -71,6 +74,10 @@ pub struct HeldSettings {
     /// How a light in hand is held and burns (`glowing-mushrooms` design
     /// 14).
     pub light: light::LightHold,
+    /// How a weapon is held (`survival-mode` design 16).
+    pub weapon: weapon::WeaponHold,
+    /// The weapons' swings (`survival-mode` combat C1).
+    pub weapon_swing: weapon_swing::WeaponSwings,
 }
 
 /// The hand's wrapped light, in `held.hand_light`: a face's shade is
@@ -270,6 +277,8 @@ impl Default for HeldSettings {
             rod: RodSettings::default(),
             hand_light: HandLight::default(),
             light: light::LightHold::default(),
+            weapon: weapon::WeaponHold::default(),
+            weapon_swing: weapon_swing::WeaponSwings::default(),
         }
     }
 }
@@ -303,6 +312,8 @@ impl HeldSettings {
         self.punch.validate()?;
         self.swing.validate()?;
         self.light.validate()?;
+        self.weapon.validate()?;
+        self.weapon_swing.validate()?;
         self.rod.validate()
     }
 }
@@ -1130,6 +1141,7 @@ pub struct HeldPlugin;
 impl Plugin for HeldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Swinging>()
+            .init_resource::<weapon_swing::SwingNow>()
             .init_resource::<RodCue>()
             .init_resource::<RodMotion>()
             .init_resource::<RodTipNow>()
@@ -1142,9 +1154,11 @@ impl Plugin for HeldPlugin {
                 (
                     spawn,
                     light::spawn_lights,
+                    weapon::spawn_weapons,
                     carry,
                     hold.in_set(HoldSet),
                     light::hold_lights.in_set(HoldSet),
+                    weapon::hold_weapons.in_set(HoldSet),
                     bend_rod,
                     shade_hands,
                     light_held,
@@ -1152,6 +1166,11 @@ impl Plugin for HeldPlugin {
                 )
                     .chain()
                     .after(crate::fish::FishSet),
+            )
+            // A placed torch drawn as the held one (playtest-fixes design 4).
+            .add_systems(
+                Update,
+                (placed::make_placed_looks, placed::show_placed).chain(),
             );
     }
 }
@@ -1661,7 +1680,13 @@ fn hold(
     mut tip_now: ResMut<RodTipNow>,
     mut clock: Local<StrokeClock>,
     mut impacts: MessageWriter<StrokeImpact>,
-    mut held_tools: Query<(&Held, &mut Transform, &mut Visibility), Without<light::HeldLightView>>,
+    mut held_tools: Query<
+        (&Held, &mut Transform, &mut Visibility),
+        (
+            Without<light::HeldLightView>,
+            Without<weapon::HeldWeaponView>,
+        ),
+    >,
     mut parts: Query<(&mut Transform, &mut Visibility), Without<Held>>,
 ) {
     let s = &settings.0;
@@ -1688,8 +1713,7 @@ fn hold(
     let light_in_hand = item
         .as_deref()
         .and_then(|i| i.0)
-        .and_then(light::LightKind::of)
-        .is_some();
+        .is_some_and(|i| light::LightKind::of(i).is_some() || weapon::weapon_of(i).is_some());
     let (kind, posed_from) = stroke_tool(in_hand);
     let tier = in_hand
         .and_then(|tool| tools.tier(tool))

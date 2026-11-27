@@ -84,6 +84,14 @@ pub enum Beast {
     Horse,
     Plodder,
     Woolback,
+    // `survival-mode` design 17 (task 4.11): the game, M26's `KINDS` where
+    // M26 has them (the ridge goat, the red fox, the rootling; the dust
+    // hound on its herd hound), the hare in the same family.
+    RidgeGoat,
+    RedFox,
+    Rootling,
+    Hare,
+    DustHound,
 }
 
 impl Beast {
@@ -93,8 +101,25 @@ impl Beast {
             Beast::Horse => 1.55,
             Beast::Plodder => 1.35,
             Beast::Woolback => 0.8,
+            Beast::RidgeGoat => 0.75,
+            Beast::RedFox => 0.42,
+            Beast::Rootling => 0.72,
+            Beast::Hare => 0.4,
+            Beast::DustHound => 0.55,
         }
     }
+
+    /// Every beast, in roster order.
+    pub const ALL: [Beast; 8] = [
+        Beast::Horse,
+        Beast::Plodder,
+        Beast::Woolback,
+        Beast::RidgeGoat,
+        Beast::RedFox,
+        Beast::Rootling,
+        Beast::Hare,
+        Beast::DustHound,
+    ];
 
     /// The form a species id is drawn by.
     pub fn of_id(id: &str) -> Option<Beast> {
@@ -102,6 +127,11 @@ impl Beast {
             "horse" => Some(Beast::Horse),
             "plodder" => Some(Beast::Plodder),
             "woolback" => Some(Beast::Woolback),
+            "ridge-goat" => Some(Beast::RidgeGoat),
+            "red-fox" => Some(Beast::RedFox),
+            "rootling" => Some(Beast::Rootling),
+            "hare" => Some(Beast::Hare),
+            "dust-hound" => Some(Beast::DustHound),
             _ => None,
         }
     }
@@ -124,18 +154,39 @@ const ROW_HORSE: u8 = 0;
 const ROW_PLODDER: u8 = 1;
 const ROW_WOOLBACK: u8 = 2;
 const ROW_HEN: u8 = 3;
-const ROWS: f32 = 4.0;
+// `survival-mode` design 17: the game's hides, appended rows.
+const ROW_RIDGE_GOAT: u8 = 4;
+const ROW_RED_FOX: u8 = 5;
+const ROW_ROOTLING: u8 = 6;
+const ROW_HARE: u8 = 7;
+const ROW_DUST_HOUND: u8 = 8;
+const ROWS: f32 = 9.0;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Ears {
     Flop,
     Point,
+    /// A hare's: long, upright and laid back a little.
+    Long,
 }
 
 #[derive(Clone, Copy, PartialEq)]
 enum Tail {
     Stub,
     Tuft,
+    /// A fox's or a hound's brush, its tip in the mane tile.
+    Bush,
+    /// A pig's: thin and short, no tuft.
+    Thin,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Horns {
+    None,
+    /// The plodder's: straight up and out.
+    Spike,
+    /// The ridge goat's: swept back and down.
+    Curl,
 }
 
 /// A beast's proportions (M26's `KINDS`), m at the mockup's size 1: body
@@ -151,7 +202,7 @@ struct Form {
     neck: f32,
     head: f32,
     snout: f32,
-    horns: bool,
+    horns: Horns,
     ears: Ears,
     tail: Tail,
     wool: bool,
@@ -168,7 +219,7 @@ const HORSE: Form = Form {
     neck: 0.75,
     head: 0.32,
     snout: 1.3,
-    horns: false,
+    horns: Horns::None,
     ears: Ears::Point,
     tail: Tail::Tuft,
     wool: false,
@@ -185,7 +236,7 @@ const PLODDER: Form = Form {
     neck: 0.2,
     head: 0.38,
     snout: 0.6,
-    horns: true,
+    horns: Horns::Spike,
     ears: Ears::Flop,
     tail: Tail::Tuft,
     wool: false,
@@ -202,7 +253,7 @@ const WOOLBACK: Form = Form {
     neck: 0.12,
     head: 0.3,
     snout: 0.0,
-    horns: false,
+    horns: Horns::None,
     ears: Ears::Flop,
     tail: Tail::Stub,
     wool: true,
@@ -212,11 +263,105 @@ const WOOLBACK: Form = Form {
     neck_k: 1.9,
 };
 
+// The game (`survival-mode` design 17): M26's `KINDS` numbers.
+const RIDGE_GOAT: Form = Form {
+    l: 1.1,
+    h: 0.6,
+    leg: 0.55,
+    neck: 0.25,
+    head: 0.28,
+    snout: 0.6,
+    horns: Horns::Curl,
+    ears: Ears::Point,
+    tail: Tail::Stub,
+    wool: false,
+    mane: false,
+    row: ROW_RIDGE_GOAT,
+    carry: 0.55,
+    neck_k: 1.6,
+};
+
+const RED_FOX: Form = Form {
+    l: 0.9,
+    h: 0.42,
+    leg: 0.38,
+    neck: 0.14,
+    head: 0.24,
+    snout: 1.0,
+    horns: Horns::None,
+    ears: Ears::Point,
+    tail: Tail::Bush,
+    wool: false,
+    mane: false,
+    row: ROW_RED_FOX,
+    carry: 0.55,
+    neck_k: 1.9,
+};
+
+const ROOTLING: Form = Form {
+    l: 1.25,
+    h: 0.72,
+    leg: 0.3,
+    neck: 0.04,
+    head: 0.38,
+    snout: 0.7,
+    horns: Horns::None,
+    ears: Ears::Flop,
+    tail: Tail::Thin,
+    wool: false,
+    mane: false,
+    row: ROW_ROOTLING,
+    carry: 0.55,
+    neck_k: 2.2,
+};
+
+/// The hare: not in M26, drawn in its family: a short body on short legs,
+/// a small head with a short snout, long ears and a puff of a tail.
+const HARE: Form = Form {
+    l: 0.55,
+    h: 0.3,
+    leg: 0.18,
+    neck: 0.05,
+    head: 0.15,
+    snout: 0.4,
+    horns: Horns::None,
+    ears: Ears::Long,
+    tail: Tail::Stub,
+    wool: false,
+    mane: false,
+    row: ROW_HARE,
+    carry: 0.35,
+    neck_k: 2.0,
+};
+
+/// The dust hound: M26's herd hound, in its own sand-coloured hide.
+const DUST_HOUND: Form = Form {
+    l: 0.95,
+    h: 0.42,
+    leg: 0.45,
+    neck: 0.15,
+    head: 0.26,
+    snout: 1.0,
+    horns: Horns::None,
+    ears: Ears::Point,
+    tail: Tail::Bush,
+    wool: false,
+    mane: false,
+    row: ROW_DUST_HOUND,
+    carry: 0.55,
+    neck_k: 1.9,
+};
+
 fn form(b: Beast) -> &'static Form {
     match b {
         Beast::Horse => &HORSE,
         Beast::Plodder => &PLODDER,
         Beast::Woolback => &WOOLBACK,
+        Beast::RidgeGoat => &RIDGE_GOAT,
+        Beast::RedFox => &RED_FOX,
+        Beast::Rootling => &ROOTLING,
+        Beast::Hare => &HARE,
+        Beast::DustHound => &DUST_HOUND,
     }
 }
 
@@ -620,16 +765,44 @@ pub fn beast(out: &mut Builder, kind: Beast, c: &Coat, pose: &Stance, size: f32)
                 Quat::IDENTITY,
                 WHITE,
             ),
+            Ears::Long => hide.bx(
+                &head,
+                tile::EARS,
+                Vec3::new(hr * 0.26, hr * 0.85, hr * 0.14),
+                Vec3::new(-hr * 0.2, hr * 0.75, s * hr * 0.24),
+                Quat::from_rotation_z(0.3) * Quat::from_rotation_x(s * 0.12),
+                WHITE,
+            ),
         }
-        if f.horns {
-            hide.bx(
+        match f.horns {
+            Horns::None => {}
+            Horns::Spike => hide.bx(
                 &head,
                 tile::HORN,
                 Vec3::new(hr * 0.14, hr * 0.62, hr * 0.14),
                 Vec3::new(-hr * 0.05, hr * 0.78, s * hr * 0.36),
                 Quat::from_rotation_x(-s * 0.45),
                 WHITE,
-            );
+            ),
+            // M26's curl: back along the crown, then down behind it.
+            Horns::Curl => {
+                hide.bx(
+                    &head,
+                    tile::HORN,
+                    Vec3::new(hr * 0.6, hr * 0.2, hr * 0.2),
+                    Vec3::new(-hr * 0.3, hr * 0.6, s * hr * 0.36),
+                    Quat::IDENTITY,
+                    WHITE,
+                );
+                hide.bx(
+                    &head,
+                    tile::HORN,
+                    Vec3::new(hr * 0.2, hr * 0.55, hr * 0.2),
+                    Vec3::new(-hr * 0.6, hr * 0.32, s * hr * 0.4),
+                    Quat::IDENTITY,
+                    WHITE,
+                );
+            }
         }
         hide.bx(
             &head,
@@ -653,6 +826,33 @@ pub fn beast(out: &mut Builder, kind: Beast, c: &Coat, pose: &Stance, size: f32)
             Vec3::splat(h * 0.26),
             Vec3::new(-l * 0.03, -h * 0.02, 0.0),
             Quat::IDENTITY,
+            tint,
+        ),
+        // M26's brush: down and back from the rump, its tip the mane tile.
+        Tail::Bush => {
+            hide.bx(
+                &rump,
+                tile::TAIL,
+                Vec3::new(l * 0.5, h * 0.32, h * 0.32),
+                Vec3::new(-l * 0.16, -h * 0.35, 0.0),
+                Quat::from_rotation_z(0.45),
+                tint,
+            );
+            hide.bx(
+                &rump,
+                tile::MANE,
+                Vec3::new(l * 0.16, h * 0.3, h * 0.3),
+                Vec3::new(-l * 0.42, -h * 0.58, 0.0),
+                Quat::IDENTITY,
+                WHITE,
+            );
+        }
+        Tail::Thin => hide.bx(
+            &rump,
+            tile::TAIL,
+            Vec3::new(l * 0.36, h * 0.12, h * 0.12),
+            Vec3::new(-l * 0.1, -h * 0.25, 0.0),
+            Quat::from_rotation_z(1.0),
             tint,
         ),
         Tail::Tuft => {
@@ -861,7 +1061,7 @@ mod tests {
     /// ground, and lying down brings it lower.
     #[test]
     fn every_beast_is_whole_and_its_size() {
-        for kind in [Beast::Horse, Beast::Plodder, Beast::Woolback] {
+        for kind in Beast::ALL {
             let mut b = Builder::default();
             beast(&mut b, kind, &Coat::default(), &Stance::default(), 1.0);
             whole(&b);
@@ -884,8 +1084,15 @@ mod tests {
                 },
                 1.0,
             );
+            // A short-legged beast (the rootling, the hare) has less to
+            // fold: it sinks a fifth of its height.
+            let sinks = if matches!(kind, Beast::Rootling | Beast::Hare) {
+                0.2
+            } else {
+                0.3
+            };
             assert!(
-                bounds(&lying).1.y < hi.y - withers * 0.3,
+                bounds(&lying).1.y < hi.y - withers * sinks,
                 "{kind:?} lies down"
             );
         }
@@ -921,7 +1128,7 @@ mod tests {
     /// its withers.
     #[test]
     fn the_head_grazes_at_the_grass_and_the_face_never_turns_back() {
-        for kind in [Beast::Horse, Beast::Plodder, Beast::Woolback] {
+        for kind in Beast::ALL {
             let graze = Stance {
                 head_down: FULL_GRAZE,
                 ..default()
@@ -963,7 +1170,7 @@ mod tests {
     /// Grazing puts the head down, not up.
     #[test]
     fn grazing_lowers_the_head() {
-        for kind in [Beast::Horse, Beast::Plodder, Beast::Woolback] {
+        for kind in Beast::ALL {
             let y = |head_down: f32| {
                 muzzle(
                     kind,

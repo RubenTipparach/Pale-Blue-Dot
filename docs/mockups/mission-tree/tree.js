@@ -1,13 +1,23 @@
 // Mission Tree mockup: the starter-missions tree (openspec/changes/starter-missions/design.md,
 // "Missions are a tree that unlocks the tech" and "The full tree") and, on the Town tab, the town
 // tree (openspec/changes/town-missions-tree/design.md, decision 2), each drawn as the game's
-// Missions screen. The open tree is the page's #anchor (#starter, #town). Nothing moves until the
-// viewer drags, zooms, steps or presses Play.
+// Missions screen; on the Survival tab, the starter tree as a Survival world shows it: the game's
+// trunk to the fire, then the paths a player picks in the path picker
+// (openspec/changes/survival-mode/design.md, decision 18); on the Infrastructure tab, the
+// INFRASTRUCTURE tree (openspec/changes/infrastructure-missions/design.md, decision 2), with
+// early power (openspec/changes/early-power/design.md, decision 2) as its Power branch. The open
+// tree is the page's #anchor (#starter, #town, #survival, #infrastructure; #power, the tab's
+// name before version 12, redirects to #infrastructure). Nothing moves until the viewer drags,
+// zooms, steps or presses Play.
 (function () {
   "use strict";
   const IMG = "mission-tree/items/";
   const UI = "mission-tree/ui/";
-  const TREE = location.hash.slice(1) === "town" ? "town" : "starter";
+  // #power was this tab's anchor before version 12: it keeps working, as #infrastructure
+  if (location.hash === "#power") history.replaceState(null, "", "#infrastructure");
+  const HASH = location.hash.slice(1);
+  const TREES = ["town", "survival", "infrastructure"];
+  const TREE = TREES.includes(HASH) ? HASH : "starter";
 
   // ---- what a mission can unlock: recipes and stations (a code the recipe list shows), or a skill
   // or branch (no recipe). new = a recipe the game does not have yet.
@@ -199,8 +209,10 @@
       help: "Board a rowboat or a cog at a town's quay (E) and head out." },
   ];
 
-  // ---- the town tree (town-missions-tree design 2): a trunk and six branches (Carpentry from `furniture`), a strict tree, every
-  // mission paying coins. Its unlocks are recipes and stations the game does not have yet (NEW).
+  // ---- the town tree (town-missions-tree design 2): a trunk and five branches (Carpentry from `furniture`), a strict tree, every
+  // mission paying coins. Its unlocks are recipes and stations the game does not have yet (NEW). Version 12: the Roads branch
+  // moved to the infrastructure tree (owner, 2026-11-27: "Maybe move roads over to this section"); Carts hang off
+  // "A job from the board", which unlocks the wheel (infrastructure-missions design 3, town-missions-tree design 13).
   const T_U = {
     grinder: { name: "Grinder", icon: "grinder", kind: "station", new: true },
     "crushed-stone": { name: "Crushed stone", icon: "crushed-stone", kind: "recipe", new: true },
@@ -217,10 +229,9 @@
     { key: "town", name: "0 · TOWN" },
     { key: "trade", name: "1 · TRADE" },
     { key: "jobs", name: "2 · JOBS" },
-    { key: "roads", name: "3 · ROADS" },
-    { key: "carts", name: "4 · CARTS" },
-    { key: "houses", name: "5 · HOUSES & LOGS" },
-    { key: "carpentry", name: "6 · CARPENTRY" },
+    { key: "carts", name: "3 · CARTS" },
+    { key: "houses", name: "4 · HOUSES & LOGS" },
+    { key: "carpentry", name: "5 · CARPENTRY" },
   ];
   const T_M = [
     // 0. Town: opens the first time you reach a town
@@ -230,7 +241,7 @@
       obj: [o("sell goods", 5, "sell 5 goods to a trader"), o("buy a good", 1, "buy 1 good from a trader")], unl: [],
       help: "Talk to a town's trader and pick TRADE." },
     { id: "first-job", b: "town", icon: "board", title: "A job from the board", needs: [["first-trade"]], coins: 15,
-      obj: [o("hand in a job", 1, "take a job from a board, do it and hand it in", true)], unl: ["grinder"],
+      obj: [o("hand in a job", 1, "take a job from a board, do it and hand it in", true)], unl: ["wheel"],
       help: "Take a job from a town's board, do it and hand it in." },
 
     // 1. Trade
@@ -251,31 +262,8 @@
     { id: "lamps", b: "jobs", icon: "lantern_post", title: "Light the lamps", needs: [["mend"]], coins: 15, pend: true,
       obj: [o("light town lamps", 4, "light 4 town lamps at dusk")], unl: [], help: "Light the town's lamps as the sun goes down." },
 
-    // 3. Roads (townsfolk design 39 to 41)
-    { id: "grinder", b: "roads", icon: "grinder", title: "Build a grinder", needs: [["first-job"]], coins: 10,
-      obj: [o("craft a grinder", 1, "craft a grinder at the workbench", true), o("place it", 1, "place the grinder")], unl: ["crushed-stone"],
-      help: "Make a grinder at the workbench and set it down." },
-    { id: "crush", b: "roads", icon: "crushed-stone", title: "Crush stone", needs: [["grinder"]], coins: 10,
-      obj: [o("make crushed stone", 9, "make 9 crushed stone at the grinder", true)], unl: ["mixer"],
-      help: "Put stone in the grinder (F)." },
-    { id: "mixer", b: "roads", icon: "mixer", title: "Build a mixer", needs: [["crush"]], coins: 10,
-      obj: [o("craft a mixer", 1, "craft a mixer at the workbench", true), o("place it", 1, "place the mixer")], unl: ["mixed-gravel"],
-      help: "Make a mixer at the workbench and set it down." },
-    { id: "gravel", b: "roads", icon: "gravel", title: "Mix gravel", needs: [["mixer"]], coins: 10,
-      obj: [o("make gravel", 8, "make 8 gravel at the mixer from crushed stone and sand", true)], unl: ["survey-stakes"],
-      help: "Put crushed stone and sand in the mixer (F)." },
-    { id: "mark", b: "roads", icon: "survey-stakes", title: "Mark a road", needs: [["gravel"]], coins: 10,
-      obj: [o("drive stakes", 2, "drive 2 survey stakes", true), o("mark cells", 8, "mark 8 cells for paving", true)], unl: [],
-      help: "Hold survey stakes and drive one at each turn of your road." },
-    { id: "pave", b: "roads", icon: "stone-shovel", title: "Pave it", needs: [["mark"]], coins: 30,
-      obj: [o("pave cells", 8, "pave 8 marked cells with gravel", true)], unl: ["wheel"],
-      help: "Hold the shovel, carry gravel, and press F on a marked cell." },
-    { id: "join", b: "roads", icon: "lantern_post", title: "Join a town", needs: [["pave"]], coins: 60,
-      obj: [o("pave to a town or road", 1, "pave a road that joins a town or a road of the world", true)], unl: [],
-      help: "Mark and pave until your road meets a town or a road." },
-
-    // 4. Carts (land-transport design 9, 10)
-    { id: "wheels", b: "carts", icon: "wheel", title: "Make wheels", needs: [["pave"]], coins: 10,
+    // 3. Carts (land-transport design 9, 10), off the board's first job since version 12
+    { id: "wheels", b: "carts", icon: "wheel", title: "Make wheels", needs: [["first-job"]], coins: 10,
       obj: [o("craft wheels", 2, "craft 2 wheels at the workbench", true)], unl: ["hand-cart"], help: "Wheels take planks and an iron tyre." },
     { id: "hand-cart", b: "carts", icon: "hand-cart", title: "A hand cart", needs: [["wheels"]], coins: 15,
       obj: [o("craft a hand cart", 1, "craft a hand cart", true), o("set it down", 1, "place the hand cart")], unl: [],
@@ -290,7 +278,7 @@
     { id: "road-trip", b: "carts", icon: "horse-cart", title: "On the road", needs: [["horse-cart"]], coins: 50,
       obj: [o("drive on road (m)", 500, "drive the horse cart 500 m on road", true)], unl: [], help: "Off the road a cart is four times slower." },
 
-    // 5. Houses and logs
+    // 4. Houses and logs
     { id: "house", b: "houses", icon: "house", title: "A house of your own", needs: [["first-job"]], coins: 40,
       obj: [o("build walls", 6, "build 6 walls", true), o("build a door", 1, "build 1 door", true), o("fit a roof", 1, "fit a roof over them", true)], unl: [],
       help: "Build walls, a door and a roof on the hex grid." },
@@ -298,7 +286,7 @@
       obj: [o("float logs", 4, "float 4 logs down a river until they stop", true)], unl: [],
       help: "Drop logs in a river; they stop where the water stops." },
 
-    // 6. Carpentry (furniture design 12): the carpenter's bench and the furniture made at it
+    // 5. Carpentry (furniture design 12): the carpenter's bench and the furniture made at it
     { id: "carpenter", b: "carpentry", icon: "carpenter", title: "A carpenter's bench", needs: [["first-job"]], coins: 10,
       obj: [o("carpenter's bench", 1, "make a carpenter's bench at the workbench", true), o("place it", 1, "place the carpenter's bench")], unl: [],
       help: "Make a carpenter's bench at the workbench and set it down." },
@@ -321,31 +309,414 @@
       obj: [o("take", 1, "take something from a chest in a town house", true)], unl: [],
       help: "Open a chest in a town house and take something." },
   ];
-  const U = TREE === "town" ? T_U : S_U;
-  const BRANCHES = TREE === "town" ? T_BRANCHES : S_BRANCHES;
-  const M = TREE === "town" ? T_M : S_M;
+
+  // ---- the Survival tab (survival-mode design 18, version 11): the starter tree as a Survival
+  // world shows it. The owner, 2026-11-27: "Survival: consist of the starter tree today then (in the
+  // game) then branch off to all survival stuff like eating and drinking, hunting etc.", and "after
+  // making a fire present players with the tree and show them options on what branch to take. Then
+  // when they click on that topic show them the tree branch, then the tree continues along their
+  // chosen path". So the trunk is the game's (missions.ron: gather, pack, axe, wood, planks and
+  // rope, the bench, stone tools, the fire, the chest), and every branch after "Make a fire" is a
+  // path the player picks. Survival missions are marked mode: survival and never shown in an
+  // Explorer world. Unlocks marked NEW are recipes the game does not have yet. Icons are stand-ins
+  // (tools/mockup_survival_icons.py).
+  const SV_U = Object.assign({}, S_U, {
+    straw: { name: "Straw", icon: "straw", kind: "recipe", new: true },
+    still: { name: "Still", icon: "still", kind: "station", new: true },
+    "meat-stew": { name: "Meat stew", icon: "meat-stew", kind: "recipe", new: true },
+    bedroll: { name: "Bedroll", icon: "bedroll", kind: "recipe", new: true },
+    "tanning-rack": { name: "Tanning rack", icon: "tanning-rack", kind: "station", new: true },
+    bow: { name: "Bow", icon: "bow", kind: "recipe", new: true },
+    "stone-arrows": { name: "Stone arrows", icon: "arrows", kind: "recipe", new: true },
+    "bone-arrows": { name: "Bone arrows", icon: "arrows", kind: "recipe", new: true },
+    "bronze-hunting-axe": { name: "Bronze hunting axe", icon: "hunting-axe", kind: "recipe", new: true },
+    "bronze-sword": { name: "Bronze sword", icon: "sword", kind: "recipe", new: true },
+    "bronze-spear": { name: "Bronze spear", icon: "bronze-spear", kind: "recipe", new: true },
+    "bronze-arrows": { name: "Bronze arrows", icon: "arrows", kind: "recipe", new: true },
+    "iron-sword": { name: "Iron sword (with the iron age)", icon: "iron-sword", kind: "recipe", new: true },
+    "straw-hat": { name: "Straw hat", icon: "straw-hat", kind: "recipe", new: true },
+    "wool-cloak": { name: "Wool cloak", icon: "wool-cloak", kind: "recipe", new: true },
+  });
+  // The paths after the fire, in the order the picker lays them out. icon and line are the
+  // picker's card: the line is game text, short and plain.
+  const SV_BRANCHES = [
+    { key: "trunk", name: "0 · HANDS TO TOOLS" },
+    { key: "eat-drink", name: "1 · EAT AND DRINK", icon: "water-drop", line: "Fresh water, wild food and a hot meal." },
+    { key: "hunting", name: "2 · HUNTING", icon: "stone-spear", line: "A spear and a hunt, then a bow and blades." },
+    { key: "fishing", name: "3 · FISHING", icon: "rod", line: "A rod, bait and fish." },
+    { key: "farming", name: "4 · FARMING", icon: "wheat", line: "Seeds, a field and bread." },
+    { key: "shelter", name: "5 · SHELTER AND WEATHER", icon: "moon", line: "The night, the heat and the cold." },
+    { key: "water", name: "6 · IN THE WATER", icon: "breath", line: "Swim far and hold your breath." },
+    { key: "herding", name: "7 · HERDING", icon: "yard_hen", line: "Fences, a tame animal and eggs." },
+    { key: "mining", name: "8 · MINING & SMELTING", icon: "bronze-ingot", line: "Ore, a forge and bronze." },
+    { key: "light", name: "9 · LIGHT & BUILDING", icon: "torch", line: "Walls, a roof and torches." },
+    { key: "cooking", name: "10 · COOKING", icon: "grilled-fish", line: "Cook what you catch." },
+    { key: "about", name: "11 · GETTING ABOUT", icon: "icon-map", line: "The map, a reef, a town and a boat." },
+  ];
+  const SV_ONLY = [
+    // 1. Eat and drink: fresh water only (owner, 2026-11-27: "Keep in mind salt water is undrinkable")
+    { id: "drink", b: "eat-drink", icon: "water-drop", title: "Drink water", needs: [["fire"]],
+      obj: [o("drink fresh water", 3, "drink 3 sips of fresh water: a river, a lake, rain or a still", true)], unl: ["straw", "still"],
+      help: "Crouch at a river or lake and hold use. Sea water is salt." },
+    { id: "forage", b: "eat-drink", icon: "fruit", title: "Something to eat", needs: [["drink"]],
+      obj: [o("eat raw food", 2, "eat 2 raw foods: fruit or an egg")], unl: [], help: "Pick fruit from a tree, or take an egg from a nest." },
+    { id: "cook-meal", b: "eat-drink", icon: "fried-egg", title: "A hot meal", needs: [["forage"]],
+      obj: [o("cook a dish", 1, "cook 1 dish at the campfire"), o("eat it", 1, "eat it")], unl: [], help: "Fry an egg or grill fish at the campfire." },
+    { id: "straw", b: "eat-drink", icon: "straw", title: "A cactus straw", needs: [["drink"]],
+      obj: [o("craft a straw", 1, "craft a straw (in the pack)")], unl: [], help: "Two fibre make a straw." },
+    { id: "cactus", b: "eat-drink", icon: "cactus", title: "Cactus juice", needs: [["straw"]],
+      obj: [o("sip a cactus", 3, "drink 3 sips from a cactus", true)], unl: ["straw-hat"], help: "Hold the straw to a desert cactus." },
+    { id: "still", b: "eat-drink", icon: "still", title: "Water from the sea", needs: [["drink"]],
+      obj: [o("set a still by a fire", 1, "set a still beside a lit campfire", true), o("drink from it", 3, "drink 3 sips from the still", true)], unl: [],
+      help: "Fill the still at the sea. The fire boils the salt out." },
+    // 2. Hunting: the spear needs a log, so it is open from the start of a Survival world
+    { id: "spear", b: "hunting", icon: "stone-spear", title: "Make a spear", needs: [["fire"]],
+      obj: [o("craft a stone spear", 1, "craft a stone spear (in the pack)")], unl: [], help: "In the pack, the Craft row makes a spear from a log, stone and fibre." },
+    { id: "hunt", b: "hunting", icon: "hare", title: "Hunt", needs: [["spear"]],
+      obj: [o("kill", 1, "kill a wild hen, hare or goat", true)], unl: [], help: "Hunt with the spear. Thrown, it hits harder." },
+    { id: "cook-meat", b: "hunting", icon: "roast-meat", title: "Cook meat", needs: [["hunt"]],
+      obj: [o("cook roast meat", 2, "cook 2 roast meat at the campfire")], unl: ["meat-stew"], help: "Put raw meat on the campfire." },
+    { id: "dress", b: "hunting", icon: "hide", title: "Dress a kill", needs: [["hunt"]],
+      obj: [o("take a hide", 1, "take 1 hide from a kill", true)], unl: ["tanning-rack"], help: "Use a blade on the kill before it is gone." },
+    { id: "tan", b: "hunting", icon: "tanning-rack", title: "Tan a hide", needs: [["dress"]],
+      obj: [o("make leather", 1, "make 1 leather at the tanning rack")], unl: ["bow", "stone-arrows"], help: "Hang a hide on the tanning rack." },
+    { id: "bow", b: "hunting", icon: "bow", title: "Bow and arrows", needs: [["tan"]],
+      obj: [o("craft a bow", 1, "craft a bow"), o("craft arrows", 8, "craft 8 arrows")], unl: ["bone-arrows"], help: "Make the bow at the workbench." },
+    { id: "long-shot", b: "hunting", icon: "arrows", title: "A long shot", needs: [["bow"]],
+      obj: [o("kill from 20 m", 1, "kill an animal with an arrow from 20 m or more", true)], unl: ["bronze-hunting-axe"], help: "Draw fully and aim above it." },
+    { id: "hunting-axe", b: "hunting", icon: "hunting-axe", title: "A hunting axe", needs: [["long-shot"]], after: ["smelt"],
+      obj: [o("craft it", 1, "craft a bronze hunting axe"), o("dress a kill", 1, "dress a kill with it", true)],
+      unl: ["bronze-sword", "bronze-spear", "bronze-arrows"], help: "A kill dressed with it gives its hide and more meat." },
+    { id: "sword", b: "hunting", icon: "sword", title: "A sword", needs: [["hunting-axe"]],
+      obj: [o("craft a sword", 1, "craft a bronze sword")], unl: ["iron-sword"], help: "Make it at the workbench from bronze." },
+    { id: "fend-off", b: "hunting", icon: "fox", title: "Drive off a predator", needs: [["sword"]],
+      obj: [o("drive off", 1, "make a predator flee, or kill it", true)], unl: [], help: "Foxes come at night. Strike back." },
+    // 5. Shelter and weather: the night, heat and cold, and fire (wildfire)
+    { id: "first-night", b: "shelter", icon: "moon", title: "The first night", needs: [["fire"]],
+      obj: [o("see the dawn", 1, "be out past 20:00 and alive at 06:00", true)], unl: ["bedroll"], help: "Keep warm, fed and watered until morning." },
+    { id: "warm-up", b: "shelter", icon: "snowflake", title: "Warm by the fire", needs: [["first-night"]],
+      obj: [o("warm up", 1, "warm from cold to fine by a fire", true)], unl: ["wool-cloak"], help: "Stand close to a campfire." },
+    { id: "dress-weather", b: "shelter", icon: "wool-cloak", title: "Dress for the weather", needs: [["warm-up"]],
+      obj: [o("wear", 1, "wear a straw hat or a wool cloak", true)], unl: [], help: "Put it on in the pack." },
+    { id: "cool-down", b: "shelter", icon: "sun", title: "Out of the heat", needs: [["first-night"]],
+      obj: [o("cool down", 1, "cool from hot to fine", true)], unl: [], help: "Stand in the shade or get in the water." },
+    { id: "relight", b: "shelter", icon: "torch-out", title: "Relight a torch", needs: [["first-night"]], after: ["torch"],
+      obj: [o("relight", 1, "relight a torch the rain put out", true)], unl: [], help: "Touch it to a fire." },
+    { id: "put-out", b: "shelter", icon: "water-bucket", title: "Put out a fire", needs: [["relight"]],
+      obj: [o("put out", 3, "put out 3 burning cells with water", true)], unl: [], help: "Fires start in the dry season." },
+    // 6. In the water
+    { id: "long-swim", b: "water", icon: "water-bucket", title: "A long swim", needs: [["fire"]],
+      obj: [o("swim 100 m", 100, "swim 100 m without being winded")], unl: [], help: "Swim steady. Sprinting tires you fast." },
+    { id: "hold-breath", b: "water", icon: "breath", title: "Hold your breath", needs: [["long-swim"]],
+      obj: [o("stay under 15 s", 1, "stay under for 15 s and surface", true)], unl: [], help: "Dive and come up before your breath runs out." },
+    { id: "soft-landing", b: "water", icon: "splash", title: "Into the water", needs: [["hold-breath"]],
+      obj: [o("fall into water", 1, "fall 10 layers or more into deep water", true)], unl: [], help: "Deep water breaks a fall." },
+  ];
+  const SV_M = TREE === "survival" ? (() => {
+    const copy = S_M.map((m) => Object.assign({}, m));
+    const pack = { id: "pack", b: "trunk", icon: "chest", title: "Open your pack", needs: [["gather"]],
+      obj: [o("open the pack", 1)], unl: [], help: "Press Tab to open your pack and craft with what you gathered." };
+    const storage = { id: "storage", b: "trunk", icon: "chest", title: "A chest", needs: [["fire"]],
+      obj: [o("make a chest", 1), o("set it down", 1), o("store a stack", 1)], unl: [],
+      help: "At the workbench (F), make a chest from eight planks. Set it down, open it with F and put a stack in it." };
+    copy.splice(1, 0, pack);
+    copy.find((m) => m.id === "axe").needs = [["pack"]];
+    copy.splice(copy.findIndex((m) => m.id === "fire") + 1, 0, storage);
+    return copy.concat(SV_ONLY);
+  })() : [];
+
+  // ---- the Power branch (early-power design 2 and 3), drawn on the Infrastructure tab since version 12
+  // (infrastructure-missions design 2): first drafted as a tree of its own, opened by the starter tree's
+  // "The iron age"; now hung off the infrastructure tree's "Build a grinder", with the iron age as a
+  // hidden gate across trees (xafter). Windmills grind food, the water mill makes power, lines carry it,
+  // and there is no battery: an appliance runs only while the wheel turns. rec = the recipe: station
+  // and inputs. Icons are stand-ins (tools/art/early_power_icons.py).
+  const r = (at, ins, out) => ({ at, ins, out });
+  const P_U = {
+    millstone: { name: "Millstone", icon: "millstone", kind: "recipe", new: true, rec: r("workbench", "2 stone blocks, 4 stone", "1 millstone") },
+    "copper-wire": { name: "Copper wire", icon: "copper-wire", kind: "recipe", new: true, rec: r("workbench", "1 copper ingot", "4 copper wire") },
+    dynamo: { name: "Dynamo", icon: "dynamo", kind: "recipe", new: true, rec: r("workbench", "8 copper wire, 2 iron ingot, 1 axle", "1 dynamo") },
+    windmill: { name: "Windmill", icon: "windmill", kind: "station", new: true, rec: r("workbench", "24 planks, 6 log, 4 rope, 4 wooden gear, 1 axle, 2 millstone, 6 fibre", "1 windmill") },
+    flour: { name: "Flour", icon: "flour", kind: "recipe", new: true, rec: r("windmill", "3 wheat", "2 flour") },
+    loaf: { name: "Loaf", icon: "loaf", kind: "recipe", new: true, rec: r("campfire", "2 flour", "1 loaf") },
+    "feed-mash": { name: "Feed mash", icon: "feed-mash", kind: "recipe", new: true, rec: r("windmill", "1 wheat, 1 turnip", "2 feed mash") },
+    "water-mill": { name: "Water mill", icon: "water-mill", kind: "station", new: true, rec: r("workbench", "20 planks, 4 log, 2 wooden gear, 1 axle, 1 dynamo, 8 stone blocks", "1 water mill") },
+    "power-pole": { name: "Power pole", icon: "power-pole", kind: "recipe", new: true, rec: r("workbench", "1 log, 2 copper wire", "1 power pole") },
+    "electric-lamp": { name: "Electric lamp", icon: "electric-lamp", kind: "recipe", new: true, rec: r("workbench", "1 iron ingot, 1 copper wire", "2 electric lamp") },
+    motor: { name: "Motor", icon: "motor", kind: "recipe", new: true, rec: r("workbench", "6 copper wire, 2 iron ingot", "1 motor") },
+    bellows: { name: "Bellows", icon: "bellows", kind: "recipe", new: true, rec: r("workbench", "2 leather, 3 planks, 1 motor", "1 bellows") },
+  };
+  // The two recipes early power opened with: since version 12 they open with the infrastructure tree,
+  // listed with its first mission.
+  const P_OPEN = {
+    grinder: { name: "Grinder", icon: "grinder", rec: r("workbench", "10 stone, 6 planks, 2 iron ingot", "1 grinder") },
+    "wooden-gear": { name: "Wooden gear", icon: "wooden-gear", new: true, rec: r("workbench", "3 planks", "1 wooden gear") },
+    axle: { name: "Axle", icon: "axle", new: true, rec: r("workbench", "1 log, 1 iron ingot", "1 axle") },
+  };
+  const P_BRANCHES = [
+    { key: "mill", name: "4 · POWER" },
+    { key: "wind", name: "4 · WIND" },
+    { key: "water", name: "4 · WATER" },
+    { key: "lines", name: "4 · LINES" },
+    { key: "appl", name: "4 · APPLIANCES" },
+  ];
+  const P_M = [
+    // 4. Power, its trunk Millwright: off "Build a grinder", after the starter tree's "The iron age"
+    { id: "gears", b: "mill", icon: "wooden-gear", title: "Cut gears", needs: [["grinder"]], xafter: ["The iron age (starter tree)"],
+      obj: [o("craft wooden gears", 4, "craft 4 wooden gears at the workbench", true), o("craft an axle", 1, "craft 1 axle at the workbench", true)],
+      unl: ["millstone", "copper-wire", "dynamo"], help: "A gear takes planks; an axle takes a log and an iron ingot." },
+    { id: "millstones", b: "mill", icon: "millstone", title: "Dress millstones", needs: [["gears"]],
+      obj: [o("craft millstones", 2, "craft 2 millstones at the workbench", true)], unl: ["windmill"], help: "Dress stone blocks into millstones at the workbench." },
+    // 1. Wind: the windmill grinds food, and turns a grinder on its floor
+    { id: "windmill", b: "wind", icon: "windmill", title: "Raise a windmill", needs: [["millstones"]],
+      obj: [o("craft a windmill", 1, "craft a windmill", true), o("set it on a rise", 1, "set it on a rise", true)], unl: ["flour"],
+      help: "Set the windmill on a rise. It needs the wind." },
+    { id: "grind", b: "wind", icon: "flour", title: "Grind grain", needs: [["windmill"]],
+      obj: [o("grind wheat", 12, "grind 12 wheat at the windmill", true)], unl: ["loaf"], help: "Put wheat in the windmill (F). No wind, no flour." },
+    { id: "loaf", b: "wind", icon: "loaf", title: "Bake a loaf", needs: [["grind"]],
+      obj: [o("cook loaves", 2, "cook 2 loaves at the campfire")], unl: ["feed-mash"], help: "Put flour on the campfire." },
+    { id: "mash", b: "wind", icon: "feed-mash", title: "Mash for the herd", needs: [["loaf"]],
+      obj: [o("grind feed mash", 6, "grind 6 feed mash at the windmill", true), o("feed the herd", 3, "feed mash to the herd 3 times")], unl: [],
+      help: "Grind wheat and turnip together. Fed mash, the herd gives sooner." },
+    { id: "wind-grinder", b: "wind", icon: "grinder", title: "Stone by the wind", needs: [["windmill"]],
+      obj: [o("set a grinder in the mill", 1, "set a grinder on the windmill's floor", true), o("crush stone", 9, "crush 9 stone with it")], unl: [],
+      help: "A grinder on the mill floor runs on the wind." },
+    // 2. Water: the water mill makes power
+    { id: "dynamo", b: "water", icon: "dynamo", title: "Wind a dynamo", needs: [["gears"]],
+      obj: [o("craft copper wire", 8, "craft 8 copper wire"), o("craft a dynamo", 1, "craft a dynamo", true)], unl: ["water-mill"],
+      help: "Draw copper ingots into wire, then wind it on an axle." },
+    { id: "water-mill", b: "water", icon: "water-mill", title: "Build a water mill", needs: [["dynamo"]],
+      obj: [o("craft a water mill", 1, "craft a water mill", true), o("set it on moving water", 1, "set it on a flowing river", true)], unl: ["power-pole"],
+      help: "Set it on a river that flows. Still water will not turn it." },
+    { id: "turn", b: "water", icon: "bolt", title: "Turn the wheel", needs: [["water-mill"]],
+      obj: [o("make power (kWh)", 6, "make 6 kWh at the water mill", true)], unl: [], help: "Open the sluice (F). Faster water, more power." },
+    // 3. Lines: poles carry it; no battery holds it
+    { id: "poles", b: "lines", icon: "power-pole", title: "Set poles", needs: [["turn"]],
+      obj: [o("craft poles", 4, "craft 4 power poles", true), o("set poles", 4, "set 4 poles in a run from the mill", true)], unl: ["electric-lamp"],
+      help: "Poles join within 4 cells of each other." },
+    { id: "line", b: "lines", icon: "copper-wire", title: "String a line", needs: [["poles"]],
+      obj: [o("join the mill (cells)", 12, "join the mill to a pole 12 cells away", true)], unl: ["motor", "bellows"],
+      help: "Run poles out from the mill. Anything within a cell of a pole is on the line." },
+    { id: "lamps", b: "lines", icon: "electric-lamp", title: "Lamps on the line", needs: [["line"]],
+      obj: [o("light lamps at night", 3, "light 3 electric lamps from the line at night")], unl: [], help: "Set lamps by a pole. They light while the wheel turns." },
+    { id: "sluice", b: "lines", icon: "sluice", title: "When the wheel stops", needs: [["lamps"]],
+      obj: [o("shut the sluice at night", 1, "shut the sluice at night", true), o("see the lamps go out", 1, "see the lamps on the line go out")], unl: [],
+      help: "Nothing stores power. When the wheel stops, the line stops." },
+    // 4. Appliances: stations that run faster on the line
+    { id: "motor-grinder", b: "appl", icon: "motor", title: "A grinder on the line", needs: [["line"]],
+      obj: [o("fit a motor", 1, "fit a motor to a grinder", true), o("crush stone on the line", 20, "crush 20 stone on the line")], unl: [],
+      help: "A grinder with a motor works twice as fast while the wheel turns." },
+    { id: "bellows", b: "appl", icon: "bellows", title: "Bellows at the forge", needs: [["motor-grinder"]],
+      obj: [o("fit bellows", 1, "fit bellows to a forge", true), o("smelt on the line", 4, "smelt 4 ingots on the line")], unl: [],
+      help: "Bellows on the line make the forge faster." },
+    { id: "motor-mixer", b: "appl", icon: "mixer", title: "A mixer on the line", needs: [["bellows"]], after: ["mixer"],
+      obj: [o("fit a motor", 1, "fit a motor to a mixer", true), o("mix gravel on the line", 16, "mix 16 gravel on the line")], unl: [],
+      help: "Too much on one line and everything slows. Build a second mill." },
+  ];
+  // ---- the Infrastructure tab (infrastructure-missions design 2, version 12): phase 4a's tree, opened by
+  // the town tree's "A job from the board". A trunk (Stoneworks) and four branches: Roads, Civil works,
+  // Town and Power (early power, above). Coins as the town tree's; Power pays none. Icons for the new
+  // goods, stations and blueprints are stand-ins (tools/art/infrastructure_icons.py).
+  const I_U = Object.assign({
+    "crushed-stone": { name: "Crushed stone", icon: "crushed-stone", kind: "recipe", rec: r("grinder", "2 stone", "3 crushed stone") },
+    mixer: { name: "Mixer", icon: "mixer", kind: "station", rec: r("workbench", "8 planks, 2 rope, 1 iron ingot, 1 bucket", "1 mixer") },
+    "mixed-gravel": { name: "Gravel (at the mixer)", icon: "gravel", kind: "recipe", rec: r("mixer", "3 crushed stone, 1 sand block", "4 gravel") },
+    "survey-stakes": { name: "Survey stakes", icon: "survey-stakes", kind: "recipe", rec: r("hand", "1 planks, 1 fibre", "4 survey stakes") },
+    milestone: { name: "Milestone", icon: "signpost", kind: "recipe", new: true, rec: r("mason's bench", "2 dressed stone", "1 milestone") },
+    "dressed-stone": { name: "Dressed stone", icon: "dressed-stone", kind: "recipe", new: true, rec: r("mason's bench", "1 stone block", "1 dressed stone") },
+    mortar: { name: "Mortar", icon: "mortar", kind: "recipe", new: true, rec: r("mixer", "2 sand, 1 crushed stone, 1 water bucket", "4 mortar") },
+    "bp-well": { name: "Well", icon: "well", kind: "blueprint", new: true, rec: r("drafting table", "12 dressed stone, 4 mortar, 2 log, 1 rope, 1 bucket", "1 cell") },
+    "bp-retaining-wall": { name: "Retaining wall", icon: "retaining-wall", kind: "blueprint", new: true, rec: r("drafting table", "6 dressed stone, 2 mortar a cell", "1 to 12 cells") },
+    "bp-culvert": { name: "Culvert", icon: "culvert", kind: "blueprint", new: true, rec: r("drafting table", "10 dressed stone, 4 mortar, 4 gravel", "1 road cell") },
+    "bp-mill-race": { name: "Mill race", icon: "mill-race", kind: "blueprint", new: true, rec: r("drafting table", "4 dressed stone, 1 mortar a cell, 1 sluice board", "3 to 16 cells") },
+    "bp-stone-bridge": { name: "Stone bridge", icon: "stone-bridge", kind: "blueprint", new: true, rec: r("drafting table", "14 dressed stone, 6 mortar, 2 gravel a cell", "3 to 10 cells") },
+    "bp-ferry": { name: "Ferry", icon: "ferry", kind: "blueprint", new: true, rec: r("drafting table", "8 planks, 4 log, 30 rope, 2 posts", "7 to 20 cells") },
+    "bp-market": { name: "Market stall", icon: "market", kind: "blueprint", new: true, rec: r("drafting table", "10 planks, 4 log, 4 wool, 2 dressed stone", "2 cells") },
+  }, P_U);
+  const I_BRANCHES = [
+    { key: "stone", name: "0 · STONEWORKS" },
+    { key: "roads", name: "1 · ROADS" },
+    { key: "civil", name: "2 · CIVIL WORKS" },
+    { key: "town", name: "3 · TOWN" },
+  ].concat(P_BRANCHES);
+  const I_M = [
+    // 0. Stoneworks, the trunk: moved from the town tree's Roads (owner, 2026-11-27); opens with "A job from the board"
+    { id: "grinder", b: "stone", icon: "grinder", title: "Build a grinder", needs: [], coins: 10,
+      obj: [o("craft a grinder", 1, "craft a grinder at the workbench", true), o("place it", 1, "place the grinder")], unl: ["crushed-stone"],
+      help: "Make a grinder at the workbench and set it down." },
+    { id: "crush", b: "stone", icon: "crushed-stone", title: "Crush stone", needs: [["grinder"]], coins: 10,
+      obj: [o("make crushed stone", 9, "make 9 crushed stone at the grinder", true)], unl: ["mixer"],
+      help: "Put stone in the grinder (F)." },
+    { id: "mixer", b: "stone", icon: "mixer", title: "Build a mixer", needs: [["crush"]], coins: 10,
+      obj: [o("craft a mixer", 1, "craft a mixer at the workbench", true), o("place it", 1, "place the mixer")], unl: ["mixed-gravel"],
+      help: "Make a mixer at the workbench and set it down." },
+    { id: "gravel", b: "stone", icon: "gravel", title: "Mix gravel", needs: [["mixer"]], coins: 10,
+      obj: [o("make gravel", 8, "make 8 gravel at the mixer from crushed stone and sand", true)], unl: ["survey-stakes"],
+      help: "Put crushed stone and sand in the mixer (F)." },
+    // 1. Roads: moved from the town tree, and a road between two towns
+    { id: "mark", b: "roads", icon: "survey-stakes", title: "Mark a road", needs: [["gravel"]], coins: 10,
+      obj: [o("drive stakes", 2, "drive 2 survey stakes", true), o("mark cells", 8, "mark 8 cells for paving", true)], unl: [],
+      help: "Hold survey stakes and drive one at each turn of your road." },
+    { id: "pave", b: "roads", icon: "stone-shovel", title: "Pave it", needs: [["mark"]], coins: 30,
+      obj: [o("pave cells", 8, "pave 8 marked cells with gravel", true)], unl: [],
+      help: "Hold the shovel, carry gravel, and press F on a marked cell." },
+    { id: "join", b: "roads", icon: "lantern_post", title: "Join a town", needs: [["pave"]], coins: 60,
+      obj: [o("pave to a town or road", 1, "pave a road that joins a town or a road of the world", true)], unl: [],
+      help: "Mark and pave until your road meets a town or a road." },
+
+    { id: "two-towns", b: "roads", icon: "signpost", title: "Town to town", needs: [["join"]], coins: 80,
+      obj: [o("join two towns", 1, "pave a road that joins two towns", true)], unl: ["milestone"],
+      help: "Pave a road from one town to another." },
+
+    // 2. Civil works: blueprints of the planner's civil kit, set out and built piece by piece
+    { id: "mason", b: "civil", icon: "mason-bench", title: "A mason's bench", needs: [["gravel"]], coins: 10,
+      obj: [o("mason's bench", 1, "craft a mason's bench at the workbench", true), o("place it", 1, "place the mason's bench")],
+      unl: ["dressed-stone", "mortar", "bp-well"], help: "Make a mason's bench at the workbench and set it down." },
+    { id: "well", b: "civil", icon: "well", title: "Dig a well", needs: [["mason"]], coins: 20,
+      obj: [o("set out a well", 1, "set out a well from the drafting table", true), o("finish the well", 1, "build every piece of the well", true)],
+      unl: ["bp-retaining-wall"], help: "Set out a well at the drafting table and build it." },
+    { id: "retaining", b: "civil", icon: "retaining-wall", title: "Hold the bank", needs: [["well"]], coins: 25,
+      obj: [o("wall (cells)", 4, "finish a retaining wall 4 cells long", true)], unl: ["bp-culvert", "bp-mill-race"],
+      help: "A retaining wall keeps a cut bank from falling in." },
+    { id: "culvert", b: "civil", icon: "culvert", title: "Under the road", needs: [["retaining"]], coins: 25,
+      obj: [o("finish a culvert", 1, "finish a culvert where a road crosses a stream", true)], unl: ["bp-stone-bridge"],
+      help: "Set a culvert where your road meets a stream." },
+    { id: "stone-bridge", b: "civil", icon: "stone-bridge", title: "A stone bridge", needs: [["culvert"]], coins: 60,
+      obj: [o("build the bridge", 1, "finish a stone bridge of 3 cells or more over a river", true)], unl: ["bp-ferry"],
+      help: "A stone bridge spans up to 10 cells." },
+    { id: "ferry", b: "civil", icon: "ferry", title: "A ferry", needs: [["stone-bridge"]], coins: 30,
+      obj: [o("rig a ferry", 1, "rig a ferry over a river too wide to bridge", true), o("cross on it", 1, "cross the river on the ferry", true)], unl: [],
+      help: "Too wide to bridge? Rig a ferry and pull it across with F." },
+    { id: "race", b: "civil", icon: "mill-race", title: "Cut a mill race", needs: [["retaining"]], after: ["water-mill"], coins: 40,
+      obj: [o("finish the race", 1, "finish a mill race to a water mill", true), o("run the mill full", 1, "run the water mill at full output", true)], unl: [],
+      help: "A race brings the river to the wheel faster." },
+
+    // 3. Town: a town grown on the grid
+    { id: "plot", b: "town", icon: "plot", title: "Lay a plot", needs: [["grinder"]], coins: 15,
+      obj: [o("set out a site", 1, "set out a site from a blueprint beside a town", true)], unl: ["bp-market"],
+      help: "Pick a blueprint at the drafting table and set it out by a town." },
+    { id: "raise", b: "town", icon: "house", title: "Raise a building", needs: [["plot"]], coins: 30,
+      obj: [o("finish a site", 1, "build every piece of the site", true)], unl: [],
+      help: "Bring the pieces and build the site with the mallet." },
+    { id: "street", b: "town", icon: "gravel", title: "A street to the door", needs: [["raise"]], coins: 20,
+      obj: [o("pave (cells)", 6, "pave 6 cells from its door to a town street", true)], unl: [],
+      help: "Mark and pave from the door to the street." },
+    { id: "ask", b: "town", icon: "market", title: "What the town needs", needs: [["street"]], coins: 50,
+      obj: [o("what it asks", 1, "raise the building a town's board asks for", true)], unl: [],
+      help: "Towns post the buildings they need on the board." },
+    { id: "grow", b: "town", icon: "town-tier", title: "The town grows", needs: [["ask"]], coins: 80,
+      obj: [o("a town grows", 1, "a town you built for reaches its next size", true)], unl: [],
+      help: "Build what a town needs and it grows." },
+
+  ].concat(P_M);
+  // the moved missions are in the game: their objectives are counted today, so none is marked NEW
+  ["grinder", "crush", "mixer", "gravel", "mark", "pave", "join"].forEach((id) => I_M.find((m) => m.id === id).obj.forEach((ob) => (ob.nw = false)));
+  const INF = TREE === "infrastructure";
+  const U = TREE === "town" ? T_U : TREE === "survival" ? SV_U : INF ? I_U : S_U;
+  const BRANCHES = TREE === "town" ? T_BRANCHES : TREE === "survival" ? SV_BRANCHES : INF ? I_BRANCHES : S_BRANCHES;
+  const M = TREE === "town" ? T_M : TREE === "survival" ? SV_M : INF ? I_M : S_M;
 
   const byId = Object.fromEntries(M.map((m) => [m.id, m]));
   const byIdRaw = byId;
-  const order = BRANCHES.flatMap((b) => M.filter((m) => m.b === b.key).map((m) => m.id));
+  let order = BRANCHES.flatMap((b) => M.filter((m) => m.b === b.key).map((m) => m.id));
   const unlockedBy = {};
   M.forEach((m) => m.unl.forEach((u) => (unlockedBy[u] = m.id)));
+  const isOpen = (m, done) => m.needs.every((g) => g.some((id) => done.has(id))) && (m.after || []).every((id) => done.has(id));
+  const unlName = (u) => U[u].name.replace(/ \(.*\)$/, "");
 
   // ---- the bot's steps: Now, each objective filling (a count of 3 or more fills in two steps), Done.
   const steps = [];
-  order.forEach((id) => {
+  const playMission = (id, nowDone) => {
     const m = byId[id];
-    if (m.pend) return; // a mission this build cannot count yet: the bot leaves it
-    steps.push({ t: "now", m: id });
+    if (!nowDone) steps.push({ t: "now", m: id });
     m.obj.forEach((ob, i) => {
       if (ob.n >= 3) steps.push({ t: "obj", m: id, i, v: Math.floor(ob.n / 2) });
       steps.push({ t: "obj", m: id, i, v: ob.n });
     });
     steps.push({ t: "done", m: id });
-  });
+  };
 
-  const isOpen = (m, done) => m.needs.every((g) => g.some((id) => done.has(id))) && (m.after || []).every((id) => done.has(id));
-  const unlName = (u) => U[u].name.replace(/ \(.*\)$/, "");
+  // ---- the Survival tab's paths (survival-mode design 18, version 11). When "Make a fire" is done
+  // the picker shows every path that has a mission open; the one picked is the current path, and
+  // its first open mission (file order) is Now. The other paths stay open and count. When the path
+  // has nothing open (done, or its next mission waits on another branch) the picker shows again.
+  const PATHS = TREE === "survival" ? SV_BRANCHES.slice(1).map((b) => b.key) : [];
+  const pathBranch = (key) => BRANCHES.find((b) => b.key === key);
+  const pathMissions = (key) => M.filter((m) => m.b === key && !m.pend);
+  const pathGoal = (key, done) => pathMissions(key).find((m) => !done.has(m.id) && isOpen(m, done));
+  function offers(done) {
+    const out = [];
+    PATHS.forEach((key) => {
+      const ms = pathMissions(key);
+      const left = ms.filter((m) => !done.has(m.id));
+      if (!left.length) return;
+      const next = left.find((m) => isOpen(m, done));
+      const n = ms.length - left.length;
+      if (next) { out.push({ key, next: next.id, n, of: ms.length }); return; }
+      if (!n) return; // not reached yet
+      const w = left.find((m) => m.needs.every((g) => g.some((id) => done.has(id))));
+      out.push({ key, wait: w ? (w.after || []).filter((id) => !done.has(id)).map((id) => byId[id].title).join(", ") : "", n, of: ms.length });
+    });
+    return out;
+  }
+  // The bot's own order of paths; a viewer's click at a pick replaces the bot's choice there.
+  const BOT_PLAN = ["eat-drink", "hunting", "shelter", "water", "fishing", "cooking", "farming", "herding", "mining", "light", "about"];
+  const forced = {};
+  function buildSteps() {
+    steps.length = 0;
+    if (TREE !== "survival" && !INF) {
+      order.forEach((id) => { if (!byId[id].pend) playMission(id); });
+      return;
+    }
+    if (INF) {
+      // branch by branch, but a mission waits for its hidden gates (the mill race for the water mill)
+      const done = new Set(), left = order.filter((id) => !byId[id].pend);
+      while (left.length) {
+        const i = left.findIndex((id) => isOpen(byId[id], done));
+        if (i < 0) break;
+        const id = left.splice(i, 1)[0];
+        playMission(id);
+        done.add(id);
+      }
+      return;
+    }
+    const done = new Set();
+    let picked = false; // the path step has already made its first mission Now
+    const finish = (id) => { playMission(id, picked); picked = false; done.add(id); };
+    // the trunk, as the game has it, to the fire; the water bar warns on the way (no mission)
+    const trunk = M.filter((m) => m.b === "trunk" && m.id !== "storage").map((m) => m.id);
+    trunk.forEach((id) => {
+      finish(id);
+      if (id === "wood") {
+        steps.push({ t: "note", warn: "Thirsty", log: "Water at half: Thirsty" });
+        steps.push({ t: "note", warn: "Salt water", log: "Tried the sea: Salt water, nothing taken" });
+        steps.push({ t: "note", log: "Drank at a river: water full" });
+      }
+    });
+    let picks = 0, path = null, last = null;
+    for (let guard = 0; guard < 400; guard++) {
+      const g = path && pathGoal(path, done);
+      if (g) { finish(g.id); continue; }
+      const off = offers(done);
+      const live = off.filter((x) => x.next);
+      if (live.length) {
+        const want = forced[picks];
+        const pick = live.find((x) => x.key === want) || BOT_PLAN.map((k) => live.find((x) => x.key === k)).find(Boolean) || live[0];
+        steps.push({ t: "pick", n: picks, choose: pick.key, after: last });
+        steps.push({ t: "path", n: picks, b: pick.key, m: pathGoal(pick.key, done).id });
+        picked = true;
+        picks++;
+        last = path = pick.key;
+        continue;
+      }
+      // no path has anything open: the trunk's tail, then whatever is left, in file order
+      const rest = M.find((m) => !m.pend && !done.has(m.id) && isOpen(m, done));
+      if (!rest) break;
+      path = null;
+      finish(rest.id);
+    }
+  }
+  buildSteps();
 
   function stateAt(k) {
     const done = new Set();
@@ -355,12 +726,28 @@
     let fresh = [];
     let lit = null;
     let coins = 0;
+    let path = null, picker = null, warn = null;
     for (let i = 0; i < k; i++) {
       const s = steps[i];
       const m = byId[s.m];
       fresh = [];
       lit = null;
-      if (s.t === "now") {
+      picker = null;
+      warn = null;
+      if (s.t === "note") {
+        warn = s.warn || null;
+        log.push({ text: s.log, w: !!s.warn });
+      } else if (s.t === "pick") {
+        path = null;
+        picker = { n: s.n, sel: s.choose, after: s.after, offers: offers(done) };
+        const waits = s.after && picker.offers.some((x) => x.key === s.after && !x.next);
+        log.push({ text: s.after ? (waits ? "PATH WAITS: " : "PATH DONE: ") + pathBranch(s.after).name.replace(/^\d+ · /, "") + " · choose a path" : "THE FIRE IS LIT · choose a path" });
+      } else if (s.t === "path") {
+        path = s.b;
+        cur = s.m;
+        prog[s.m] = m.obj.map(() => 0);
+        log.push({ text: "PATH: " + pathBranch(s.b).name.replace(/^\d+ · /, "") + " · NOW: " + m.title });
+      } else if (s.t === "now") {
         cur = s.m;
         prog[s.m] = m.obj.map(() => 0);
         log.push({ text: "NOW: " + m.title });
@@ -379,7 +766,7 @@
         if (fresh.length) log.push({ text: "OPEN: " + fresh.map((id) => byId[id].title).join(", ") });
       }
     }
-    return { k, coins, done, prog, cur, log, fresh: k > 0 && steps[k - 1].t === "done" ? fresh : [], lit };
+    return { k, coins, done, prog, cur, log, fresh: k > 0 && steps[k - 1].t === "done" ? fresh : [], lit, path, picker, warn };
   }
 
   function standing(id, st) {
@@ -467,7 +854,7 @@
     el.className = "lane";
     el.textContent = b.name;
     world.appendChild(el);
-    return { el, first };
+    return { el, first, key: b.key };
   });
 
   // edges
@@ -531,8 +918,8 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const icon = (name, cls) => `<img src="${IMG}${name}.png" alt="" class="${cls || ""}">`;
   const check = (on, cls) => `<img src="${UI}stone-check-${on ? "on" : "off"}.png" alt="${on ? "done" : ""}" class="ck ${cls || ""}">`;
-  const needText = (m) => "after " + [...m.needs.flat(), ...(m.after || [])].map((id) => byId[id].title).join(" + ");
-  const branchName = (m) => BRANCHES.find((b) => b.key === m.b).name.replace(/^\d · /, "");
+  const needText = (m) => "after " + [...m.needs.flat(), ...(m.after || [])].map((id) => byId[id].title).concat(m.xafter || []).join(" + ");
+  const branchName = (m) => BRANCHES.find((b) => b.key === m.b).name.replace(/^\d+ · /, "");
   const WORD = { done: "DONE", now: "NOW", open: "OPEN", locked: "LOCKED", pending: "NOT YET" };
   const coinChip = (m) => m.coins ? `<span class="coins" title="${m.coins} coins">${icon("coin", "ci")}${m.coins}</span>` : "";
 
@@ -585,13 +972,23 @@
 
   function renderHud() {
     const hud = $("#hud");
-    const last = st.log[st.log.length - 1];
-    if (st.cur) {
+    let last = st.log[st.log.length - 1];
+    // the Survival tab: the HUD line names what was done, not the list of what opened
+    if (TREE === "survival" && last && /^OPEN: /.test(last.text) && st.log.length > 1) last = st.log[st.log.length - 2];
+    // the Survival tab: the chosen path over the mission line, a need's warning, the picker's ask
+    const pathLine = st.path ? `<small>${esc(pathBranch(st.path).name.replace(/^\d+ · /, ""))}</small>` : "";
+    if (st.warn) {
+      hud.textContent = st.warn;
+      hud.className = "hud warn";
+    } else if (st.picker) {
+      hud.textContent = "Choose a path";
+      hud.className = "hud";
+    } else if (st.cur) {
       const m = byId[st.cur];
       const c = st.prog[m.id];
       const i = m.obj.findIndex((ob, j) => c[j] < ob.n);
       const ob = m.obj[i < 0 ? m.obj.length - 1 : i];
-      hud.textContent = `${ob.s} ${c[i < 0 ? m.obj.length - 1 : i]}/${ob.n}`;
+      hud.innerHTML = pathLine + esc(`${ob.s} ${c[i < 0 ? m.obj.length - 1 : i]}/${ob.n}`);
       hud.className = "hud";
     } else if (last && last.d) {
       hud.textContent = last.text.split(" · ")[0];
@@ -601,8 +998,8 @@
       hud.className = "hud";
     } else hud.textContent = "";
     const lines = st.log.slice(-5);
-    $("#log").innerHTML = lines.map((l) => `<div class="${l.d ? "d" : ""}">${esc(l.text)}</div>`).join("");
-    $("#stepNo").textContent = `step ${st.k}/${steps.length}` + (TREE === "town" ? ` · ${st.coins} coins` : "");
+    $("#log").innerHTML = lines.map((l) => `<div class="${l.d ? "d" : l.w ? "w" : ""}">${esc(l.text)}</div>`).join("");
+    $("#stepNo").textContent = `step ${st.k}/${steps.length}` + (TREE === "town" || INF ? ` · ${st.coins} coins` : "");
     $("#stepBtn").disabled = st.k >= steps.length;
   }
 
@@ -630,6 +1027,7 @@
         .map((ob, i) => `<li>${check(c[i] >= ob.n)}<span>${esc(ob.t)}${ob.nw ? '<span class="nw">NEW</span>' : ""}</span><em>${c[i]}/${ob.n}</em><span class="pb"><i style="width:${Math.round((100 * c[i]) / ob.n)}%"></i></span></li>`)
         .join("")}</ul>` +
       `<h3>HELP</h3><p class="help">${esc(m.help)}</p>` +
+      (INF && !m.needs.length ? `<h3>OPENS WITH THE TREE</h3><div class="ulist">${Object.values(P_OPEN).map((d) => `<div><span class="slot sm on">${icon(d.icon)}</span><span>${esc(d.name)}${d.new ? '<span class="nw">NEW</span>' : ""}${recLine(d)}</span></div>`).join("")}</div>` : "") +
       (m.coins ? `<h3>REWARD</h3><div class="ulist"><div><span class="slot sm ${s === "done" ? "on" : "off"}">${icon("coin")}</span><span>${m.coins} coins<small>${s === "done" ? "paid" : "paid when this is done"}</small></span></div></div>` : "") +
       `<h3>UNLOCKS</h3>` +
       (m.unl.length
@@ -637,19 +1035,23 @@
             .map((u) => {
               const d = U[u];
               const lit = s === "done";
-              return `<div>${d.icon ? `<span class="slot sm ${lit ? "on" : "off"}">${icon(d.icon, lit ? "" : "sil")}</span>` : `<span class="slot sm ${lit ? "on" : "off"}"></span>`}<span>${esc(d.name)}${d.new ? '<span class="nw">NEW</span>' : ""}<small>${lit ? "unlocked" : "locked until this is done"}</small></span></div>`;
+              return `<div>${d.icon ? `<span class="slot sm ${lit ? "on" : "off"}">${icon(d.icon, lit ? "" : "sil")}</span>` : `<span class="slot sm ${lit ? "on" : "off"}"></span>`}<span>${esc(d.name)}${d.new ? '<span class="nw">NEW</span>' : ""}<small>${lit ? "unlocked" : "locked until this is done"}</small>${recLine(d)}</span></div>`;
             })
             .join("")}</div>`
         : `<p class="help">Nothing: this one is for the play.</p>`) +
-      (m.needs.length ? `<h3>NEEDS</h3><div class="mlinks">${m.needs.map((g) => g.map((id) => `<button data-go="${id}">${esc(byId[id].title)}</button>`).join(" or ")).join(" + ")}</div>` : "") +
+      (m.needs.length ? `<h3>NEEDS</h3><div class="mlinks">${m.needs.map((g) => g.map((id) => `<button data-go="${id}">${esc(byId[id].title)}</button>`).join(" or ")).join(" + ")}${(m.after || []).map((id) => ` + <button data-go="${id}">${esc(byId[id].title)}</button>`).join("")}${(m.xafter || []).map((t) => ` + <span class="xneed">${esc(t)}</span>`).join("")}</div>` : "") +
       (users.length ? `<h3>FEEDS</h3><div class="mlinks">${users.map((x) => `<button data-go="${x.id}">${esc(x.title)}</button>`).join("")}</div>` : "") +
       (m.uses ? `<h3>USES</h3><div class="mlinks">${m.uses.map((id) => `<button data-go="${id}">${esc(byId[id].title)}</button>`).join("")}</div>` : "") +
       (next.length ? `<h3>OPENS NEXT</h3><div class="mlinks">${next.map((x) => `<button data-go="${x.id}">${esc(x.title)}</button>`).join("")}</div>` : "");
   }
 
+  // A recipe's station and inputs, where the tree gives them (the Power tab).
+  const recLine = (d) => d.rec ? `<small class="rec">${esc(d.rec.at)}: ${esc(d.rec.ins)} → ${esc(d.rec.out)}</small>` : "";
   function recipesHtml() {
-    const groups = [["recipe", "RECIPES"], ["station", "STATIONS"], ["skill", "SKILLS"], ["branch", "BRANCHES"]];
-    return groups
+    const opens = INF ? `<div class="rgroup">WHEN THE TREE OPENS</div>` + Object.values(P_OPEN)
+      .map((d) => `<div class="rrow"><span class="slot sm on">${icon(d.icon)}</span><span>${esc(d.name)}${d.new ? '<span class="nw">NEW</span>' : ""}<small>with A job from the board</small>${recLine(d)}</span></div>`).join("") : "";
+    const groups = [["recipe", "RECIPES"], ["station", "STATIONS"], ["blueprint", "BLUEPRINTS"], ["skill", "SKILLS"], ["branch", "BRANCHES"]];
+    return opens + groups
       .map(([k, label]) => {
         const rows = Object.keys(U).filter((u) => U[u].kind === k && unlockedBy[u]);
         if (!rows.length) return "";
@@ -658,11 +1060,34 @@
             const d = U[u];
             const by = byId[unlockedBy[u]];
             const lit = st.done.has(by.id);
-            return `<button class="rrow ${lit ? "" : "locked"}" data-go="${by.id}"><span class="slot sm ${lit ? "on" : "off"}">${d.icon ? icon(d.icon, lit ? "" : "sil") : ""}</span><span>${esc(d.name)}${d.new ? '<span class="nw">NEW</span>' : ""}<small>${lit ? "unlocked" : esc(by.title)}</small></span></button>`;
+            return `<button class="rrow ${lit ? "" : "locked"}" data-go="${by.id}"><span class="slot sm ${lit ? "on" : "off"}">${d.icon ? icon(d.icon, lit ? "" : "sil") : ""}</span><span>${esc(d.name)}${d.new ? '<span class="nw">NEW</span>' : ""}<small>${lit ? "unlocked" : esc(by.title)}</small>${recLine(d)}</span></button>`;
           })
           .join("");
       })
       .join("");
+  }
+
+  // ---- the path picker (Survival tab): the stone frame and oak trim of the side panel, a card a
+  // path. The bot's choice is marked; a click picks that path instead.
+  let pickerHidden = false;
+  function renderPicker() {
+    const el = $("#picker");
+    if (!el) return;
+    const p = TREE === "survival" && st.picker && !pickerHidden ? st.picker : null;
+    el.hidden = !p;
+    lanes.forEach((l) => l.el.classList.toggle("chosen", !!st.path && l.key === st.path));
+    if (!p) return;
+    const said = (key) => { const t = pathBranch(key).name.replace(/^\d+ · /, "").toLowerCase(); return t[0].toUpperCase() + t.slice(1); };
+    const waits = p.after && p.offers.find((x) => x.key === p.after && !x.next);
+    $("#pkSub").textContent = !p.after ? "The fire is lit." : waits ? said(p.after) + " waits on " + waits.wait + "." : said(p.after) + " is done.";
+    $("#pkGrid").innerHTML = p.offers.map((x) => {
+      const b = pathBranch(x.key);
+      const foot = x.next ? (x.n ? "Next: " : "First: ") + byId[x.next].title : "Waits on " + x.wait;
+      return `<button class="pcard${x.key === p.sel ? " bot" : ""}${x.next ? "" : " wait"}" data-path="${x.key}"${x.next ? "" : " disabled"}>` +
+        `<span class="slot">${icon(b.icon, x.next ? "" : "sil")}</span>` +
+        `<span class="pct"><span class="pth"><b>${esc(b.name.replace(/^\d+ · /, ""))}</b><em>${x.n}/${x.of}</em></span><span>${esc(b.line)}</span><small>${esc(foot)}</small></span>` +
+        `</button>`;
+    }).join("");
   }
 
   function render() {
@@ -670,11 +1095,15 @@
     renderEdges();
     renderHud();
     renderPanel();
+    renderPicker();
   }
 
-  function setStep(k) {
+  function setStep(k, follow) {
     st = stateAt(Math.max(0, Math.min(steps.length, k)));
+    pickerHidden = false;
     render();
+    // stepping into a picked path pans the tree to it (never on its own: only Step, Play or a click)
+    if (follow && st.k > 0 && steps[st.k - 1].t === "path") focusPath(st.path);
   }
 
   function select(id) {
@@ -852,7 +1281,7 @@
     clearInterval(timer);
     timer = setInterval(() => {
       if (st.k >= steps.length) { stop(); return; }
-      setStep(st.k + 1);
+      setStep(st.k + 1, true);
     }, +speedSel.value);
     playBtn.textContent = "Pause";
     playBtn.setAttribute("aria-pressed", "true");
@@ -862,7 +1291,7 @@
     if (+speedSel.value === 0) stop();
     else if (timer) play();
   });
-  $("#stepBtn").addEventListener("click", () => { stop(); setStep(st.k + 1); });
+  $("#stepBtn").addEventListener("click", () => { stop(); setStep(st.k + 1, true); });
   $("#resetBtn").addEventListener("click", () => { stop(); setStep(0); });
 
   // ---- the info modal
@@ -876,8 +1305,9 @@
 
   // ---- a world partway through: the bot in the middle of "Go fishing" (cast, one fish of three), or on
   // the Town tab in the middle of "Mark a road" (both stakes driven, four cells of eight marked)
-  const SAMPLE = TREE === "town" ? { m: "mark", i: 1 } : { m: "go-fishing", i: 1 };
-  const sample = steps.findIndex((s) => s.t === "obj" && s.m === SAMPLE.m && s.i === SAMPLE.i) + 1;
+  const SAMPLE = TREE === "town" ? { m: "haul", i: 0 } : TREE === "survival" ? { m: "fire", pick: true } : INF ? { m: "retaining", i: 0 } : { m: "go-fishing", i: 1 };
+  // the Survival tab opens on the picker, the moment the fire is lit
+  const sample = SAMPLE.pick ? steps.findIndex((s) => s.t === "pick") + 1 : steps.findIndex((s) => s.t === "obj" && s.m === SAMPLE.m && s.i === SAMPLE.i) + 1;
   // centre a mission at a level (used by the stills; the page never calls it on its own)
   function focus(id, level) {
     if (level !== undefined) { setLevel(Math.max(0, Math.min(LEVELS.length - 1, level))); relayout(); }
@@ -887,8 +1317,71 @@
     ty = r.height / 2 - (py(m.row) + CH / 2) * q;
     apply();
   }
+  // Pan (eased, about half a second) to a picked path: its next mission at a level where the branch
+  // reads, with its lane lit. Only ever called from a click, Step or Play.
+  function focusPath(key) {
+    if (!key) return;
+    const g = pathGoal(key, st.done) || pathMissions(key)[0];
+    world.classList.add("pan");
+    // the whole branch in view at the largest level that holds it (full cards from 0.8 up), else
+    // its next mission at 0.8
+    const ms = pathMissions(key);
+    const c0 = Math.min(...ms.map((m) => m.col)), c1 = Math.max(...ms.map((m) => m.col));
+    const r0 = Math.min(...ms.map((m) => m.row)), r1 = Math.max(...ms.map((m) => m.row));
+    const r = view.getBoundingClientRect();
+    let n = 6;
+    for (let k = LEVELS.length - 1; k >= 6; k--) {
+      const q = SCALES[k] * Math.max(1, Math.round(2 * dpr())) / (2 * dpr());
+      const w = (c1 - c0 + 1) * (CARD.cw + CARD.gx) * q, h = ((r1 - r0 + 1) * (CARD.ch + CARD.gy) + 60) * q;
+      if (w <= r.width - 40 && h <= r.height - 150) { n = k; break; }
+    }
+    setLevel(n); relayout();
+    const q = unit();
+    const bw = (c1 - c0 + 1) * (CW + GX) - GX, bh = (r1 - r0 + 1) * (CH + GY) - GY;
+    if (bw * q <= r.width - 40 && bh * q <= r.height - 150) {
+      tx = r.width / 2 - (px(c0) + bw / 2) * q;
+      ty = (r.height - 130) / 2 + 10 - (py(r0) - 46 + (bh + 46) / 2) * q;
+      apply();
+    } else {
+      // too big for one view: its first column at the left and its lane at the top, so the
+      // branch runs on to the right and down
+      tx = 60 - px(c0) * q;
+      tx = Math.min(tx, r.width - 60 - (px(g.col) + CW) * q);
+      ty = 24 - (py(r0) - 46) * q;
+      ty = Math.min(ty, r.height - 150 - (py(g.row) + CH) * q);
+      apply();
+    }
+    clearTimeout(focusPath.t);
+    focusPath.t = setTimeout(() => world.classList.remove("pan"), 520);
+  }
+  if (TREE === "survival") {
+    $("#pathsBtn").hidden = false;
+    $("#pkGrid").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-path]");
+      if (!b || !st.picker || b.disabled) return;
+      stop();
+      const n = st.picker.n, k = st.k;
+      if (b.dataset.path !== st.picker.sel) { forced[n] = b.dataset.path; buildSteps(); }
+      setStep(k + 1, true);
+    });
+    $("#pkLater").addEventListener("click", () => { pickerHidden = true; render(); });
+    // the Paths button opens the picker for review: the next time the bot is shown it, or the last
+    $("#pathsBtn").addEventListener("click", () => {
+      stop();
+      if (st.picker) { pickerHidden = false; render(); return; }
+      let i = steps.findIndex((s, j) => j >= st.k && s.t === "pick");
+      if (i < 0) i = steps.map((s) => s.t).lastIndexOf("pick");
+      setStep(i + 1);
+      fit();
+    });
+  }
   // test hooks for the stills
-  window.missionTree = { tree: TREE, steps: steps.length, missions: M.length, unlocks: M.reduce((n, m) => n + m.unl.length, 0), setStep, select, fit, focus, sample, levels: LEVELS.length, level: () => lv };
+  const pickAt = (n) => steps.findIndex((s) => s.t === "pick" && s.n === n) + 1;
+  const stepOf = (t, m) => steps.findIndex((s) => s.t === t && s.m === m) + 1;
+  window.missionTree = { tree: TREE, get steps() { return steps.length; }, missions: M.length, unlocks: M.reduce((n, m) => n + m.unl.length, 0), setStep, select, fit, focus, focusPath, pickAt, stepOf,
+    pick: (key) => { const b = document.querySelector(`#pkGrid [data-path="${key}"]`); if (b) b.click(); return !!b; },
+    state: () => ({ k: st.k, path: st.path, cur: st.cur, picker: st.picker && st.picker.offers.map((x) => x.key + (x.next ? "" : "(waits)")) }),
+    stepList: () => steps.map((s) => s.t + ":" + (s.m || s.b || s.choose || s.log || "")), sample, levels: LEVELS.length, level: () => lv };
   setStep(sample);
   // Open at full size on the mission the bot is playing; Fit shows the whole tree.
   focus(SAMPLE.m, OPEN);
@@ -898,10 +1391,13 @@
     b.setAttribute("aria-selected", String(b.dataset.tree === TREE));
   });
   // #crew is the CREW tab (crew.js), drawn over this tree: it keeps its anchor.
-  if (location.hash.slice(1) !== TREE && location.hash.slice(1) !== "crew") history.replaceState(null, "", "#" + TREE);
+  const OVER = ["crew", "mills"]; // tabs drawn over this tree (crew.js, mills.js) keep their anchor
+  if (location.hash.slice(1) !== TREE && !OVER.includes(location.hash.slice(1))) history.replaceState(null, "", "#" + TREE);
   window.addEventListener("hashchange", () => {
-    if (location.hash.slice(1) === "crew") return;
-    const want = location.hash.slice(1) === "town" ? "town" : "starter";
+    if (OVER.includes(location.hash.slice(1))) return;
+    const h = location.hash.slice(1);
+    if (h === "power") { history.replaceState(null, "", "#infrastructure"); if (INF) return; }
+    const want = h === "power" ? "infrastructure" : TREES.includes(h) ? h : "starter";
     if (want !== TREE) location.reload();
   });
 })();

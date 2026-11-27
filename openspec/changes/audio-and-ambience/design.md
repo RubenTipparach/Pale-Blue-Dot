@@ -670,3 +670,104 @@ The ambience beds' shore and open-water reads (the surf bed) are a 25 m to
 seabed block 1 m under the sea level, with the tide at its lowest:
 - the audio's reading is dry (it fails before: 1 m of water);
 - at the highest tide it is wet.
+
+## Master does not quiet rain and thunder (owner, 2026-11-25)
+
+**The report.** "rain and thunder specifically ignore my master slider",
+with the Sound tab at Master 0 %, Effects 100 %, Ambience 80 %. The owner's
+rule for the sliders: "master * any other slider = volume".
+
+**What the code does today (read, 2026-11-25).**
+- The rule the owner gives is the rule built: every bus's slider is a gain
+  in dB (`volume_db`, 50 % is -12 dB), and master is a gain on kira's main
+  track, so the two multiply.
+- Rain (`rain_hit_water`, the rain beds) and thunder (`thunder_*`) play
+  through that main track like every other sound. They are the only
+  streamed effects (`stream: true`); a stream plays on its voice's
+  sub-track under `effects`, under `world`. The reverb is a send track,
+  and kira 0.12 sums send tracks into the main track before its volume
+  (`backend/resources/mixer.rs`, `track/main.rs`), so the reverb tail is
+  under master too.
+- There is one audio engine (`Engine::open` has one caller) and no other
+  sound output (`bevy_audio` is off; nothing else opens cpal).
+- **The one way the sliders are not read:** `default_volumes`. A launch
+  with `--capture`, `--frame-log` or `PBD_TAKE_SOUND=1` plays every bus at
+  the default volumes (master 80 %) and ignores the Sound tab entirely,
+  so all five sliders do nothing. A playtest started with `--frame-log`
+  (the standing way to judge frame time) hears rain and thunder whatever
+  master says.
+
+So the code alone does not show a sound that skips master. Either the run
+was a `default_volumes` launch, or something in the device path does what
+the code does not say. Neither is proved yet.
+
+**The plan.**
+1. `default_volumes` only where nobody is listening: a fixed-step capture
+   and a sound take (`PBD_TAKE_SOUND=1`). `--frame-log` is a real-time run
+   someone plays, so it reads the player's sliders. Frame time does not
+   move with a bus's gain (the same voices are mixed at any level).
+2. An instrument that proves the rule: a test on the mock engine, the real
+   mixer system and the real cues, with master at 0 % and every other
+   slider at 100 %, playing a streamed thunder, the rain loop and a rain
+   bed; the output after master is silent. The meters and the tap sit
+   before the main track's volume today, so they cannot see master: the
+   test reads the renderer's own output (a test backend), and the main
+   meter moves after master.
+3. If that test passes and the owner still hears rain at master 0 % in a
+   plain launch, the next step is the owner's `--audio-log` line
+   `AUDIO volumes master=...` from that run, which says whether the slider
+   reached the mixer.
+
+## Eating munches (owner, 2026-11-26)
+
+**The ask.** "eating sounds should have munching sounds".
+
+**What eats today (read, 2026-11-26).** One rule eats, `desktop::kitchen::eat_held`:
+the held stack loses one dish, the effect runs, one saved line. Two callers
+reach it, and both raise `kitchen::Ate` on the frame the save took it:
+- the right button with a dish in the selected slot (`kitchen::eat`): every
+  campfire dish, the steamed mussels and kelp crisps, and the glowing
+  mushroom, which is eaten raw (`cooking.ron`'s `dishes`);
+- the scripted `--eat` of a capture (`kitchen::scripted`).
+
+Nothing else eats. A tree's fruit is picked into the pack and is no dish, so
+it cannot be eaten yet; when it becomes one it is eaten through the same rule
+and sounds the same way. Animals eat in two ways and neither raises an event:
+a kept animal hand-fed (`husbandry`, a note and hearts, no message) and the
+graze drawn by `critters::motion::Eat` (drawn only). So no animal munches in
+this step; a fed animal is a quieter placed `eat_crisp` once a feed raises an
+event, not before.
+
+Today `Ate` plays `breath`, the gasp of surfacing from a long dive, which is
+the wrong sound.
+
+**The cues.** Two, each in four takes so a run of meals never repeats one:
+- `eat_crisp`: a bite and its crunch, then a chew or two, about 1.1 to 1.25 s.
+  Cut from recordings of an apple and a raw carrot being eaten.
+- `eat_soft`: two or three closed-mouth chews, about 1.2 s. Cut from
+  recordings of a mouthful being chewed.
+
+Which a dish plays is data: `mix.ron`'s `crisp_foods` lists the goods that
+crunch (the glowing mushroom and the kelp crisps today; fruit and raw veg
+when they become dishes). Every other dish is cooked and plays `eat_soft`.
+`MixConfig::problems` refuses a code that is no good. The one rule is
+`pbd_core::audio::eat_cue`.
+
+**Where it plays.** At the eye, `Where::At(listener.eye)`, as `breath` does:
+the player's own mouth, so it is not panned and is heard at full level. On
+the Effects bus (the cue's default), so the Effects and Master sliders scale
+it. One at a time (`cap: 1`): two meals in one frame are one munch.
+
+**How it is made.** Recorded CC0 only, through `tools/audio/fetch_cc0.py`
+(each sound's Freesound page read for its CC0 link) and `cc0_cues.json`: a
+window of each recording, a high pass at 90 Hz for handling rumble, faded
+out, peak -3 dBFS, mono. No synthesis: the recordings already have the bite,
+the crunch and the wet chew a synthesised munch would lack. Judged by
+`inspect_sfx.py check` and the contact sheet (a munch is two or three
+separate bursts, not one smear, and ends at nothing); only the owner's ears
+approve it.
+
+**Verify.** A test raises `Ate` for a cooked dish and for the mushroom and
+reads the asks `Sfx` holds: `eat_soft` and `eat_crisp`, at the eye. The
+cue-book tests hold both cues to `cues.ron` and every take's file to an Ogg
+that exists and is mono, and a test decodes each take.

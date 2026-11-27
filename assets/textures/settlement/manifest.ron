@@ -54,7 +54,8 @@
     // eight 32 px tiles (body, legs, head, horns, tail, mane, snout, ears),
     // laid by the metre on every face of a box; laid out by
     // tools/art/herd_hide.py from M26's hides.
-    (name: "herd_hide", width: 256, height: 128, repeat_m: 0.0),
+    // Nine rows since `survival-mode` 4.11: the game's five appended.
+    (name: "herd_hide", width: 256, height: 288, repeat_m: 0.0),
     (name: "banner", width: 32, height: 32, repeat_m: 0.0),
     (name: "sandstone", width: 32, height: 32, repeat_m: 2.0),
     (name: "salt", width: 32, height: 32, repeat_m: 2.0),
@@ -105,5 +106,32 @@
     (name: "forgefire", width: 32, height: 64, repeat_m: 0.0, cut: true),
     (name: "anvil", width: 32, height: 32, repeat_m: 0.6),
     (name: "anvilface", width: 32, height: 32, repeat_m: 0.6),
+    // `townsfolk` design 42p: a bridge's rail and leg cards, cut out, drawn
+    // by tools/art/bridge_cards.py in the timber's palette. The rail is
+    // mapped once across a cell's side; the legs repeat a metre down.
+    (name: "bridgerail", width: 64, height: 32, repeat_m: 0.0, cut: true),
+    (name: "bridgetrestle", width: 64, height: 32, repeat_m: 1.0, cut: true),
+    // `survival-mode` 4.10: the approved weapons' own textures (survey
+    // G10, docs/mockups/survival/weapons.js), mapped once over each part,
+    // and the tanning rack's hide, laid by the metre; drawn by
+    // tools/art/weapon_textures.py.
+    (name: "weapon_shaft", width: 32, height: 32, repeat_m: 0.0),
+    (name: "weapon_stone", width: 16, height: 16, repeat_m: 0.0),
+    (name: "weapon_bronze", width: 16, height: 16, repeat_m: 0.0),
+    (name: "weapon_iron", width: 16, height: 16, repeat_m: 0.0),
+    (name: "weapon_leather", width: 16, height: 16, repeat_m: 0.0),
+    (name: "weapon_bow", width: 32, height: 32, repeat_m: 0.0),
+    (name: "weapon_feather", width: 16, height: 16, repeat_m: 0.0),
+    (name: "weapon_wood", width: 32, height: 32, repeat_m: 0.0),
+    (name: "weapon_haft", width: 32, height: 32, repeat_m: 0.0),
+    (name: "weapon_blade_bronze", width: 16, height: 16, repeat_m: 0.0),
+    (name: "weapon_blade_iron", width: 16, height: 16, repeat_m: 0.0),
+    (name: "hide", width: 32, height: 32, repeat_m: 0.6),
+    // `survival-mode` 6.3: the laid bedroll's wool and hide, mapped once
+    // across and twice along; drawn by tools/art/bedroll_texture.py.
+    (name: "bedroll", width: 32, height: 32, repeat_m: 0.0),
+    // `survival-mode` design 18: the still's fresh water in its cup, drawn
+    // by tools/art/still_water_texture.py.
+    (name: "still_water", width: 16, height: 16, repeat_m: 0.0),
   ],
 )

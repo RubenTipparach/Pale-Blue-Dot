@@ -28,6 +28,8 @@ pub enum Stuff {
     Plank,
     /// A drum's staves.
     Barrel,
+    /// A raw hide (`survival-mode` design 17): the tanning rack's.
+    Hide,
 }
 
 impl Stuff {
@@ -42,16 +44,18 @@ impl Stuff {
             Stuff::Cloth => ("cloth", 0.25),
             Stuff::Plank => ("plank", 2.0),
             Stuff::Barrel => ("barrel", 1.1),
+            Stuff::Hide => ("hide", 0.6),
         }
     }
 
-    pub const ALL: [Stuff; 6] = [
+    pub const ALL: [Stuff; 7] = [
         Stuff::Wood,
         Stuff::Iron,
         Stuff::Stone,
         Stuff::Cloth,
         Stuff::Plank,
         Stuff::Barrel,
+        Stuff::Hide,
     ];
 }
 
@@ -327,6 +331,35 @@ fn vessel(shape: &mut Shape, centre: Vec3, y0: f32, y1: f32, h0: Vec2, h1: Vec2,
         rect(y0 + wall, h0 - inset),
     ];
     shape.loft(&rings, true, true);
+}
+
+/// A street lantern's ghost in the road planner (`townsfolk` design 42o),
+/// its foot at the origin, `y` up: a six-sided timber post bevelled at its
+/// foot, flaring at its collar into the lantern's housing and narrowing to
+/// its roof and finial, lofted as one piece at the size the world draws the
+/// street lantern (a post to 1.5 m, a lantern 0.3 m across to 1.86 m).
+pub fn ghost_lamp() -> Shape {
+    // (height, half width) up the lamp.
+    const STOPS: [(f32, f32); 11] = [
+        (0.0, 0.05),
+        (0.05, 0.07),
+        (1.38, 0.055),
+        (1.46, 0.07),
+        (1.5, 0.14),
+        (1.53, 0.15),
+        (1.7, 0.15),
+        (1.75, 0.165),
+        (1.8, 0.11),
+        (1.86, 0.04),
+        (1.9, 0.015),
+    ];
+    let rings: Vec<Vec<Vec3>> = STOPS
+        .iter()
+        .map(|&(y, r)| ring(Vec3::Y * y, Vec3::Y, Vec3::X, r, r, 6, 0.5))
+        .collect();
+    let mut shape = Shape::default();
+    shape.loft(&rings, true, true);
+    shape
 }
 
 /// A survey stake (design 39a): one tapered peg of split timber, its foot
@@ -614,6 +647,150 @@ pub fn mixer() -> Vec<(Stuff, Shape)> {
     ]
 }
 
+/// A lathe about the upright through `centre`: (radius, height) stops from
+/// the foot up, `sides` round, one smooth piece capped at both ends.
+fn upright(shape: &mut Shape, centre: Vec3, stops: &[(f32, f32)], sides: usize) {
+    let rings: Vec<Vec<Vec3>> = stops
+        .iter()
+        .map(|&(r, y)| ring(centre + Vec3::Y * y, Vec3::Y, Vec3::X, r, r, sides, 0.0))
+        .collect();
+    shape.loft(&rings, true, true);
+}
+
+/// The tanning rack (`survival-mode` design 17): two splayed uprights and
+/// a back prop, a rail top and bottom, and a raw hide laced between them,
+/// one irregular sheet bellied a little by the stretch, its edge ragged.
+/// The lacing is in the hide's texture, never a part stuck on.
+pub fn tanning_rack() -> Vec<(Stuff, Shape)> {
+    let (mut wood, mut hide) = (Shape::default(), Shape::default());
+    let lean = Vec3::new(0.0, 0.0, -0.18);
+    let mut seed = 81;
+    for x in [-0.62, 0.62] {
+        let foot = Vec3::new(x * 1.08, -0.05, 0.12);
+        let head = Vec3::new(x, 1.62, 0.0) + lean;
+        timber(&mut wood, foot, head, 0.06, 0.05, seed);
+        seed += 1;
+    }
+    // The back prop, from the top rail's middle to the ground behind.
+    timber(
+        &mut wood,
+        Vec3::new(0.0, 1.45, -0.2),
+        Vec3::new(0.0, -0.05, -0.85),
+        0.05,
+        0.055,
+        seed,
+    );
+    seed += 1;
+    for y in [0.3, 1.48] {
+        let at = |x: f32| Vec3::new(x, y, 0.12 * (1.0 - y / 1.62)) + lean * (y / 1.62);
+        timber(&mut wood, at(-0.72), at(0.72), 0.04, 0.04, seed);
+        seed += 1;
+    }
+    // The hide: rows from the bottom rail to the top, each across the
+    // frame's width with a ragged edge, bellied toward the front.
+    let rows = 9;
+    let cols = 9;
+    let mut grid = Vec::new();
+    for r in 0..=rows {
+        let v = r as f32 / rows as f32;
+        let y = 0.38 + v * (1.4 - 0.38);
+        let half = 0.5 + 0.06 * (v * std::f32::consts::PI).sin() - 0.05 * roll(91, r as u32);
+        for c in 0..=cols {
+            let u = c as f32 / cols as f32 * 2.0 - 1.0;
+            let x = u * half * (0.92 + 0.08 * roll(93, (r * 17 + c) as u32));
+            let belly = 0.05 * (1.0 - u * u) * (v * std::f32::consts::PI).sin();
+            let z = 0.12 * (1.0 - y / 1.62) + belly;
+            grid.push(Vec3::new(x, y, z) + lean * (y / 1.62));
+        }
+    }
+    let w = cols + 1;
+    let base = hide.positions.len() as u32;
+    for (i, p) in grid.iter().enumerate() {
+        let (r, c) = (i / w, i % w);
+        let dx = grid[r * w + (c + 1).min(cols)] - grid[r * w + c.saturating_sub(1)];
+        let dy = grid[(r + 1).min(rows) * w + c] - grid[r.saturating_sub(1) * w + c];
+        hide.positions.push(*p);
+        hide.normals.push(dx.cross(dy).normalize_or(Vec3::Z));
+        hide.uvs.push(Vec2::new(p.x, p.y));
+    }
+    for r in 0..rows as u32 {
+        for c in 0..cols as u32 {
+            let a = base + r * w as u32 + c;
+            let (b, d) = (a + 1, a + w as u32);
+            hide.indices.extend([a, b, d + 1, a, d + 1, d]);
+        }
+    }
+    hide.both_sides();
+    vec![(Stuff::Wood, wood), (Stuff::Hide, hide)]
+}
+
+/// The still (`survival-mode` design 15 and 18): a bellied stone pot on
+/// three stones, its lid, and a cane spout from the lid down to a cup,
+/// where the fresh water drips. Set beside a campfire, whose fire it
+/// shares; it has none of its own.
+pub fn still() -> Vec<(Stuff, Shape)> {
+    let (mut stone, mut wood) = (Shape::default(), Shape::default());
+    for k in 0..3 {
+        let a = k as f32 / 3.0 * std::f32::consts::TAU + 0.4;
+        upright(
+            &mut stone,
+            Vec3::new(a.cos() * 0.2, -0.02, a.sin() * 0.2),
+            &[(0.07, 0.0), (0.09, 0.05), (0.07, 0.12), (0.0, 0.14)],
+            7,
+        );
+    }
+    // The pot, bellied and lipped, its lid on it.
+    upright(
+        &mut stone,
+        Vec3::ZERO,
+        &[
+            (0.0, 0.12),
+            (0.16, 0.13),
+            (0.27, 0.24),
+            (0.3, 0.38),
+            (0.27, 0.52),
+            (0.21, 0.6),
+            (0.23, 0.63),
+            (0.2, 0.66),
+        ],
+        16,
+    );
+    upright(
+        &mut stone,
+        Vec3::ZERO,
+        &[
+            (0.21, 0.64),
+            (0.22, 0.67),
+            (0.15, 0.73),
+            (0.05, 0.76),
+            (0.0, 0.77),
+        ],
+        16,
+    );
+    // The cane spout, out of the lid and down to the cup.
+    timber(
+        &mut wood,
+        Vec3::new(0.06, 0.74, 0.0),
+        Vec3::new(0.62, 0.42, 0.04),
+        0.022,
+        0.018,
+        97,
+    );
+    upright(
+        &mut stone,
+        Vec3::new(0.66, 0.0, 0.05),
+        &[
+            (0.0, 0.0),
+            (0.09, 0.01),
+            (0.1, 0.12),
+            (0.08, 0.14),
+            (0.06, 0.06),
+        ],
+        10,
+    );
+    vec![(Stuff::Stone, stone), (Stuff::Wood, wood)]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -638,6 +815,8 @@ mod tests {
             ("stake", stake(7)),
             ("grinder", grinder()),
             ("mixer", mixer()),
+            ("tanning rack", tanning_rack()),
+            ("still", still()),
         ] {
             parts_ok(&parts);
             let all: Vec<Vec3> = parts
@@ -650,7 +829,7 @@ mod tests {
                 .fold(0.0, f32::max);
             let top = all.iter().map(|p| p.y).fold(f32::MIN, f32::max);
             assert!(reach < 1.4, "{name} reaches {reach} m");
-            assert!(top > 0.8 && top < 1.8, "{name} stands {top} m");
+            assert!(top > 0.7 && top < 1.8, "{name} stands {top} m");
         }
         // The stake's foot is sunk; its head 0.9 m up.
         let peg = &stake(3)[0].1;

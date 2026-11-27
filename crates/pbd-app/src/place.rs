@@ -14,6 +14,14 @@ use pbd_core::geo;
 use crate::planet::{PLANET_RADIUS, PlanetRenderFrame};
 use crate::weather::height_above_ground;
 
+/// The `--at` pair, degrees, that stands a launch on `direction` (the body
+/// frame's latitude and longitude, as `Place::lat` and `Place::lon`): for a
+/// capture instrument's log, which the screen's own code may not work out
+/// from the frame (`desktop::tests::the_screen_reads_the_compass_not_the_frame`).
+pub fn at_flag(direction: Vec3) -> (f32, f32) {
+    geo::lat_lon(direction).degrees()
+}
+
 /// A body-local point's place.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Place {

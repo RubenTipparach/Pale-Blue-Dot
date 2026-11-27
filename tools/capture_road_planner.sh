@@ -10,6 +10,8 @@
 #   lamps   a three-wide dirt road with lamps, paved, its street lanterns built both sides (design 42m)
 #   slope   a gravel road up a slope, two wide where the planner takes it, else one, paved whole
 #   bridge  a gravel road over a river on a plank bridge, paved whole
+#   ghost-lamps   the lamps road open in the planner, nothing staked: its ghost's lamp posts (design 42o)
+#   ghost-bridge  the bridge road open in the planner: its ghost's deck, posts and rails (design 42o)
 # With stakes in hand the view is lifted (design 42n, the owner's survey P2).
 # Each shot is a new world. Needs the fast build:
 #   cargo build --profile fast -p pbd-app
@@ -34,7 +36,7 @@ shot() {
   base=$COMMON
   case "$*" in *--at*) base=$AT ;; esac
   case "$*" in *--view*) base="--weather-at 1800 --rain 0 --hold-pointer --no-readout" ;; esac
-  timeout 2400 xvfb-run -a -s "-screen 0 1440x900x24" "$EXE" --world "planner-$name-$$" $base "$@" \
+  timeout 2400 xvfb-run -a -s "-screen 0 1440x900x24" "$EXE" --world "p$$-$name" $base "$@" \
     --capture "$D/$name.png" > "$D/$name.log" 2>&1
   echo "$name exit $?"
   [ -f "$D/$name.png" ] && convert "$D/$name.png" -quality 88 "$D/$name.jpg" && rm "$D/$name.png"
@@ -56,13 +58,15 @@ done
 road_shot() {
   name=$1; scene=$2; pitch=$3; how=$4; shift 4
   log="$D/$name-find.log"
-  timeout 900 xvfb-run -a -s "-screen 0 640x400x24" "$EXE" --world "find-$name-$$" $AT "$@" \
+  timeout 900 xvfb-run -a -s "-screen 0 640x400x24" "$EXE" --world "f$$-$name" $AT "$@" \
     --frames 400 --paving 2 --road-plan "$scene" --time 11 --capture "$D/$name-find.png" > "$log" 2>&1 &
   until grep -aq "scripted road view\|road in the fan" "$log" 2>/dev/null || ! kill -0 $! 2>/dev/null; do sleep 5; done
-  pkill -f "find-$name-$$"
+  pkill -f "f$$-$name"
   view=$(grep -ao "scripted road $how: [^[:cntrl:]]*" "$log" | head -1 | sed "s/.*$how: //")
   rm -f "$log" "$D/$name-find.png"
   [ -n "$view" ] || { echo "$name: no road found"; return; }
+  # A ghost shot leaves the found road open in the planner instead.
+  [ -n "${GHOST:-}" ] && view=${view/--road-plan /--road-plan ghost-}
   echo "$name: $view"
   if [ "$how" = overview ]; then
     shot "$name" --view column --height 10 --frames 400 --paving 2 --pitch "$pitch" --time 11 $view
@@ -71,7 +75,11 @@ road_shot() {
   fi
 }
 want slope && road_shot road-slope slope -2 view $SLOPE
-want bridge && road_shot road-bridge bridge -28 overview $BRIDGE
+# On foot, not `overview`: `--view column` stands no walker, and the paving
+# instrument needs one (the launch stops on a missing resource).
+want bridge && road_shot road-bridge bridge -12 view $BRIDGE
+want ghost-bridge && GHOST=1 road_shot road-planner-ghost-bridge-1100 bridge -40 view $BRIDGE
+want ghost-lamps && shot road-planner-ghost-lamps-1100 --frames 400 --paving 5 --road-plan ghost-lamps --pitch -24 --time 11
 want lamps && shot road-planner-lamps-2230 --frames 400 --paving 5 --road-plan lamps --pitch -24 --time 22.5
 # want two && shot road-planner-two-2230 --frames 400 --paving 5 --road-plan two --pitch -24 --time 22.5
 # The mark's look close up (design 39a, task 13.4), by day and at 22:30.

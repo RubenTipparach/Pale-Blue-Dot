@@ -1,0 +1,35 @@
+# Tasks
+
+Phase 4, with `survival-mode` (owner, 2026-11-26). The write-up and the
+mockup first; game code waits on their approval and a request to build.
+
+## 1. Mockup for the owner
+
+- [ ] 1.1 A forest fire spreading at night in the dry season through trees and grass, lit by its own flames, wind and rain on sliders, the rain putting it out, a dug break holding, and its scar by day (`docs/mockups/survival.html#fire`; drafted 2026-11-26, screenshots `docs/screenshots/survival-mode/mockup/`). Verify: the owner approves the look and the pace.
+- [ ] 1.2 Decision 12 (the owner, 2026-11-26: "Let's not spread fire too much for now , consider lots of factors like dryness of plants"): the Fire tab runs `plant_dry` (design 2), the slower spread and the tight limits (design 3, 5), with a dryness overlay, a green river band, green and cured patches and a season control (spring, summer, dry season); screenshots `fire-dryness.png` and `fire-spring-green.png` beside the night, rain and day-after shots (revised 2026-11-26). Verify: the owner approves the size and the pace (survey G9).
+
+## 2. The weather
+
+- [x] 2.1 `ground_wet` in `pbd_core::atmosphere` (design 2), stepped with it, additive in `to_bytes`. Verify: a test that soaked ground dries in about a world day of summer sun, and an atmosphere saved before restores. Tests: `atmosphere::tests::soaked_ground_dries_in_about_a_world_day_of_summer_sun`, `a_save_from_before_the_ground_wetness_restores_at_the_biomes_wetness` (and the older-layout tests, which strip the new field).
+- [x] 2.2 The fire weather and `plant_dry` (design 2, decision 12), derived and never saved, each factor read from its source. Verify: a test per row of design 2's table of examples; a cell below 0.5 never catching; spring-green grass never catching on a test patch; the dry season half a year apart across the equator. Tests: `fire::tests::the_fire_weather_matches_design_2s_rows`, `plant_dry_matches_design_2s_table_of_examples`, `the_hazard_grows_as_the_square_of_the_margin_and_is_nought_when_green`, `a_cell_below_one_half_never_catches_from_a_neighbour`, `spring_green_grass_never_catches_anywhere_on_the_patch`, `the_dry_season_is_half_a_year_apart_across_the_equator`, `snow_water_and_a_cactus_never_burn`.
+
+## 3. The rule in the core
+
+- [x] 3.1 `pbd_core::fire`: the fuel table from the generator (design 3), the `blaze` record and its lines, the one-second spread in cell-key order with seeded hashes, reading each neighbour's `plant_dry` (design 5), no ember throw, the limits (2 blazes, 300 cells, 40 burning). Verify: the design's Verification tests, decision 12's worked examples inside their ranges, a pentagon's five neighbours, and two runs and a reload mid-fire agreeing cell for cell. Tests: `fire::tests::a_late_summer_grass_fire_stays_small_and_slow`, `a_fire_on_open_dry_grass_stops_at_its_limits`, `a_pentagon_cell_tries_its_five_neighbours`, `the_same_blaze_burns_the_same_cells_on_two_runs_and_across_a_reload`, `a_torch_on_late_summer_grass_starts_a_blaze_and_a_third_is_a_damp_flame`, `lightning_starts_a_blaze_only_when_dry_and_once_in_its_quiet_spell`.
+- [x] 3.2 Stopping (design 7): rain, water, bare and green breaks, grazed pasture, the bucket, the yield set; a burnt cell unburnable until its grass is whole (design 8). Verify: a test each; a player's field and fence untouched. Tests: `fire::tests::rain_stops_a_front`, `a_front_goes_out_at_a_green_river_bank`, `a_bucket_puts_out_a_cell_and_its_neighbours`, `a_dug_line_and_the_players_field_hold`, `a_burnt_cell_cannot_burn_again_until_its_grass_is_whole`.
+- [x] 3.3 The scar and regrowth (design 8), charcoal from a snag. Verify: tests by day. Test: `fire::tests::the_scar_grows_back_by_day` (`scar::snag_gives` gives the charcoal); in the game the axe on a snag gives `charcoal` and fells it, test `wildfire::tests::a_snag_chopped_gives_charcoal_and_is_felled`.
+- [x] 3.4 `assets/config/fire.ron` (design 11), validated, the one source of defaults. Test: `fire::tests::the_shipped_file_parses_and_validates`.
+
+## 4. In the game
+
+- [x] 4.1 The server ticks blazes in Survival worlds only; ignition by a lit torch (design 6). Verify: an app test that a torch on late-summer grass starts a blaze and on spring-green grass does not; an Explorer world never makes one. Tests: `wildfire::tests::a_torch_on_late_summer_grass_starts_a_blaze_and_the_server_spreads_it`, `a_torch_on_spring_grass_makes_a_damp_flame_and_explorer_none`.
+- [x] 4.2 Flames, smoke, embers and the fire's light in the cell light field; the burnt-cell table for the ground and tree draws. Verify: `--capture` shots at night at the front, the scar the next day and at day 30, in `docs/screenshots/wildfire/`; on the owner's hardware, `perf_suite.py` before and after with a forced blaze (not in a cloud session). Built: `wildfire/fx.rs` (flames on the torch sheet, embers, field-lit smoke, snags and saplings from the tree's own model), the fire's light as lamps in the column tier (`ColumnTier::set_fire`), the scar in the tier's record words and the ash bit in `planet_surface.wgsl`. Shots in `docs/screenshots/wildfire/` (`wildfire.md`), lavapipe; `perf_suite.py` waits for the owner's hardware.
+- [x] 4.3 Torches in the rain (design 9): `lamp_out`, the held torch, relighting. Verify: an app test with forced rain, a roof keeping one lit, a reload keeping one out; Explorer's never going out. Tests: `wildfire::tests::a_placed_torch_goes_out_in_forced_rain_and_a_roof_keeps_one_lit`, `an_out_torch_is_drawn_dark_and_lights_nothing`; the held torch and F's relighting in `desktop/fire_play.rs` (design, "As built: in the game").
+- [x] 4.4 Danger to the living (design 10). Verify: an app test that standing in fire hurts and animals flee. Built: the player's harm and warmth (`desktop/fire_play.rs`), `harm_at` and `flee_from` (test `wildfire::tests::standing_in_fire_hurts_and_animals_flee`). Every animal runs from fire in the herds' step (`husbandry::fire_goal`), test `husbandry::tests::animals_run_from_a_burning_cell`.
+- [ ] 4.5 The dry strike, once `lightning-fire` is built (design 6), with its quiet spell (10 world days within 2 km). Verify: a `--strike-at` test in a dry place and a wet one, and a second strike in the quiet spell starting nothing.
+- [ ] 4.6 Multiplayer: two clients, one fire. Verify: the two-machine procedure (`multiplayer` design 20) shows the same scar.
+
+## 5. Close
+
+- [ ] 5.1 Screenshots of each state for the owner; the video task waits for the batch (CLAUDE.md).
+- [ ] 5.2 Move `world/fire` into `openspec/specs/` requirement by requirement with the test that proves each; `openspec validate --all`. Seven of eight moved 2026-11-27 to `openspec/specs/world/fire/spec.md`, each with the tests that pin it: the ground's wetness, plant dryness, small fires, the one spread rule, what stops fire, the scar and its regrowth, torches in the rain. Left in the change: "Forest fires start only in the dry season, in Survival", whose lightning half waits on 4.5 (`lightning-fire`).

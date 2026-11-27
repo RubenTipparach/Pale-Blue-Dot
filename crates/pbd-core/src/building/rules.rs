@@ -40,6 +40,8 @@ pub enum Rule {
     Overlap,
     /// No furniture in the clear space inside a door.
     DoorClear,
+    /// A beam needs a post at each end (`coop-missions` design 5).
+    Posts,
 }
 
 impl Rule {
@@ -60,13 +62,14 @@ impl Rule {
             Rule::InWall => "in_wall",
             Rule::Overlap => "overlap",
             Rule::DoorClear => "door_clear",
+            Rule::Posts => "posts",
         }
     }
 }
 
 /// Every rule, in the order they are asked: the first to fail is the
 /// reason.
-pub const RULES: [Rule; 14] = [
+pub const RULES: [Rule; 15] = [
     Rule::Outside,
     Rule::Slot,
     Rule::Doorway,
@@ -81,6 +84,7 @@ pub const RULES: [Rule; 14] = [
     Rule::RoofOverlap,
     Rule::Clear,
     Rule::DoorClear,
+    Rule::Posts,
 ];
 
 /// Whether `rule` holds for `piece` among `others` (the pieces already
@@ -118,6 +122,14 @@ pub fn holds<'a>(
             .any(|o| cuts(&o.shape, shape) || cuts(shape, &o.shape)),
         Rule::Landing => landing(site, others, shape),
         Rule::Room => room(site, others, shape),
+        Rule::Posts => match *shape {
+            Shape::Beam { a, b, layer } => [a, b].iter().all(|end| {
+                others.clone().any(
+                    |o| matches!(o.shape, Shape::Post { cells, layer: l } if cells == *end && l == layer),
+                )
+            }),
+            _ => true,
+        },
         Rule::RoofOverlap => roof_clear(site, others, shape),
         Rule::Clear => match shape {
             Shape::Lantern { cell, layer } | Shape::Furniture { cell, layer, .. } => {
@@ -278,6 +290,10 @@ fn rests_on(upper: &Shape, lower: &Shape) -> bool {
                 ..
             },
         ) => a == a2 && b == b2 && *layer == l + STOREY,
+        // A beam rests on the posts at its ends.
+        (Shape::Beam { a, b, layer }, Shape::Post { cells, layer: l }) => {
+            (a == cells || b == cells) && layer == l
+        }
         // A door hangs in its wall (design B8).
         (
             Shape::Door { a, b, layer },
@@ -301,6 +317,9 @@ fn joined(site: &Site, shape: &Shape) -> bool {
             foot: a, head: b, ..
         } => a != b && site.cells.adjacent(*a, *b),
         Shape::Post { cells, .. } => site.cells.corner(*cells).is_some(),
+        Shape::Beam { a, b, .. } => {
+            a != b && site.cells.corner(*a).is_some() && site.cells.corner(*b).is_some()
+        }
         Shape::Roof { cells, .. } => !cells.is_empty(),
         _ => true,
     }
@@ -398,8 +417,8 @@ fn held_up<'a>(
             cell: foot, layer, ..
         } => stands(foot, layer),
         // A roof is held by its room's walls: the room rule; a door by its
-        // wall: the doorway rule.
-        Shape::Roof { .. } | Shape::Door { .. } => true,
+        // wall: the doorway rule; a beam by its posts: the posts rule.
+        Shape::Roof { .. } | Shape::Door { .. } | Shape::Beam { .. } => true,
     }
 }
 

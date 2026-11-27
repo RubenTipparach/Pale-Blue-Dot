@@ -18,6 +18,7 @@ pub mod chests;
 pub mod clutter;
 #[cfg(feature = "desktop")]
 pub mod coast_walk;
+pub mod combat;
 #[cfg(feature = "desktop")]
 pub mod compass;
 #[cfg(feature = "desktop")]
@@ -87,6 +88,9 @@ pub mod settings;
 pub mod sites;
 #[cfg(feature = "desktop")]
 pub mod sky;
+// Survival in the game (`survival-mode` tasks 4.1, 4.2, 4.8, 4.9, 6.6).
+#[cfg(feature = "desktop")]
+pub mod survival;
 #[cfg(feature = "desktop")]
 pub mod tone;
 #[cfg(feature = "desktop")]
@@ -106,7 +110,12 @@ pub mod vehicles;
 pub mod walking;
 pub mod water_flow;
 #[cfg(feature = "desktop")]
+pub mod weapon_models;
+#[cfg(feature = "desktop")]
 pub mod weather;
+// Fire in a Survival world (`wildfire` tasks 4.1 to 4.4).
+#[cfg(feature = "desktop")]
+pub mod wildfire;
 pub mod world_map;
 
 #[cfg(all(test, feature = "desktop"))]

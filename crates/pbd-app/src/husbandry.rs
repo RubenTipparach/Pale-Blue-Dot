@@ -15,6 +15,7 @@
 
 pub mod breed;
 pub mod forms;
+pub mod hunt;
 pub mod loft;
 pub mod rig;
 
@@ -36,7 +37,7 @@ use pbd_core::goods::Good;
 use pbd_core::husbandry::farm::{Conditions, FarmState};
 use pbd_core::husbandry::record::{self, AnimalBody, FenceBody, Standing};
 use pbd_core::husbandry::{
-    Edge, Genome, HusbandrySettings, LandSpecies, Pen, Plan, Sex, Trust, herds, taming,
+    Edge, Genome, Ground, HusbandrySettings, LandSpecies, Pen, Plan, Sex, Trust, herds, taming,
 };
 use pbd_core::inventory::{Item, Slots};
 use pbd_core::locale::{Localized, tr, tr_with};
@@ -93,6 +94,9 @@ enum Mode {
     Flee,
     Approach,
     Follow,
+    /// A predator hunting (`survival-mode` combat C2): its pace is the
+    /// hunt's.
+    Hunt,
 }
 
 /// Where an animal may go.
@@ -150,6 +154,10 @@ struct Beast {
     /// Its head held where a capture set it (`--husbandry close-stand` or
     /// `close-graze`): grazing or up, looking ahead. A capture instrument.
     held_graze: Option<bool>,
+    /// Its health, hunt and carcass in a Survival world (combat C2).
+    game: hunt::Game,
+    /// The hunt's pace while in [`Mode::Hunt`], m/s.
+    hunt_mps: f32,
 }
 
 impl Beast {
@@ -203,6 +211,8 @@ impl Beast {
             sitting: false,
             posed: false,
             held_graze: None,
+            game: hunt::Game::default(),
+            hunt_mps: 0.0,
         }
     }
 }
@@ -231,6 +241,8 @@ pub struct Farmyard {
     /// Hearts to show over an animal this frame, for a feed
     /// (`taming-hearts`): whose, and how many.
     hearts: Vec<(Who, u8)>,
+    /// Predators' bites landed, pts, for the combat path (combat C2).
+    bites: Vec<f32>,
 }
 
 impl Default for Farmyard {
@@ -248,6 +260,7 @@ impl Default for Farmyard {
             deeds: Vec::new(),
             gained: Vec::new(),
             hearts: Vec::new(),
+            bites: Vec::new(),
         }
     }
 }
@@ -264,6 +277,10 @@ pub struct Seen {
     pub wild: bool,
     pub following: bool,
     pub female: bool,
+    /// A kill lying where it fell (Survival's hunt), and whether it has
+    /// been dressed.
+    pub dead: bool,
+    pub dressed: bool,
 }
 
 impl Farmyard {
@@ -279,6 +296,8 @@ impl Farmyard {
                 wild: matches!(b.who, Who::Wild { .. }),
                 following: b.mode == Mode::Follow,
                 female: b.sex == Sex::F,
+                dead: b.game.dead_s.is_some(),
+                dressed: b.game.dressed,
             })
     }
 
@@ -930,11 +949,17 @@ fn sync(world: World, mut save: Option<ResMut<WorldSave>>, mut yard: ResMut<Farm
     }
     // Wild herds near, on dry grass.
     let roster: Vec<LandSpecies> = world.roster().to_vec();
+    // A member killed in a Survival world stays away until its herd comes
+    // back (design 17): its `hunted` record.
+    let survival = hunt::mode_of(Some(&*save)).is_survival();
+    let day = world.day();
     for herd in wild_herds_near(up, near, &s.herds, &roster, world.sea.as_deref()) {
         let east = Vec3::Y.cross(herd.centre).normalize_or(Vec3::X);
         let north = herd.centre.cross(east);
-        for m in &herd.members {
-            if tamed.contains(&m.seed) {
+        for (member, m) in herd.members.iter().enumerate() {
+            if tamed.contains(&m.seed)
+                || (survival && hunt::away(save, crate::survival::rules(), m.seed, day))
+            {
                 continue;
             }
             let who = Who::Wild { seed: m.seed };
@@ -949,7 +974,7 @@ fn sync(world: World, mut save: Option<ResMut<WorldSave>>, mut yard: ResMut<Farm
             let genome = sp.keep.as_ref().map_or_else(Genome::default, |k| {
                 Genome::roll(m.seed, k.coats.len(), k.patterns.len())
             });
-            yard.beasts.push(Beast::new(
+            let mut beast = Beast::new(
                 who,
                 herd.species,
                 m.sex,
@@ -958,7 +983,9 @@ fn sync(world: World, mut save: Option<ResMut<WorldSave>>, mut yard: ResMut<Farm
                 d,
                 Range::Around(herd.centre, s.herds.spread_m * 1.5),
                 m.seed,
-            ));
+            );
+            beast.game.herd = Some((hunt::square_id(herd.square), member as u32));
+            yard.beasts.push(beast);
         }
     }
     // Everything else fades out. A follower and a scripted animal stay.
@@ -985,10 +1012,42 @@ pub fn wild_herds_near(
     let up = up.normalize_or(Vec3::Y);
     herds::squares_near(up, reach_m, PLANET_RADIUS, settings)
         .into_iter()
-        .filter_map(|square| herds::herd_in(seed, square, PLANET_RADIUS, settings, roster))
+        .flat_map(|square| herds::herds_in(seed, square, PLANET_RADIUS, settings, roster))
         .filter(|herd| herd.centre.angle_between(up) * PLANET_RADIUS <= reach_m + settings.spread_m)
-        .filter(|herd| grassy_land(sea, herd.centre))
+        .filter(|herd| {
+            let ground = roster
+                .get(herd.species as usize)
+                .map_or(Ground::Grass, |sp| sp.ground);
+            herd_ground(sea, herd.centre, ground)
+        })
         .collect()
+}
+
+/// Whether a direction is the ground a herd of this kind stands on: dry
+/// grass (the meadows' game and herds), or dry desert sand and rock (the
+/// dust hound, `survival-mode` design 17).
+pub fn herd_ground(sea: Option<&crate::sea::Sea>, d: Vec3, ground: Ground) -> bool {
+    match ground {
+        Ground::Grass => grassy_land(sea, d),
+        Ground::Desert => desert_land(sea, d),
+    }
+}
+
+/// Whether a direction is dry land of the desert: its sand or bare rock.
+pub fn desert_land(sea: Option<&crate::sea::Sea>, d: Vec3) -> bool {
+    if crate::planet::surface_height(d) <= 0.5 {
+        return false;
+    }
+    if sea.is_some_and(|s| s.depth_at(d) > 0.0) {
+        return false;
+    }
+    let config = crate::planet::terrain_config();
+    let altitude = pbd_core::planet_gen::surface_altitude(config, d);
+    pbd_core::planet_gen::biome_at(config, d, altitude) == pbd_core::planet_gen::Biome::Desert
+        && matches!(
+            pbd_core::planet_gen::top_material(config, d, altitude),
+            Material::Sand | Material::Rock | Material::Stone
+        )
 }
 
 /// Whether a direction is dry land topped with grass, by the generator (a
@@ -1673,11 +1732,22 @@ fn herd_trace() -> Option<HerdTrace> {
 }
 
 /// Move and animate every animal.
+/// The fire the herds run from (`wildfire` design 10).
+type FireNear<'w> = (
+    Option<Res<'w, crate::wildfire::FireNow>>,
+    Option<Res<'w, crate::wildfire::FireRules>>,
+);
+
 fn step(
     world: World,
     mut yard: ResMut<Farmyard>,
     hotbar: Option<Res<Hotbar>>,
     mut trace: Local<Option<Option<HerdTrace>>>,
+    (save, survival, fire): (
+        Option<Res<WorldSave>>,
+        Option<Res<crate::survival::Survival>>,
+        FireNear,
+    ),
 ) {
     let trace = trace.get_or_insert_with(herd_trace);
     if let Some(t) = trace.as_mut() {
@@ -1697,6 +1767,13 @@ fn step(
     let held = hotbar.as_ref().and_then(|h| h.held()).map(|st| st.item);
     let hours = dt / DAY_S * 24.0;
     let fade = dt / s.herds.fade_s;
+    // The hunt (combat C2): Survival only, never on a downed player.
+    let mode = hunt::mode_of(save.as_deref());
+    let rules = crate::survival::rules();
+    let player_down = survival
+        .as_deref()
+        .is_some_and(|sv| sv.dead || sv.vitals.as_ref().is_some_and(|v| v.consciousness.is_out()));
+    let mut bites = Vec::new();
     for b in yard.beasts.iter_mut() {
         b.shown = if b.leaving {
             (b.shown - fade).max(0.0)
@@ -1711,10 +1788,34 @@ fn step(
         let up = o.up_at(b.pos);
         let night = world.night_at(up);
         let bird = sp.plan == Plan::Bird;
+        if !b.posed {
+            bites.extend(hunt::drive(
+                b,
+                sp,
+                rules,
+                mode,
+                feet,
+                up,
+                night,
+                player_down,
+                dt,
+            ));
+        }
+        // A carcass lies where it fell (design 17).
+        if b.game.dead_s.is_some() {
+            b.speed = 0.0;
+            b.goal = None;
+            b.mode = Mode::Idle;
+            b.swing = 0.0;
+            b.pos = stand_on(&o, b.pos, ground);
+            continue;
+        }
         // What it wants.
         b.mode_s -= dt;
         if let (Who::Wild { .. }, Some(feet)) = (b.who, feet)
             && !b.posed
+            && b.game.hunt.phase == pbd_core::survival::predator::Phase::Wander
+            && b.mode != Mode::Hunt
         {
             b.trust.decay(hours, &s.taming);
             let d = feet.distance(b.pos);
@@ -1749,6 +1850,21 @@ fn step(
                 b.idle_s = b.rng.range(1.0, 3.0);
             }
             if b.mode == Mode::Flee && b.mode_s <= 0.0 {
+                b.mode = Mode::Idle;
+                b.goal = None;
+            }
+        }
+        // Fire (`wildfire` design 10): every animal, wild, kept or hunting,
+        // runs from a burning cell within the flight's reach, at its run;
+        // a herd's members, standing together, run the same way.
+        if !b.posed
+            && let (Some(now), Some(rules)) = (fire.0.as_deref(), fire.1.as_deref())
+        {
+            if let Some(goal) = fire_goal(&rules.0, now, &o, b.pos) {
+                b.mode = Mode::Flee;
+                b.mode_s = 2.5;
+                b.goal = Some(goal);
+            } else if b.mode == Mode::Flee && b.mode_s <= 0.0 {
                 b.mode = Mode::Idle;
                 b.goal = None;
             }
@@ -1792,6 +1908,7 @@ fn step(
                 }
             }
             Mode::Approach => sp.walk_mps * 0.8,
+            Mode::Hunt => hunt::hunt_pace(b),
             _ => sp.walk_mps,
         };
         let mut want = 0.0;
@@ -1929,6 +2046,7 @@ fn step(
             (b.clock_s * 2.2 + b.phase * 0.1).sin() * 0.35
         };
     }
+    yard.bites.extend(bites);
     yard.beasts
         .retain(|b| !(b.leaving && b.shown <= 0.0 && b.entity.is_none()));
 }
@@ -1936,6 +2054,20 @@ fn step(
 /// `local` stood on the ground under it: moved along its own up to the
 /// ground's radius there (`ground(up)`, f64), through the origin, so nothing
 /// is rounded at the planet's scale (`world-frames` 10.2).
+/// Where an animal at `local` runs to from the fire, if a burning cell is
+/// within the flight's reach (`wildfire` design 10): 12 m on, away from
+/// the nearest flame along the ground. Worked out in the planet's frame in
+/// f64, the step a tangent direction, which is the same in the local frame.
+pub(crate) fn fire_goal(
+    cfg: &pbd_core::fire::FireConfig,
+    now: &crate::wildfire::FireNow,
+    origin: &SimOrigin,
+    local: Vec3,
+) -> Option<Vec3> {
+    let away = crate::wildfire::flee_from(cfg, now, origin.to_world(local).pos)?;
+    Some(local + away.as_vec3() * 12.0)
+}
+
 fn stand_on(origin: &SimOrigin, local: Vec3, ground: impl Fn(Vec3) -> f64) -> Vec3 {
     origin.with_radius(local, ground(origin.up_at(local)))
 }
@@ -2018,7 +2150,8 @@ fn draw(
         let pose = rig::Pose {
             phase: b.phase,
             swing: b.swing,
-            head_down: b.head_down,
+            // A blow throws the head up (combat C2); drawn only.
+            head_down: b.head_down - b.game.flinch * 0.6,
             glance: b.glance,
             bob: if sp.plan == Plan::Bird {
                 (b.phase * 2.0).sin() * 0.02 * (b.swing / 0.45).min(1.0)
@@ -2031,7 +2164,8 @@ fn draw(
             } else {
                 0.0
             },
-            down: b.down,
+            // A carcass lies, a warning predator crouches.
+            down: hunt::drawn_down(b),
         };
         let mut builder = rig::Builder::default();
         rig::build(
@@ -2049,7 +2183,11 @@ fn draw(
             .born
             .zip(sp.keep.as_ref())
             .map_or(1.0, |(born, k)| k.young.stage(b.sex, born, day).1);
-        let place = Transform::from_translation(at).with_scale(Vec3::splat(size));
+        // A lunge's spring and nose (combat C2); drawn only.
+        let (lift, pitch, _) = hunt::lunge_draw(b);
+        let place = Transform::from_translation(at + up * lift)
+            .with_rotation(Quat::from_axis_angle(right, pitch))
+            .with_scale(Vec3::splat(size));
         match &b.entity {
             Some((e, handle)) => {
                 if let Some(mesh) = meshes.get_mut(handle) {
@@ -2479,24 +2617,35 @@ fn script(
                 );
             }
         }
-        "close" | "close-stand" | "close-graze" => {
+        "close" | "close-stand" | "close-graze" | "game" | "game-stand" => {
             // One of each species of the herd broadside a few metres ahead,
             // held where it stands, to look at close up; `close-stand` and
             // `close-graze` hold its head up or down to graze as well.
+            // `game` and `game-stand` are the game of `survival-mode` design
+            // 17 (task 4.11) the same way: the hare, the ridge goat, the
+            // rootling, the red fox and the dust hound.
             let held = match script.scene.as_str() {
-                "close-stand" => Some(false),
+                "close-stand" | "game-stand" => Some(false),
                 "close-graze" => Some(true),
                 _ => None,
             };
-            for (n, (id, x, y)) in [
-                ("meadow-hen", -1.9f32, 2.4f32),
-                ("woolback", -0.6, 3.4),
-                ("plodder", 1.6, 4.6),
-                ("horse", 4.6, 5.6),
-            ]
-            .into_iter()
-            .enumerate()
-            {
+            let herd: &[(&str, f32, f32)] = if script.scene.starts_with("game") {
+                &[
+                    ("hare", -2.0, 2.3),
+                    ("red-fox", -0.9, 3.0),
+                    ("ridge-goat", 0.6, 3.6),
+                    ("rootling", 2.3, 4.3),
+                    ("dust-hound", 4.1, 5.0),
+                ]
+            } else {
+                &[
+                    ("meadow-hen", -1.9, 2.4),
+                    ("woolback", -0.6, 3.4),
+                    ("plodder", 1.6, 4.6),
+                    ("horse", 4.6, 5.6),
+                ]
+            };
+            for (n, &(id, x, y)) in herd.iter().enumerate() {
                 if !roster.iter().any(|s| s.id == id) {
                     continue;
                 }
@@ -2506,7 +2655,7 @@ fn script(
                     n as u64 + 1,
                     feet_point + right * x + ahead * y,
                 );
-                let d = yard.beasts[k].pos.normalize();
+                let d = world.query(yard.beasts[k].pos).normalize();
                 yard.beasts[k].range = Range::Around(d, 0.05);
                 yard.beasts[k].facing = right;
                 yard.beasts[k].idle_s = 1.0e6;

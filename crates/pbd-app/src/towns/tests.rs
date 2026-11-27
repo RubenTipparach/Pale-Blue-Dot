@@ -187,6 +187,139 @@ fn a_world_stores_its_town_once_and_keeps_it_when_the_template_changes() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
+/// `playtest-fixes` design 6 (the owner's survey P5, 2026-11-26): a village
+/// stored at layout 2 is raised to layout 4 the first time it is read, by
+/// the world through the durable path, its smithy standing and everything
+/// else of its record as it was; it is not raised again. One with a block
+/// on a smithy cell stays at layout 2 with nothing written, and a layout-3
+/// town writes nothing.
+#[test]
+fn an_old_town_gains_its_forge_unless_something_is_built_on_it() {
+    use crate::saves::WorldSave;
+    use pbd_core::edits::Edit;
+    use pbd_core::terrain::Material;
+    let site = holbrook();
+    let config = *crate::planet::terrain_config();
+    let template = load_template("village");
+    let old_save = || {
+        let mut save = WorldSave::memory_only();
+        let (town, _) = ensure(&mut save, &site, &template, &config).expect("laid");
+        let town = town.expect("a town");
+        assert_eq!(town.layout, record::FORGE_LAYOUT);
+        // Nothing to raise at layout 3.
+        let lines = save.records.len();
+        let (again, seq) = ensure(&mut save, &site, &template, &config).expect("kept");
+        assert_eq!((again.as_ref(), seq), (Some(&town), 0));
+        assert_eq!(save.records.len(), lines);
+        let old = Town {
+            layout: 2,
+            ..town.clone()
+        };
+        save.store(&Author::Creation, vec![record::settlement_record(&old)])
+            .expect("set back to layout 2");
+        (save, old)
+    };
+    let solids = |t: &Town| {
+        build(
+            &site,
+            t,
+            Some(&template),
+            &load_kits(),
+            &|_: &str| 2.0,
+            &config,
+        )
+        .expect("built")
+        .solids
+        .len()
+    };
+    // Raised.
+    let (mut save, old) = old_save();
+    // A save with no disk behind it waits on nothing; the record is what
+    // says it was written.
+    let (raised, _) = ensure(&mut save, &site, &template, &config).expect("read");
+    let raised = raised.expect("a town");
+    assert_eq!(raised.layout, record::RAISED_CHORD_LAYOUT);
+    assert_eq!(
+        Town {
+            layout: 2,
+            ..raised.clone()
+        },
+        old,
+        "only its layout"
+    );
+    assert_eq!(
+        stored(&save, site.id),
+        Stored::Town(raised.clone()),
+        "in the save"
+    );
+    assert_eq!(
+        save.records
+            .get(record::SETTLEMENT_RECORD, u64::from(site.id))
+            .map(|r| r.body.clone()),
+        Some(record::settlement_record(&raised).body),
+    );
+    assert_eq!(solids(&raised), solids(&old) + 1, "its smithy stands");
+    let (ground_old, ground_new) = (
+        record::ground_of(
+            &old,
+            &patch_round(site.direction, config.radius_m, patch_m(site.kind)),
+            config.radius_m,
+            natural(&config),
+        )
+        .unwrap()
+        .1,
+        record::ground_of(
+            &raised,
+            &patch_round(site.direction, config.radius_m, patch_m(site.kind)),
+            config.radius_m,
+            natural(&config),
+        )
+        .unwrap()
+        .1,
+    );
+    for c in old.cells.iter() {
+        let d = pbd_core::cell_key::key_direction(c.2).unwrap();
+        assert_eq!(
+            ground_old.at(d).map(|g| g.height(0.0)),
+            ground_new.at(d).map(|g| g.height(0.0)),
+            "the ground stays, cell for cell"
+        );
+    }
+    let lines = save.records.len();
+    let (again, seq) = ensure(&mut save, &site, &template, &config).expect("kept");
+    assert_eq!((again, seq), (Some(raised), 0), "raised once");
+    assert_eq!(save.records.len(), lines);
+    // A block on one of the smithy's cells: left as it is.
+    let (mut save, old) = old_save();
+    let key = *record::smithy_keys(&old, &template)
+        .expect("smithy cells")
+        .iter()
+        .next()
+        .unwrap();
+    save.edits.set(Edit {
+        cell: key,
+        layer: 60,
+        material: Material::Stone,
+    });
+    let before = save
+        .records
+        .get(record::SETTLEMENT_RECORD, u64::from(site.id))
+        .cloned();
+    let (kept, seq) = ensure(&mut save, &site, &template, &config).expect("read");
+    assert_eq!(
+        (kept, seq),
+        (Some(old), 0),
+        "no smithy over the player's block"
+    );
+    assert_eq!(
+        save.records
+            .get(record::SETTLEMENT_RECORD, u64::from(site.id))
+            .cloned(),
+        before,
+        "nothing written"
+    );
+}
+
 /// A settlement record this build cannot read is never taken for no town:
 /// no town is built and nothing is written over it.
 #[test]
@@ -2739,6 +2872,47 @@ fn print_the_days_linenleighs_board_posts_a_lost_villager() {
         if let Some(place) = jobs.iter().position(|j| j.kind == JobKind::Lost) {
             println!(
                 "day {day}: a lost villager, row {place} of {} on the board",
+                jobs.len()
+            );
+            found += 1;
+            if found == 5 {
+                break;
+            }
+        }
+    }
+}
+
+/// A measurement instrument, run by hand (playtest-fixes design 7,
+/// `townsfolk` design 47): the first game days on which Linenleigh's board
+/// posts a delivery, in the memory-only world the captures play, so a
+/// capture of a parcel's pick-up can be taken on one.
+#[test]
+#[ignore]
+fn print_the_days_linenleighs_board_posts_a_delivery() {
+    use pbd_core::economy::jobs::{Board, JobKind, Town};
+    let site = sites_of(SiteKind::Walled)
+        .into_iter()
+        .find(|s| s.name == "Linenleigh")
+        .unwrap();
+    let cfg = crate::economy::EconomyConfig::load();
+    let board = Board {
+        jobs: &cfg.jobs,
+        trade: &cfg.trade,
+        values: &cfg.values,
+        seed: crate::saves::WorldSave::memory_only().seed(),
+    };
+    let town = Town {
+        site: site.id,
+        kind: site.kind,
+        neighbours: &[1, 2, 3],
+        roads_to: &[],
+    };
+    let mut found = 0;
+    for day in 0..200 {
+        let jobs = board.posted(town, day, 0, &Default::default());
+        if let Some(place) = jobs.iter().position(|j| j.kind == JobKind::Deliver) {
+            println!(
+                "day {day}: a delivery, row {place} of {} on the board",
                 jobs.len()
             );
             found += 1;

@@ -33,6 +33,10 @@ pub struct Showcase {
     /// The day of the year, for a season.
     #[serde(default)]
     pub day: Option<u32>,
+    /// The new world is a Survival one (`survival-mode` 6.4); Explorer when
+    /// absent.
+    #[serde(default)]
+    pub survival: bool,
     pub shots: Vec<Shot>,
 }
 
@@ -215,6 +219,21 @@ pub enum Act {
     /// `hot`, `temperate` or `cold` dry ground, a `reef` (swum onto) or a
     /// `town`.
     Seek(String),
+    /// Pick a path on the path picker (`survival-mode` 6.5): the Missions
+    /// screen opened with O (the picker comes up with it while a path is to
+    /// be picked, from its Paths plaque otherwise), the path's card pressed,
+    /// the screen shut.
+    Path(String),
+    /// An empty hand: no tool (G and the wheel) and an empty hotbar slot
+    /// picked by its number key.
+    Empty,
+    /// F this many times at what is ahead, a second and a half apart: a sip
+    /// at the water each, with an empty hand.
+    Drink(u32),
+    /// Hunt with the weapon in hand: walk up to the nearest wild animal of
+    /// these roster ids (`|` between them), look at it and hold the left
+    /// button, a carcass struck again to dress it; until.
+    Hunt(String, Until),
     /// A key pressed once, as the player presses it (`F`, `W`, ...).
     Tap(String),
     /// A key held for seconds.

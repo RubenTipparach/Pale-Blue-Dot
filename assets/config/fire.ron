@@ -1,0 +1,70 @@
+// Fire (pbd_core::fire; openspec/changes/wildfire design 11). Seconds of
+// world time, metres, mm/h of rain, deg C, world days of 48 minutes.
+// Forest fires and torches going out are Survival's only; the ground's
+// wetness is the weather's, stepped in every world.
+(
+    tick_s: 1.0,
+    // Design 2: rain adds per_mm for each millimetre; it dries by
+    // dry_per_hour an in-game hour (120 s) x (0.5 + sunlight / sun_ref_wm2)
+    // x (1 - humidity) x clamp((air_c + dry_from_c) / dry_span_c, 0, 1).
+    ground_wet: (per_mm: 0.1, dry_per_hour: 0.04, sun_ref_wm2: 1000.0,
+                 dry_from_c: 5.0, dry_span_c: 30.0),
+    weather: (humid_dry: 0.35, humid_wet: 0.85, humid_keep: 0.6,
+              warm_from_c: 0.0, warm_full_c: 25.0, warm_floor: 0.4),
+    dryness: (
+        // Below it nothing catches; burn(d) = ((d - dry_min) / (1 - dry_min))^burn_power.
+        dry_min: 0.5,
+        burn_power: 2.0,
+        // The fire's own season: a bump on the place's own year at
+        // dry_peak, nought dry_half either side; the flora's straw counts
+        // at straw_share.
+        season: (dry_peak: 0.10, dry_half: 0.20, straw_share: 0.5),
+        // cure = base + per_cure x c (+ per_litter x litter).
+        cure: (
+            grass: (base: 0.2, per_cure: 0.8),
+            shrub: (base: 0.25, per_cure: 0.6),
+            deciduous: (base: 0.15, per_cure: 0.45, per_litter: 0.15),
+            conifer: (base: 0.3, per_cure: 0.6),
+            evergreen: (base: 0.1, per_cure: 0.3),
+            cactus: (base: 0.0, per_cure: 0.0),
+        ),
+        shade: (per_tree: 0.07, own_tree: 0.85),
+        water: (bank: 0.35, from_cells: 1.0, to_cells: 3.0),
+        hollow: (per_layer: 0.06, clamp_layers: 2.0),
+        patch: (base: 0.62, span: 0.5, field_m: 60.0, cell_base: 0.92, cell_span: 0.16),
+        grazed: (mult: 0.5, cells: 2),
+    ),
+    // Design 3: the hazard a second to each neighbour at burn 1, and how
+    // long a cell burns.
+    fuel: (
+        grass: (spread_per_s: 0.20, burn_s: 15.0),
+        shrub: (spread_per_s: 0.12, burn_s: 40.0),
+        deciduous: (spread_per_s: 0.02, burn_s: 90.0),
+        conifer: (spread_per_s: 0.04, burn_s: 90.0),
+        evergreen: (spread_per_s: 0.02, burn_s: 90.0),
+    ),
+    crown: (mult: 3.0, dry: 0.85, wind_mps: 6.0, crown_s: 30.0),
+    wind: (down_per_mps: 0.15, up_per_mps: 0.10, floor: 0.2),
+    slope: (up_per_layer: 0.10, down: 0.8),
+    rain: (spread_scale_mmh: 0.5, douse_s_per_mmh: 0.5, no_catch_mmh: 1.0),
+    // No ember throw for now (decision 12): a fire crosses only to a
+    // touching cell.
+    ignite: (lightning_dry: 0.7, lightning_rain_below_mmh: 0.5,
+             lightning_quiet_days: 10.0, lightning_quiet_m: 2000.0),
+    limits: (live_blazes: 2, cells: 300, burning: 40),
+    // Design 8, in world days since a cell burnt out. A cell's grass is
+    // back between grass and grass_whole by its own roll.
+    regrow_days: (shoots: 2.0, grass: 4.0, grass_whole: 8.0, shrub: 10.0,
+                  sapling: 20.0, young: 40.0, tree: 60.0),
+    // What a felled snag gives.
+    snag: (good: "charcoal", count: 1),
+    // Design 9. A torch goes out after this long in rain_seen or more
+    // under open sky (no solid cell within sky_layers above it).
+    torch: (placed_out_s: 20.0, held_out_s: 10.0, rain_seen: 0.3, sky_layers: 8,
+            relight_s: 1.0, damp_flame_s: 3.0),
+    // Design 10. Being near a fire is warm through survival.ron's own fire
+    // table (its "wildfire" row), not here.
+    harm: (in_cell_per_s: 4.0, beside_per_s: 1.0, flee_m: 40.0),
+    // Design 7: a poured bucket leaves the cells it put out wet this long.
+    bucket_wet_days: 1.0,
+)

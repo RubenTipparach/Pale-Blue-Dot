@@ -13,6 +13,10 @@ arrival:
   new_world: A NEW WORLD
   welcome_back: WELCOME BACK
 block:
+  tanning_rack:
+    name: tanning rack
+  still:
+    name: still
   drafting_table:
     name: drafting table
   air:
@@ -193,6 +197,7 @@ build:
   no_furniture: No furniture carried
   not_empty: Empty it first
   piece:
+    beam: beam
     door: door
     floor: floor
     furniture: furniture
@@ -212,6 +217,7 @@ build:
     outside: "Too far to build"
     overlap: Against another piece
     pentagon: "Can't build on this cell"
+    posts: Needs a post at each end
     room: "Walls must close round the room"
     roof_overlap: "Another roof is in the way"
     slot: "Something is already here"
@@ -429,9 +435,45 @@ craft:
   queue: "QUEUE"
   queue_full: "The {station}'s queue is full"
   queue_more: "QUEUE +{count}"
+  repair: REPAIR
   title: CRAFT
   waiting: "{recipe}  +{waiting} WAITING"
   workbench: WORKBENCH
+crew:
+  needs_each: Everyone has to help
+  needs_hands: Needs another pair of hands
+crew_mission:
+  house-floor:
+    help: Lay the floor together.
+    objective:
+      "0": Lay floor
+    title: Lay the floor
+  house-hearth:
+    help: Put a campfire or a brazier in the house.
+    objective:
+      "0": Place a fire
+    title: Light the hearth
+  house-roof:
+    help: Put a roof over the walls.
+    objective:
+      "0": Build the roof
+    title: Roof it
+  house-site:
+    help: Dig the site level together.
+    objective:
+      "0": Dig the site
+    title: Clear the site
+  house-timber:
+    help: Fell trees and bring logs. Everyone brings some.
+    objective:
+      "0": Fell trees
+      "1": Bring logs
+    title: Gather timber
+  house-walls:
+    help: Raise the walls, a door and a window together.
+    objective:
+      "0": Raise walls
+    title: Raise the walls
 crop:
   chili:
     name: chili
@@ -466,6 +508,7 @@ equipment:
   hand_tip: "{tool}: {purpose}"
   picker_hint: wheel to choose, let go of G
 farm:
+  fertilized: "{crop} fertilized"
   already_growing: Something is already growing here
   harvested: "+{produce} {crop}, +{seeds} seed"
   no_room: No room in the pack
@@ -496,6 +539,11 @@ fauna:
     rivers: rivers
     shallows: shallows
     shelf: shelf
+fire:
+  thing:
+    grass: grass
+    shrub: bush
+    tree: tree
 fishing:
   fact:
     about_cm: "about {length} cm"
@@ -558,6 +606,10 @@ guide:
   title: FIELD GUIDE
 husbandry:
   adult:
+    billy: billy
+    nanny: nanny
+    boar: boar
+    sow: sow
     bull: bull
     cockerel: cockerel
     cow: cow
@@ -567,6 +619,9 @@ husbandry:
     ram: ram
     stallion: stallion
   coat:
+    pink: pink
+    ginger: ginger
+    sooty: sooty
     bay: bay
     black: black
     brown: brown
@@ -618,12 +673,15 @@ husbandry:
     sick: sick
     strayed: "strayed: feed it"
   morph:
+    gold: gold
     albino: albino
     dapple: dapple
     golden: golden
     melanic: melanic
   no_room: No room to carry it
   pattern:
+    saddle: saddle
+    spotted: spotted
     belted: belted
     blaze: blaze
     piebald: piebald
@@ -639,6 +697,9 @@ husbandry:
     female: female
     male: male
   stage:
+    kid: kid
+    piglet: piglet
+    weaner: weaner
     calf: calf
     chick: chick
     foal: foal
@@ -668,10 +729,15 @@ husbandry:
   young: "{name} {stage}"
 interact:
   act:
+    fertilize: "Fertilize {thing}"
+    gather_sea: "Gather {thing}"
+    sip: "Sip {thing}"
+    take_ornament: "Take up {thing}"
     board: "Board {thing}"
     build: "Build {thing}"
     check: "Check {thing}"
     collect: "Collect {thing}"
+    drink: "Drink {thing}"
     drive: "Drive {thing}"
     feed: "Feed {thing}"
     fill: "Place {thing}"
@@ -706,10 +772,87 @@ interact:
     talk: "Talk to {thing}"
     till: "Till {thing}"
     unhitch: "Unhitch {thing}"
+    use_still: "Use {thing}"
   key: F
 inventory:
   fish: fish
 item:
+  raw-meat:
+    name: raw meat
+  hide:
+    name: hide
+  bone:
+    name: bone
+  feather:
+    name: feather
+  sea-bucket:
+    name: bucket of sea water
+  charcoal:
+    name: charcoal
+  straw:
+    name: straw
+  stone-spear:
+    name: stone spear
+  bronze-spear:
+    name: bronze spear
+  iron-spear:
+    name: iron spear
+  bow:
+    name: bow
+  stone-arrow:
+    name: stone arrow
+  bone-arrow:
+    name: bone arrow
+  bronze-arrow:
+    name: bronze arrow
+  bronze-hunting-axe:
+    name: bronze hunting axe
+  iron-hunting-axe:
+    name: iron hunting axe
+  bronze-sword:
+    name: bronze sword
+  iron-sword:
+    name: iron sword
+  straw-hat:
+    name: straw hat
+  wool-cloak:
+    name: wool cloak
+  bedroll:
+    name: bedroll
+  meat-stew:
+    name: meat stew
+  staghorn-coral:
+    name: staghorn coral
+  finger-coral:
+    name: finger coral
+  brain-coral:
+    name: brain coral
+  table-coral:
+    name: table coral
+  soft-coral:
+    name: soft coral
+  tube-sponge:
+    name: tube sponge
+  barrel-sponge:
+    name: barrel sponge
+  sea-fan:
+    name: sea fan
+  sea-anemone:
+    name: sea anemone
+  sea-lettuce:
+    name: sea lettuce
+  coral-rubble:
+    name: coral rubble
+  mussels:
+    name: mussels
+  kelp:
+    name: kelp
+  fertilizer:
+    name: fertilizer
+  steamed-mussels:
+    name: steamed mussels
+  kelp-crisps:
+    name: kelp crisps
   mallet:
     name: mallet
   apple:
@@ -859,6 +1002,7 @@ jobs:
   abandon: ABANDON
   abandoned_line: Job abandoned
   done_notice: Job done
+  escort_marker: Trader
   hand_in: HAND IN
   kind:
     cook: "Cook {count} {thing}  {have}/{count}"
@@ -877,16 +1021,39 @@ jobs:
     trade: "Sell {count} goods here  {have}/{count}"
   lamp: lamp
   lost_marker: Lost villager
+  name:
+    cook: "Cook {count} {thing}"
+    deliver: "Take the parcel to {town}"
+    escort: "Walk a trader to {town}"
+    fish: "Catch {count} fish"
+    gather: "Bring {count} {thing}"
+    harvest: "Harvest {count} {thing}"
+    herd: "Collect {count} {thing}"
+    hunt: "Bring {count} {thing}"
+    lamps: "Light {count} lamps at dusk"
+    lost: "Bring a lost villager home"
+    mine: "Dig {count} {thing}"
+    repair: "Mend a broken wall"
+    rockfall: "Clear the rockfall off the road"
+    trade: "Sell {count} goods here"
   no_parcel: No parcel for this town
   none: No work today
   not_done: Not done yet
   not_taken: Not taken
+  none_taken: No jobs taken
   paid: "Paid {coins} coins"
+  parcel_marker: Parcel drop-off
   posted: ON THE BOARD
+  posted_at: "From {town}"
   take: TAKE
   taken: Already taken
   taken_line: Job taken
   title: JOBS
+  track: TRACK
+  tracking: TRACKING
+  track_hand_in: "Hand it in at {town}"
+  track_pick_up: Get the parcel from the trader
+  track_row: Done
   wall: wall
   wrong_town: Hand it in where you took it
   yours: YOUR JOBS
@@ -1041,6 +1208,12 @@ mission:
       "0": Board a boat
       "1": Travel by boat
     title: Take a boat
+  bow:
+    help: Make the bow at the workbench.
+    objective:
+      "0": Make a bow
+      "1": Make arrows
+    title: Bow and arrows
   bread:
     help: At the campfire, bake flatbread from wheat you grew.
     objective:
@@ -1057,6 +1230,11 @@ mission:
     objective:
       "0": Place blocks
     title: Build a shelter
+  cactus:
+    help: Hold the straw to a desert cactus.
+    objective:
+      "0": Sip a cactus
+    title: Cactus juice
   collect:
     help: "A kept animal in a pen gives an egg, wool or milk once a day: F on it collects."
     objective:
@@ -1067,6 +1245,22 @@ mission:
     objective:
       "0": Grill fish
     title: Cook fish
+  cook-meal:
+    help: Fry an egg or grill fish at the campfire.
+    objective:
+      "0": Cook a dish
+      "1": Eat it
+    title: A hot meal
+  cook-meat:
+    help: Put raw meat on the campfire.
+    objective:
+      "0": Cook roast meat
+    title: Cook meat
+  cool-down:
+    help: Stand in the shade or get in the water.
+    objective:
+      "0": Cool down
+    title: Out of the heat
   crafting-table:
     help: Make a workbench from six planks in the Craft row, then place it on the ground.
     objective:
@@ -1078,6 +1272,21 @@ mission:
     objective:
       "0": Dig stone
     title: Dig into the hill
+  dress:
+    help: Use a blade on the kill before it is gone.
+    objective:
+      "0": Take a hide
+    title: Dress a kill
+  dress-weather:
+    help: Put it on in the pack.
+    objective:
+      "0": Wear a hat or cloak
+    title: Dress for the weather
+  drink:
+    help: Press F at a river or lake. Sea water is salt.
+    objective:
+      "0": Drink fresh water
+    title: Drink water
   eat:
     help: "Put a dish on the hotbar and use it; its effect shows by the hotbar."
     objective:
@@ -1101,6 +1310,11 @@ mission:
       "0": Make fences
       "1": Make a gate
     title: Make fences
+  fend-off:
+    help: Foxes come at night. Strike back.
+    objective:
+      "0": Drive one off
+    title: Drive off a predator
   find-seeds:
     help: "Seeds turn up when you dig grass, and wild plants give them when picked (F)."
     objective:
@@ -1112,12 +1326,22 @@ mission:
       "0": Make a campfire
       "1": Set it down
     title: Make a fire
+  first-night:
+    help: "Keep warm, fed and watered until morning."
+    objective:
+      "0": See the dawn
+    title: The first night
   flock:
     help: "Woolbacks and plodders graze in open country; tame one as you did the hen."
     objective:
       "0": Tame a woolback or plodder
       "1": Collect wool or milk
     title: A mixed herd
+  forage:
+    help: "Pick fruit from a tree, or take an egg from a nest."
+    objective:
+      "0": Eat raw food
+    title: Something to eat
   forge:
     help: Make a forge at the workbench and place it on the ground.
     objective:
@@ -1146,12 +1370,38 @@ mission:
     objective:
       "0": Harvest wheat
     title: Harvest
+  hold-breath:
+    help: Dive and come up before your breath runs out.
+    objective:
+      "0": Stay under 15 s
+    title: Hold your breath
+  hunt:
+    help: "Hunt with the spear. Thrown, it hits harder."
+    objective:
+      "0": "Kill a hen, hare or goat"
+    title: Hunt
+  hunting-axe:
+    help: A kill dressed with it gives its hide and more meat.
+    objective:
+      "0": Make it
+      "1": Dress a kill with it
+    title: A hunting axe
   iron:
     help: "Smelting mixed ore gives iron as well as copper and tin."
     objective:
       "0": Smelt iron ingots
       "1": Make an iron pickaxe
     title: The iron age
+  long-shot:
+    help: Draw fully and aim above it.
+    objective:
+      "0": Kill from 20 m
+    title: A long shot
+  long-swim:
+    help: Swim steady. Sprinting tires you fast.
+    objective:
+      "0": Swim
+    title: A long swim
   map:
     help: "Open the map (M), right-click a place at least 200 m away to mark it, and walk there."
     objective:
@@ -1186,11 +1436,21 @@ mission:
     objective:
       "0": Plant wheat seeds
     title: Plant a field
+  put-out:
+    help: Fires start in the dry season.
+    objective:
+      "0": Put out a fire
+    title: Put out a fire
   reef:
     help: Dive to a warm reef and mine some reef rock with a pickaxe.
     objective:
       "0": Mine reef rock
     title: Get a reef
+  relight:
+    help: Touch it to a fire.
+    objective:
+      "0": Relight a torch
+    title: Relight a torch
   rod:
     help: Make a rod at the workbench from planks, rope and fiber.
     objective:
@@ -1207,6 +1467,22 @@ mission:
     objective:
       "0": Smelt bronze ingots
     title: Smelt bronze
+  soft-landing:
+    help: Deep water breaks a fall.
+    objective:
+      "0": Fall into deep water
+    title: Into the water
+  spear:
+    help: "In the pack, the Craft row makes a spear from a log, stone and fibre."
+    objective:
+      "0": Make a stone spear
+    title: Make a spear
+  still:
+    help: Fill the still at the sea. The fire boils the salt out.
+    objective:
+      "0": Set a still by a fire
+      "1": Drink from it
+    title: Water from the sea
   stone-tools:
     help: "At the workbench (F), make a stone pickaxe and a stone shovel."
     objective:
@@ -1220,16 +1496,31 @@ mission:
       "1": Set it down
       "2": Store a stack
     title: A chest
+  straw:
+    help: Two fibre make a straw.
+    objective:
+      "0": Make a straw
+    title: A cactus straw
   swim:
     help: Walk into deep water and swim.
     objective:
       "0": Swim
     title: Into the water
+  sword:
+    help: Make it at the workbench from bronze.
+    objective:
+      "0": Make a bronze sword
+    title: A sword
   tame:
     help: Stand still with its food in hand and let a wild animal come to you, then feed it.
     objective:
       "0": Tame a hen
     title: Tame an animal
+  tan:
+    help: Hang a hide on the tanning rack.
+    objective:
+      "0": Make leather
+    title: Tan a hide
   three-crops:
     help: "Wild plants give turnip, chili and frost kale seed. Chili grows where it is hot, frost kale where it is cool."
     objective:
@@ -1259,6 +1550,11 @@ mission:
     objective:
       "0": Reach a town
     title: Find a town
+  warm-up:
+    help: Stand close to a campfire.
+    objective:
+      "0": Warm up
+    title: Warm by the fire
   water-field:
     help: "Fill the bucket at water (right click), then pour it beside the field."
     objective:
@@ -1270,22 +1566,70 @@ mission:
       "0": Fell trees
       "1": Gather logs
     title: Gather wood
+mission_path:
+  about:
+    line: "The map, a reef, a town and a boat."
+    name: Getting about
+  choose: CHOOSE A PATH
+  choose_hud: Choose a path
+  cooking:
+    line: Cook what you catch.
+    name: Cooking
+  count: "{done}/{total}"
+  done: "{path} is done."
+  eat-drink:
+    line: "Fresh water, wild food and a hot meal."
+    name: Eat and drink
+  farming:
+    line: "Seeds, a field and bread."
+    name: Farming
+  fire_lit: The fire is lit.
+  first: "First: {mission}"
+  fishing:
+    line: "A rod, bait and fish."
+    name: Fishing
+  herding:
+    line: "Fences, a tame animal and eggs."
+    name: Herding
+  hunting:
+    line: "A spear and a hunt, then a bow and blades."
+    name: Hunting
+  later: Later
+  light:
+    line: "Walls, a roof and torches."
+    name: Light and building
+  mining:
+    line: "Ore, a forge and bronze."
+    name: Mining and smelting
+  paths: PATHS
+  shelter:
+    line: "The night, the heat and the cold."
+    name: Shelter and weather
+  waits: "{path} waits on {mission}."
+  waits_on: "Waits on {mission}"
+  water:
+    line: Swim far and hold your breath.
+    name: In the water
 mission_tree:
   after: "after {missions}"
   branch:
     carpentry: CARPENTRY
     carts: CARTS
     cooking: COOKING
+    eat_drink: EAT AND DRINK
     farming: FARMING
     fishing: FISHING
     getting_about: GETTING ABOUT
     hands_tools: HANDS TO TOOLS
     herding: HERDING
     houses_logs: "HOUSES & LOGS"
+    hunting: HUNTING
+    in_the_water: IN THE WATER
     jobs: JOBS
     light_building: "LIGHT & BUILDING"
     mining_smelting: "MINING & SMELTING"
     roads: ROADS
+    shelter_weather: SHELTER AND WEATHER
     town: TOWN
     trade: TRADE
   branch_label: "{number} · {name}"
@@ -1299,6 +1643,7 @@ mission_tree:
   open: OPEN
   opens_next: OPENS NEXT
   tree:
+    jobs: JOBS
     starter: STARTER
     town: TOWN
   unlocks: UNLOCKS
@@ -1341,6 +1686,7 @@ pack:
   hold: HOLD
   hotbar: HOTBAR
   pack: PACK
+  stats: STATS
 planner:
   adopted: Your house
   bill: Materials
@@ -1421,6 +1767,76 @@ planner:
     iso: Isometric
     top: Top down
 recipe:
+  straw:
+    name: STRAW
+  stone-spear:
+    name: STONE SPEAR
+  stone-arrows:
+    name: STONE ARROWS
+  bone-meal:
+    name: BONE MEAL
+  straw-hat:
+    name: STRAW HAT
+  fibre-hat:
+    name: FIBRE HAT
+  bedroll:
+    name: BEDROLL
+  tanning-rack:
+    name: TANNING RACK
+  tan-hide:
+    name: TAN HIDE
+  still:
+    name: STILL
+  wool-cloak:
+    name: WOOL CLOAK
+  bow:
+    name: BOW
+  bone-arrows:
+    name: BONE ARROWS
+  bronze-arrows:
+    name: BRONZE ARROWS
+  bronze-spear:
+    name: BRONZE SPEAR
+  iron-spear:
+    name: IRON SPEAR
+  bronze-hunting-axe:
+    name: BRONZE HUNTING AXE
+  iron-hunting-axe:
+    name: IRON HUNTING AXE
+  bronze-sword:
+    name: BRONZE SWORD
+  iron-sword:
+    name: IRON SWORD
+  meat-stew:
+    name: MEAT STEW
+  crush-staghorn-coral:
+    name: CRUSH STAGHORN CORAL
+  crush-finger-coral:
+    name: CRUSH FINGER CORAL
+  crush-brain-coral:
+    name: CRUSH BRAIN CORAL
+  crush-table-coral:
+    name: CRUSH TABLE CORAL
+  crush-soft-coral:
+    name: CRUSH SOFT CORAL
+  crush-tube-sponge:
+    name: CRUSH TUBE SPONGE
+  crush-barrel-sponge:
+    name: CRUSH BARREL SPONGE
+  crush-sea-fan:
+    name: CRUSH SEA FAN
+  crush-sea-anemone:
+    name: CRUSH SEA ANEMONE
+  crush-sea-lettuce:
+    name: CRUSH SEA LETTUCE
+  crush-coral-rubble:
+    name: CRUSH CORAL RUBBLE
+  crush-kelp:
+    name: CRUSH KELP
+  steamed-mussels:
+    name: STEAMED MUSSELS
+  kelp-crisps:
+    name: KELP CRISPS
   drafting-table:
     name: DRAFTING TABLE
   mallet:
@@ -1569,6 +1985,10 @@ saves:
 scatter:
   pick_up_stone: pick up stone
   pull_fibre: pull fibre
+sea:
+  occupied: Something already stands there
+  refusal:
+    rod: Use a rod
 site:
   have: "{have}/{count}"
   left: "{left} of {total} left"
@@ -1602,6 +2022,36 @@ slots:
   many: "{name} x {count}"
   tool_tip: "{tool}: {purpose}"
 species:
+  hare:
+    caps: HARE
+    entry: "A long-eared hare of the meadows and the scrub. It sits still in the grass until something comes close, then bolts and zigzags away."
+    lower: hare
+    name: Hare
+    tip: "Come up on it slowly. It runs at fourteen meters."
+  ridge-goat:
+    caps: RIDGE GOAT
+    entry: "A sure-footed goat of the hills, grey with curled horns. Small herds graze the slopes and run uphill when chased."
+    lower: ridge goat
+    name: Ridge goat
+    tip: "Feed it wheat or turf to tame it."
+  rootling:
+    caps: ROOTLING
+    entry: "A stout wild pig that roots in soft ground for tubers. A boar will turn on whatever corners it."
+    lower: rootling
+    name: Rootling
+    tip: "Feed it turnips to tame it. Give a cornered boar room."
+  red-fox:
+    caps: RED FOX
+    entry: "A lean red fox of the woods and fields. It hunts small game at dusk and keeps its distance by day."
+    lower: red fox
+    name: Red fox
+    tip: "It cannot be tamed."
+  dust-hound:
+    caps: DUST HOUND
+    entry: "A rangy sand-coloured hound of the desert. Small packs roam the dunes and the rock."
+    lower: dust hound
+    name: Dust hound
+    tip: "It cannot be tamed."
   beaver:
     caps: BEAVER
     entry: "A big brown rodent of slow rivers. Beavers fell trees, dam the stream with sticks and build a lodge in the pond behind the dam. Beavers are protected: none may be caught."
@@ -1747,6 +2197,10 @@ species:
     name: Woolback
     tip: Four feeds of wheat or turf, standing still. Pen them on grass and they feed themselves.
 station:
+  tanning-rack:
+    name: tanning rack
+  still:
+    name: still
   campfire:
     name: campfire
   chest:
@@ -1763,6 +2217,27 @@ station:
     name: mixer
   workbench:
     name: workbench
+survival:
+  broke: "{tool} broke"
+  cactus: cactus
+  hud:
+    body_c: "{c} C"
+    heat_stroke: Heat stroke
+    wake_up: Wake up
+    you_died: You died
+  mode:
+    explorer: Explorer
+    survival: Survival
+  note:
+    empty: Empty
+    needs_fire: Needs a fire
+    salt_water: Salt water
+    dry: Dry
+    thirsty: Thirsty
+    very_thirsty: Very thirsty
+    protected: Protected
+  repaired: "{tool} repaired"
+  water: water
 talk:
   back: BACK
   bye: BYE
@@ -1772,6 +2247,7 @@ talk:
     ready: You're back. Here for your pay?
     trader: Want to trade?
   lost_found: I'm lost. Lead the way.
+  parcel_given: Here is the parcel.
   parcel_thanks: Thanks for the parcel.
   role:
     boatman: boatman

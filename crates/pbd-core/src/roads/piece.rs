@@ -35,6 +35,27 @@ pub const SIDE: &str = "dirt";
 pub const DECK: &str = "plank";
 pub const TIMBER: &str = "timber";
 
+/// A bridge's rail card (design 42p): posts at its ends, a hand rail, a
+/// mid rail and a bottom rail, clear between, mapped once across a side.
+pub const RAIL_CARD: &str = "bridgerail";
+/// A bridge's leg card: a leg at each end and cross braces, clear between,
+/// repeating a metre down from the deck.
+pub const TRESTLE_CARD: &str = "bridgetrestle";
+
+/// A card: the quad `p` (its foot first, then its top) as two single-sided
+/// faces back to back, one toward `out` and one away, `u` across it from 0
+/// to 1 and `v` from `v[k]` (0 at its top edge).
+fn card(buf: &mut MeshBuf, p: [Vec3; 4], v: [f32; 4], out: Vec3) {
+    let uv = [
+        Vec2::new(0.0, v[0]),
+        Vec2::new(1.0, v[1]),
+        Vec2::new(1.0, v[2]),
+        Vec2::new(0.0, v[3]),
+    ];
+    quad(buf, p, uv, out);
+    quad(buf, p, uv, -out);
+}
+
 /// One road cell, cut.
 #[derive(Clone, Debug)]
 pub struct Piece {
@@ -184,9 +205,12 @@ pub fn cut(
     let reach_m = outline.iter().map(|p| p.length()).fold(0.0, f32::max) + 0.1;
     let mut solids = Vec::new();
     if bridge {
+        // The rails and the legs are cards (design 42p, the owner's survey
+        // P7, 2026-11-26: "use a texture with alpha cutout instead of adding
+        // geom"): flat, in a cut-out texture, each two single-sided faces back
+        // to back, one facing out over the water and one in over the deck, so
+        // it reads from both and only the one facing the eye is drawn.
         let around = super::ring(cell.key);
-        let rep = repeat_m(TIMBER);
-        let buf = meshes.entry(TIMBER.to_string()).or_default();
         for k in 0..ring.len() {
             let (a, b) = (ring[k], ring[(k + 1) % ring.len()]);
             let side_mid = (a + b).normalize();
@@ -195,8 +219,8 @@ pub fn cut(
             if across.is_some_and(|n| road_neighbours.contains(n)) {
                 continue;
             }
-            // A rail along the side, just inside it, and a post at its
-            // first corner down to the bed.
+            // The rail's solid along the side, just inside it, as it was:
+            // what stops the walker.
             let (pa, pb) = (plan(at(a, low)), plan(at(b, low)));
             let inward = -plan(at(side_mid, low)).normalize_or_zero();
             let (ia, ib) = (pa + inward * RAIL_T, pb + inward * RAIL_T);
@@ -205,53 +229,27 @@ pub fn cut(
                 y0: 0.0,
                 y1: RAIL_M,
             });
+            // The cards stand on the rail's middle line.
+            let (ca, cb) = (pa + inward * (RAIL_T / 2.0), pb + inward * (RAIL_T / 2.0));
             let up = |p: Vec2, h: f32| fr.world(Vec3::new(p.x, h, p.y));
-            let uvp = |p: Vec2, h: f32| Vec2::new(p.x + p.y, h) / rep;
-            let faces: [([Vec2; 2], Vec3); 3] = [
-                ([pa, pb], (a + b) * 0.5 - c),
-                ([ib, ia], c - (a + b) * 0.5),
-                ([pa, ia], b - a),
-            ];
-            for ([p, q], toward) in faces {
-                quad(
-                    buf,
-                    [up(p, 0.0), up(q, 0.0), up(q, RAIL_M), up(p, RAIL_M)],
-                    [uvp(p, 0.0), uvp(q, 0.0), uvp(q, RAIL_M), uvp(p, RAIL_M)],
-                    toward,
-                );
-            }
-            quad(
-                buf,
-                [
-                    up(pa, RAIL_M),
-                    up(pb, RAIL_M),
-                    up(ib, RAIL_M),
-                    up(ia, RAIL_M),
-                ],
-                [uvp(pa, 0.0), uvp(pb, 0.0), uvp(ib, RAIL_T), uvp(ia, RAIL_T)],
-                c,
+            let out = (a + b) * 0.5 - c;
+            // The rail: from the deck to the hand rail, mapped once.
+            card(
+                meshes.entry(RAIL_CARD.to_string()).or_default(),
+                [up(ca, 0.0), up(cb, 0.0), up(cb, RAIL_M), up(ca, RAIL_M)],
+                [1.0, 1.0, 0.0, 0.0],
+                out,
             );
-            // the post, from the bed to the deck's underside
+            // The legs, the land part: from the deck's underside down to the
+            // bed or the bank, a repeat a metre from the deck down.
             let bed = cell.base_m as f32 - low;
-            let s = POST_M / 2.0;
-            let p0 = pa + inward * (RAIL_T / 2.0);
-            let along = (pb - pa).normalize_or_zero();
-            let across2 = inward;
-            let corners2 = [
-                p0 - along * s - across2 * s,
-                p0 + along * s - across2 * s,
-                p0 + along * s + across2 * s,
-                p0 - along * s + across2 * s,
-            ];
-            for i in 0..4 {
-                let (p, q) = (corners2[i], corners2[(i + 1) % 4]);
-                let mid2 = (p + q) * 0.5 - p0;
-                let toward = fr.x * mid2.x + fr.z * mid2.y;
-                quad(
-                    buf,
-                    [up(p, bed), up(q, bed), up(q, -DECK_M), up(p, -DECK_M)],
-                    [uvp(p, bed), uvp(q, bed), uvp(q, 0.0), uvp(p, 0.0)],
-                    toward,
+            if -DECK_M - bed > 0.05 {
+                let depth = -DECK_M - bed;
+                card(
+                    meshes.entry(TRESTLE_CARD.to_string()).or_default(),
+                    [up(ca, bed), up(cb, bed), up(cb, -DECK_M), up(ca, -DECK_M)],
+                    [depth, depth, 0.0, 0.0],
+                    out,
                 );
             }
         }
@@ -352,7 +350,7 @@ mod tests {
     }
 
     #[test]
-    fn a_bridge_has_a_deck_rails_where_the_road_does_not_go_and_posts() {
+    fn a_bridge_has_a_deck_and_rail_and_leg_cards_where_the_road_does_not_go() {
         let b = cell(None, Kind::Bridge { deck_m: 15 });
         let ns = neighbours(b.key);
         let p = cut(&b, Surface::Dirt, &[ns[0], ns[3]], R, &|_| 2.0).unwrap();
@@ -362,6 +360,45 @@ mod tests {
             ns.len() - 2,
             "a rail a side but the two"
         );
+        // The rails and legs are cards: no timber box over the deck, and on
+        // each railed side a rail card and a leg card, each two triangles a
+        // face and two faces back to back.
+        let railed = ns.len() - 2;
+        let rails = &p.meshes[RAIL_CARD];
+        let legs = &p.meshes[TRESTLE_CARD];
+        assert_eq!(rails.positions.len(), railed * 2 * 6, "two quads a rail");
+        assert_eq!(legs.positions.len(), railed * 2 * 6, "two quads a leg card");
+        let radius_of = |p: &[f32; 3]| Vec3::from_array(*p).length() - R;
+        let deck_top = 15.0 + LIFT_M + 1e-3;
+        assert!(
+            p.meshes[TIMBER]
+                .positions
+                .iter()
+                .all(|v| radius_of(v) <= deck_top),
+            "no timber stands over the deck"
+        );
+        for buf in [rails, legs] {
+            for face in buf.normals.chunks(12) {
+                let (front, back) = (Vec3::from_array(face[0]), Vec3::from_array(face[6]));
+                assert!(front.dot(back) < -0.99, "back to back: {front} {back}");
+            }
+            assert!(buf.uvs.iter().all(|uv| (0.0..=1.0).contains(&uv[0])));
+        }
+        let top = rails
+            .positions
+            .iter()
+            .map(radius_of)
+            .fold(f32::MIN, f32::max);
+        assert!(
+            (top - (15.0 + LIFT_M + RAIL_M)).abs() < 0.05,
+            "the hand rail at {top}"
+        );
+        let foot = legs
+            .positions
+            .iter()
+            .map(radius_of)
+            .fold(f32::MAX, f32::min);
+        assert!((foot - 12.0).abs() < 0.05, "the legs to the bed at {foot}");
         let local = p.solids.frame.local(centre(b.key).unwrap() * (R + 15.5));
         let (floor, _) = p.solids.stand_in(local, 1.0);
         assert!((floor.unwrap() - LIFT_M).abs() < 1e-3, "the deck");

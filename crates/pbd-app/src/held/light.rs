@@ -457,6 +457,48 @@ fn torch_head() -> Mesh {
     b.shaded().mesh()
 }
 
+/// The torch's parts for a torch placed in the world (`placed`): the haft
+/// and the head as held, and the haft's, the head's and the flame's
+/// textures.
+pub(super) fn torch_parts(
+    images: &mut Assets<Image>,
+) -> (Mesh, Mesh, Handle<Image>, Handle<Image>, Handle<Image>) {
+    (
+        haft(),
+        torch_head(),
+        texture(
+            include_bytes!("../../../../assets/textures/held_light/haft.png"),
+            images,
+        ),
+        texture(
+            include_bytes!("../../../../assets/textures/held_light/head.png"),
+            images,
+        ),
+        texture(
+            include_bytes!("../../../../assets/textures/held_light/flame.png"),
+            images,
+        ),
+    )
+}
+
+/// The held flame's three cards as a mesh: standing on `base` (from the
+/// eye) about `up`, as [`flame_cards`] lays them.
+pub(super) fn flame_mesh(base: Vec3, up: Vec3, size: f32, flick: f32, t: f32, fps: f32) -> Mesh {
+    let mut b = Build::default();
+    flame_cards(&mut b, base, up, Vec3::ZERO, size, flick, t, fps);
+    b.mesh()
+}
+
+/// Where the flame stands on the torch, in its own frame.
+pub(super) fn flame_seat() -> Vec3 {
+    FLAME_AT
+}
+
+/// The haft's foot, in the torch's own frame (the fist at nought).
+pub(super) fn haft_bottom() -> f32 {
+    HAFT_BOTTOM
+}
+
 /// The lantern's iron, hung from its bail: x along the bail, y up, the
 /// origin where the fist closes on it (the mockup's `lanternModel`).
 fn lantern_iron() -> Mesh {
@@ -596,7 +638,7 @@ pub(super) struct LightLooks {
 /// handle), the origin on the fist, metres to tool units. `up_tool`, the
 /// eye's up in tool units, sets which way the item's own up turns (a
 /// lantern hangs under its bail); `None` for things along the handle.
-fn item_frame(fist_tool: Vec3, scale: f32, up_tool: Option<Vec3>) -> Transform {
+pub(super) fn item_frame(fist_tool: Vec3, scale: f32, up_tool: Option<Vec3>) -> Transform {
     let rotation = match up_tool {
         // A lantern: its x along the bail (the handle), its y the eye's up.
         Some(up) => {
@@ -615,7 +657,7 @@ fn item_frame(fist_tool: Vec3, scale: f32, up_tool: Option<Vec3>) -> Transform {
 
 /// The pickaxe's grip, turned and moved to `hold`: the rest pose of a held
 /// light, and its fist, eye space.
-fn hold_rest(pick: &HeldModel, hold: Hold) -> (Transform, Vec3) {
+pub(super) fn hold_rest(pick: &HeldModel, hold: Hold) -> (Transform, Vec3) {
     let rest = pick.rest();
     let fist = Vec3::from(pick.fist);
     let handle = rest.rotation * Vec3::X;
@@ -985,7 +1027,7 @@ pub(super) fn hold_lights(
     mut panes: Query<&mut MeshMaterial3d<StandardMaterial>, With<Panes>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut state: Local<LightState>,
+    (mut state, torch_out): (Local<LightState>, Option<Res<crate::wildfire::TorchOut>>),
 ) {
     let s = &settings.0.light;
     let dt = time.delta_secs().clamp(0.0, 0.1);
@@ -1065,7 +1107,8 @@ pub(super) fn hold_lights(
         }
         let burns = posed.transform_point(view.burns);
         burns_eye = Some(burns);
-        if view.kind == LightKind::Torch {
+        // A torch the rain put out has no flame (`wildfire` design 9).
+        if view.kind == LightKind::Torch && !torch_out.as_deref().is_some_and(|o| o.held) {
             flame_base = Some(burns);
         }
     }

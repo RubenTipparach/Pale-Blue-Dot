@@ -238,6 +238,11 @@ pub fn render_code(material: Material) -> u32 {
         Material::Workbench | Material::Carpenter | Material::DraftingTable => WOOD,
         // The gravel stations (`townsfolk` design 41): the workbench's timber.
         Material::Grinder | Material::Mixer => WOOD,
+        // Survival's stations (`survival-mode` design 17, 18): the tanning
+        // rack's timber, the still's stone pot, each with its model stood
+        // on it (`farm::show`).
+        Material::TanningRack => WOOD,
+        Material::Still => 5,
         // A chest (`storage-chests` design 1): the workbench's wood, with an
         // iron hasp stood on it (`farm::show`).
         Material::Chest => WOOD,

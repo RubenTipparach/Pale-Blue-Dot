@@ -29,7 +29,7 @@ pub const SHAKE_LEAF: f32 = 1.3;
 /// The tree being worked and when it was last hit.
 #[derive(Resource, Clone, Copy, Default, ExtractResource, PartialEq, Debug)]
 pub struct TreeShake {
-    /// The worked tree's cell key (`digging::tree_on_ray`), none before the
+    /// The worked tree's cell key (`digging::tree_or_snag_on_ray`), none before the
     /// first hit.
     pub cell: Option<u32>,
     /// Its id as the draw rolls it (the record's `spare.x`).

@@ -3,68 +3,12 @@
 ## Purpose
 
 What it takes to stay alive in a Survival world: health, falls, hunger,
-breath and air, tool wear, predators, fights with townsfolk, death and respawn, with
+stamina and its food cost, water, body temperature and heat stroke, breath
+and air, hunting and weapons, tool wear, predators, fights with townsfolk,
+death and respawn, with
 Explorer worlds left exactly as calm as before.
 
 ## ADDED Requirements
-
-### Requirement: A world is Explorer or Survival
-A world SHALL have a mode, Explorer or Survival, chosen when it is made and
-stored with it. In Explorer, no rule in this capability SHALL apply. A world
-saved before modes existed SHALL open as Explorer.
-
-#### Scenario: An old save
-- **WHEN** a world saved before this change is opened
-- **THEN** it opens as Explorer, with no health, hunger or breath shown, and
-  plays as before
-
-#### Scenario: A new Survival world
-- **WHEN** a player makes a world and picks Survival
-- **THEN** the world opens with full health, hunger and breath, and keeps
-  Survival every time it is opened
-
-### Requirement: Health and death
-In Survival, the player SHALL have health that damage lowers and that
-refills slowly while hunger is not empty. At zero health the player SHALL
-die, their pack SHALL drop at that place as a bag that stays until picked up,
-and they SHALL wake at their bed, or at the world's spawn if they have none.
-
-#### Scenario: Dying with a full pack
-- **WHEN** the player dies carrying items
-- **THEN** a bag holding all of them lies where they died, it is still there
-  after the world is closed and reopened, and walking into it returns the
-  items
-
-### Requirement: Falling hurts by impact speed
-In Survival, landing SHALL cause damage when the speed at impact exceeds a
-safe speed, growing with the excess. The safe speed SHALL be computed in the
-body's own gravity, so the same fall height hurts less on a lower-gravity
-body. Landing in water deep enough to swim in SHALL cause no fall damage.
-
-#### Scenario: A short drop
-- **WHEN** the player steps off a ledge two layers high
-- **THEN** they take no damage
-
-#### Scenario: A cliff
-- **WHEN** the player falls from twenty layers onto rock
-- **THEN** they take damage that a fall from ten layers does not exceed
-
-#### Scenario: Into a lake
-- **WHEN** the player falls from twenty layers into deep water
-- **THEN** they take no damage
-
-### Requirement: Hunger empties with play and meals refill it
-In Survival, hunger SHALL empty slowly with play time only, never while the
-game is closed. A meal SHALL refill it as well as giving its buff. While
-hunger is empty, health SHALL NOT refill and SHALL drain slowly.
-
-#### Scenario: Closing the game hungry
-- **WHEN** a player quits with hunger nearly empty and returns a day later
-- **THEN** hunger is where they left it
-
-#### Scenario: Eating
-- **WHEN** a hungry player eats a cooked dish
-- **THEN** hunger rises by the dish's amount and its buff starts
 
 ### Requirement: Breath under water and air in thin air or vacuum
 In Survival, while the player's head is under water, breath SHALL empty,
@@ -81,66 +25,68 @@ the player SHALL breathe the craft's air.
 - **THEN** the suit's air reserve starts to empty, and refills once they are
   back in the cabin
 
-### Requirement: Predators hunt in Survival
-In Survival, predators SHALL hunt the player. Each SHALL give a visible and
-audible warning before its first attack, SHALL flee when badly hurt, and
-SHALL be bolder at night. In Explorer, predators SHALL keep their earlier
-behaviour and never attack the player.
+### Requirement: Water is drunk, and heat uses it faster
+In Survival, the player SHALL have a water bar that empties with play time,
+faster in heat and with effort. Fresh water, a water bucket, milk, fruit and
+meat stew SHALL refill it; sea water SHALL NOT. A straw SHALL drink juice
+from a standing desert cactus, a few sips a cactus, which come back over
+world days and are kept in the save. An empty bar SHALL drain health slowly.
 
-#### Scenario: A fox at night
-- **WHEN** a Survival player meets a red fox at night
-- **THEN** it stalks, warns, and attacks, and flees once it is badly hurt
+#### Scenario: A cactus with a straw
+- **WHEN** a Survival player holding a straw drinks from a desert cactus
+  until it is dry, closes the world and reopens it the same day
+- **THEN** each sip raised water, the cactus is still dry, and it gives a sip
+  again a world day later
 
-#### Scenario: The same fox in Explorer
-- **WHEN** an Explorer player meets a red fox
-- **THEN** it never attacks them
+#### Scenario: Sea water
+- **WHEN** a Survival player tries to drink from the sea
+- **THEN** water does not rise
 
-### Requirement: Townsfolk fight back
-In Survival, a struck townsperson SHALL fight back or flee, nearby guards
-SHALL come to fight, and the town SHALL remember the fight in the player's
-standing with it. In Explorer, townsfolk SHALL NOT be harmed.
+### Requirement: Heat stroke hurts and makes the player pass out
+In Survival, a body temperature of 40 C or more SHALL take health and make
+the player pass out where they stand for a fixed time, during which the
+world goes on. Being hit, or being revived by another player with water,
+SHALL wake them at once. Waking, they SHALL be dazed for a while. A heat
+stroke in deep water SHALL leave the player floating face up. Water drunk
+SHALL hold the body below heat stroke in the hottest weather the planet has.
 
-#### Scenario: Striking a villager
-- **WHEN** a Survival player strikes a villager in a town
-- **THEN** the guards come for the player, and the town's standing with them
-  drops
+#### Scenario: Out of water at noon in the desert
+- **WHEN** a Survival player with an empty water bar stays in the desert sun
+- **THEN** within minutes the body passes 40 C, health drops, and the player
+  passes out for 30 s, then wakes dazed
 
-### Requirement: Tools wear out in Survival
-In Survival, each owned tool SHALL carry the uses it has left, starting at
-the number its tier sets. A finished action with the tool (a block broken, a
-tree felled, a cell tilled, a fish landed, a hit landed) SHALL spend one use,
-or two for a block of a higher tier than the tool.  At zero uses the tool SHALL become a broken
-tool in the same slot that works as bare hands, and repairing it at a
-workbench or with a town's smith SHALL restore all its uses. In Explorer,
-tools SHALL NOT wear.
+#### Scenario: Watered at noon in the desert
+- **WHEN** the same player keeps drinking
+- **THEN** the body stays below 40 C and they never pass out
 
-#### Scenario: A stone pickaxe wears out
-- **WHEN** a Survival player breaks stone with a stone pickaxe until its
-  uses reach zero
-- **THEN** the pickaxe stays in its slot as a broken pickaxe, digs as bare
-  hands do, and is still there after the world is reopened
+### Requirement: The survival HUD shows a stat only when it matters
+In Survival, health, stamina, hunger and water SHALL be shown as bars
+stacked at the left edge of the screen. A full bar SHALL be hidden, and
+hunger and water SHALL be shown only at half or lower. Every stat SHALL be
+shown, full or not, in the pack. While the body is in heat exhaustion or
+heat stroke, a short warning SHALL be shown above the hotbar. In Explorer
+none of it SHALL be shown.
 
-#### Scenario: Repair at the workbench
-- **WHEN** the player repairs a broken stone pickaxe at the workbench with
-  half its head materials
-- **THEN** it has its full uses again and keeps its tier
+#### Scenario: Fed, watered and rested
+- **WHEN** a Survival player is at full health and stamina with hunger and
+  water above half
+- **THEN** no survival bar is on the screen, and opening the pack shows all
+  four with their values
 
-#### Scenario: A missed swing is free
-- **WHEN** the player swings at nothing, or stops a dig half way
-- **THEN** the tool spends no use
+#### Scenario: Getting hungry
+- **WHEN** hunger falls from 60 to 40
+- **THEN** the hunger bar appears on the left stack as it passes half
 
-#### Scenario: An old save
-- **WHEN** a world saved before tool wear is opened in Survival
-- **THEN** every tool it holds has its full uses
-
-#### Scenario: Explorer never wears
-- **WHEN** an Explorer player breaks a thousand blocks with one pickaxe
-- **THEN** the pickaxe has not changed
+#### Scenario: Heading for heat stroke
+- **WHEN** a Survival player's body passes 39.5 C
+- **THEN** the heat stroke warning appears above the hotbar, and goes once
+  the body is back under 39.5 C
 
 ### Requirement: The server decides survival
 In a multiplayer world, health, hunger, breath, damage, death and the
 dropped pack SHALL be decided by the server like any other stored change.
-Tool wear SHALL be counted by the server too. Players SHALL NOT damage each other.
+Tool wear, stamina, water, body temperature, passing out, every weapon hit
+and every kill SHALL be decided by the server too. Players SHALL NOT damage each other.
 
 #### Scenario: Two players and a fox
 - **WHEN** a fox attacks one of two players standing together

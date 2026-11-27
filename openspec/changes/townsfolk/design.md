@@ -2228,6 +2228,240 @@ taken where 10b and 42 to 42k leave a choice (ask only with screenshots):
   lifted view is to stake what it shows; the shovel still paves only
   within `reach_m` of the player's feet.
 
+**42o. The ghost's bridges and lamp posts, and the trader on the map
+(2026-11-25; written before the code).** Three things 42a, 42m and 46 ask
+for that the game did not yet draw. Each a recommendation taken (ask only
+with screenshots): none changes a rule, a tunable or what is built, only
+what the planner's ghost and the map show of it.
+- **A bridge in the ghost.** 42a: deeper water is "shown in the ghost as a
+  deck with its posts and rails". Today a bridged cell is in the ghost as
+  a flat top at its deck's height, with nothing under it. A bridge cell of
+  the aimed road that is not refused is now cut by the same
+  `roads::piece::cut` that cuts it once paved (its deck, the posts from
+  the bed to the deck, the rails along its sides with no cell of the aimed
+  road beside them, so a wide bridge is railed outside), and every part of
+  it is drawn in the ghost's tint. The ghost then shows what paving will
+  build, from the one cutting code, never a second picture of a bridge.
+- **Lamp posts in the ghost.** 42m: "Its ghost stands with the plan (a
+  post in the ghost tint)". The aim already finds the posts
+  (`PlannerAim::lamps`); they are now drawn: on each post cell not already
+  holding its lamp (`paving::lamp_standing`), on the cell's ground, one
+  shape in the ghost tint at the street lantern's size as the world draws
+  it (a post 1.5 m high, a lantern 0.3 m across from 1.5 to 1.86 m): a
+  six-sided timber post, bevelled at its foot and swelling into the
+  lantern's housing, lofted as one piece with no part stuck on (CLAUDE.md,
+  no obvious primitives), its smooth normals from the loft. It is a
+  ghost: the tint and its opacity are the plan's, lit by the field as the
+  rest of the ghost is, and it goes with the ghost.
+- **The trader on the map.** 46 places the escort job's trader on the
+  road, and the map and the compass mark a lost villager (design 9) but
+  not them. Now each taken escort job not yet done marks its trader where
+  they stand (`road_jobs::trader_point` of the stored record, so where
+  they stopped on a reload): on the map a pin with "Trader" beside it
+  (`jobs.escort_marker`), as the lost villager's pin is, and on the
+  compass bar a pin after the lost villagers', named "Trader" with its
+  distance when faced. The record is taken back when the trader reaches
+  the other town, and the marker goes with it.
+- **Tests.** App tests: the ghost of a bridged road carries the bridge
+  piece's deck, posts and rails (more of the mesh than the cells' tops
+  alone, and reaching under the deck), and a lamp post stands in it on its
+  cell's ground up to the lantern's height; a lamp already standing is not
+  drawn. The escort test reads the trader's marker where the stored record
+  puts them, and none once the job is done.
+- **Captures.** The ghost of the bridge from the bridge capture's spot, and
+  of a road with lamps, by day.
+
+**42o, as built (2026-11-25).** As written above. Tests:
+`roads::tests::the_ghost_carries_a_bridge_s_deck_posts_and_rails_and_its_lamp_posts`
+and the escort test's marker checks
+(`economy::tests::a_trader_leads_the_player_along_the_road_and_the_escort_is_paid`).
+The capture instrument holds the planner's aim on the checked road's far
+end (`roads::planner::AimPin`, set only by `--road-plan ghost-*`), opens it
+from its near end (a bridge is laid from the bank it starts on: the other
+way round the same cells were "Too wide to bridge"), and logs its stand
+point's `--yaw` by `place::yaw_of`. Captures: `road-planner-ghost-lamps-1100.jpg`
+and its close crop. The ghost of the bridge is not captured: at the bridge
+spot the lifted eye (42n) looks down on forest canopy over the road.
+
+**Found in the captures (2026-11-25; not fixed, for the owner).**
+- **A deck awash.** `road-bridge.jpg`: where a river runs bank-full, the
+  deck (the bank's height, `LIFT_M` over it) stands at the water's surface,
+  and the river draws its ripples over the planks. The rule that a deck
+  stands over the water (`planner::bridged`) holds by a hair. Fixing it is
+  either a render change to the water under a deck, which waits for the
+  session that owns rendering, or the deck raised off its bank (a step or
+  a ramp onto every bridge, the world's included): a look change, for the
+  survey with this screenshot. Recommendation: the deck a quarter metre
+  over the water where the river is that full, its ends ramped on the
+  bank's cell, as a new road version for the world's bridges.
+- **Rails as panels.** The bridge's rails are solid timber panels a metre
+  high along each open side, as the approved roads mockup draws them
+  (`mockup-roads-bridge-11h00.jpg`). Close up they box the deck in like a
+  trough, which sits uneasily with "no obvious primitives" (2026-11-22).
+  A rail of posts and a top bar is the alternative; it is a look change
+  for the owner, with this screenshot.
+
+**42p. The owner's answers on bridges (survey P6 and P7, 2026-11-26;
+written before the code).**
+
+*P6, a deck awash.* The owner picked "Raise it about 0.25 m over full
+rivers" and wrote: "River surface seems to be right on the surface of top
+of terrain hex. You could offset water surface a bit to account for that
+instead of raising bridge". So no road version and no raised deck: the
+river is drawn lower.
+- **Measured.** The water mesher (`water_flow::cell_pieces`, Luanti's
+  corner rule) draws a top's corner at the full layer wherever a source
+  (`Water`) is one of the three cells round it (`corner_level`), so a
+  bank-full river's surface is drawn at its layer's top, `layer_altitude +
+  1.0`, which is exactly the bank cell's ground top: an offset of 0.00 m.
+  The deck stands at the bank's height plus `LIFT_M` (0.02 m) and is
+  `DECK_M` (0.2 m) thick, so its underside is 0.18 m under the water and
+  the ripples are drawn through the planks.
+- **The change.** Every corner of a drawn top is drawn `STILL_DROP` (0.2 m)
+  under its rule level (`water_flow::drawn_corner`), into the water under
+  it where there is water under it, and never under its floor where there
+  is not: a full corner is drawn 0.2 m under its bank, at the deck's
+  underside, so the planks stand 0.22 m over the water. One drop for every
+  corner keeps every top's shape and every step between tops, so no reach
+  draws higher than another than it did. A side's top edge follows its
+  corners (and is never under its own foot), so the sides meet the top.
+  First written as a scale of the corner level by `1 - STILL_DROP`; the
+  measure below (a thin sheet riding over the bank's layer, which a scale
+  barely moves) made it one drop for all.
+- **What it leaves alone.** Every corner that touches a fall is drawn as
+  it is today, so a fall keeps its lip, its sheet and its foot exactly (the
+  waterfall rule): a corner is left whole where any of its three cells has
+  falling water in that layer, falling water on it (a fall's foot), or is
+  open with falling water under it (a lip). Water standing in a stack (the
+  layers under a top) is never scaled. The sea is not touched: its sheet
+  draws its top, and water within a layer of the sea's level is left whole,
+  so a river's mouth meets the sea's sheet and the eye there still knows
+  the river's water from the sea's
+  (`water_junction_tests::where_waters_meet_the_surfaces_join_and_the_eye_follows_them`). Two cells sharing a corner work it out from the same
+  three cells, so the top stays one surface with no crack.
+- **What reads it.** It is a draw-time rule: the column, the rule's levels,
+  the tick, the save, swimming and buoyancy are unchanged. The readers of
+  the drawn top follow it through `water_flow::drawn_top_m`, which applies
+  the same drop: whether the eye is under the water, the rain's
+  ripples, the eye's path. A raft floats on the drawn top
+  (`PlanetContact::drawn_water`), which no longer stops at the column's
+  level but at most `STILL_DROP` under it, so a raft sits on the water it
+  is drawn on. The walker swims to the rule's surface, as before: a
+  swimmer's float line is up to 0.2 m over the drawn water in a full river.
+- **Caches.** The river band's cached pieces (`river_band`, a file beside
+  the worlds) were meshed at the old height; its file's magic moves to
+  `PBDBAND2`, so an old file is read as none and the band is meshed again.
+  Derived data only: no save changes.
+- **Tests.** App tests: a full river's drawn top is `STILL_DROP` under its
+  bank's top, and `drawn_top_m` says the same; a fall's lip and foot
+  corners are where they were.
+- **Captures.** `road-bridge-after.jpg` from `road-bridge.jpg`'s spot, and
+  a river bank close up before and after.
+- **Measured at the bridge (2026-11-26, a measuring instrument: a capture
+  logs `WATER_PROBE`, the rule's and the drawn water top under and round
+  the walker, `PlanetContact::water_probe`; and the ignored test
+  `roads::tests::measure_the_river_at_the_bridge_capture`).** The paved
+  road's cells: bank 54 m, the river's cells' bed 52 m with two layers of
+  water in the generated column, so the planner's river surface is 54 m
+  and the deck `deck_m` 54 (top 54.02). The live, settled river is higher
+  over the deck's cells: a thin flowing sheet in the bank's own layer,
+  its rule top 54.06 to 54.31 m, drawn (with the drop) 53.87 to 54.11 m.
+  So where the river runs full the deck clears it; where the settled
+  river rides up to 0.31 m over the generated bank, a 0.2 m drop leaves
+  its water up to 0.09 m over the planks. The far river sheet is not
+  what is drawn there (hiding it changed nothing); hiding the game's own
+  water clears the deck. Clearing that case too would need a larger drop
+  (0.35 m) or the deck set from the settled water rather than the
+  generated column: a look change and a road change, for the owner.
+
+**42p (P6), as built (2026-11-26).** As written above, the drop one
+`STILL_DROP` (0.2 m) for every corner not touching a fall or within a layer
+of the sea (`water_flow::drawn_corner`), `drawn_top_m` in step, the raft's
+floor `STILL_DROP` under the column's level, the river band's file
+`PBDBAND2`. Tests: `water_flow::tests::a_full_river_is_drawn_under_its_bank_and_a_fall_is_not_moved`
+(a full pool 0.2 m under its bank, a thin sheet over full water 0.2 m under
+its level, a lip's corners and a fall's top as they were), and the
+existing fall, foot and junction tests unchanged. Captures (lavapipe, no
+frame times) from `road-bridge.jpg`'s spot: `road-bridge-after.jpg` and
+the bank close up `river-bank-before.jpg` (the build before) and
+`river-bank-after.jpg`: the near half of the deck, where the river runs
+full to its bank, is clear of the water; its far half, where the settled
+river rides up to 0.31 m over the bank (the measure above), still has
+water over the planks. For the owner: a larger drop, or decks set from the
+settled water.
+
+*P7, the rails.* The owner picked "Keep the solid panels" and wrote: "You
+should use a texture with alpha cutout instead of adding geom (single
+sided, hand rails and posts and the land parts)". So the panels' look
+stays (a timber rail along each open side), drawn as flat cards in a
+cut-out texture instead of modelled boxes.
+- **The cards.** A bridge cell's railed side gets two:
+  - **the rail**, from the deck's top to `RAIL_M` (1 m) over it, along
+    the side, in `bridgerail`: a post at each end, a hand rail on top, a
+    mid rail and the bottom rail, the gaps clear;
+  - **the trestle** (the land part: the bridge's legs, standing on the
+    bed or the bank), from the deck's underside down to the cell's bed, in
+    `bridgetrestle`: a leg at each end and cross braces, one repeat a
+    metre, the gaps clear.
+  Each is mapped once across the side (its posts or legs land on the
+  side's corners, where the next side's begin), nearest sampled.
+- **Single sided, read from both sides.** Each card is two single-sided
+  quads back to back on the same plane, one facing out over the water and
+  one facing in over the deck, each culled from behind, so from the deck
+  and from the bank the card is seen from its front, lit by its own
+  normal, and the two never fight for a pixel (only one faces the eye).
+  One double-sided quad would be lit by one normal on both faces, dark on
+  the side away from the sun; two thin boxes are the geometry the owner
+  asked to do without.
+- **The texture.** `tools/art/bridge_cards.py` draws both, 64 x 32, in the
+  timber's and the plank's own palette (each pixel snapped to theirs), the
+  grain and the pegs painted in, no outline, the clear texels at alpha 0;
+  rows in the settlement manifest with `cut: true`. The world's roads draw
+  a texture the manifest cuts in the masked town material (`AlphaMode::Mask`),
+  as the net is.
+- **What stays.** The deck, its timber sides and its underside are as
+  they were. The rail's solid (what stops the walker) is as it was, so
+  walking and the paving rule are unchanged; the cut is the same
+  `roads::piece::cut` for the paved road and the planner's ghost.
+- **The ghost.** The ghost draws the cards in its own tint and opacity in
+  each card's texture, blended, so the holes are clear in the ghost too:
+  the ghost's meshes are split by texture (`planner::ghost_cards`), the
+  cells' in the gravel as before.
+- **Tests.** Core: a bridge cell railed on four sides cuts four rail cards
+  and four trestle cards, each two quads (four triangles), in the two card
+  textures; no timber box faces stand over the deck; every card's quads
+  face opposite ways. App: the ghost carries the cards in their textures.
+- **Captures.** The bridge close up by day and at night.
+
+**42p (P8), the owner's answer (survey P8, 2026-11-27).** Of a larger drop,
+decks set from the settled water, both, or leaving it, the owner picked
+"Set a new bridge's deck from the settled river, not the generated one
+(existing bridges keep theirs)". The 0.2 m drop stays. A bridge laid after
+this reads the river's settled level over its cells and sets its deck
+clear of it; a bridge already in a save keeps its deck, so no saved world
+moves. Not built yet.
+
+**42p (P7), as built (2026-11-26).** As written above.
+- Core: `roads::piece::RAIL_CARD`, `TRESTLE_CARD` and `card`; test
+  `roads::piece::tests::a_bridge_has_a_deck_and_rail_and_leg_cards_where_the_road_does_not_go`
+  (a cell railed on four sides: four rail and four leg cards, two quads
+  each, back to back, no timber over the deck, the hand rail at 1 m and the
+  legs down to the bed).
+- App: the world's roads draw a manifest-cut texture masked
+  (`roads::spawn_chunk`); the ghost draws the cards in their textures
+  (`planner::ghost_cards`, `GhostLooks::cards`); tests
+  `roads::tests::the_ghost_carries_a_bridge_s_deck_and_rail_and_leg_cards_and_its_lamp_posts`
+  (renamed from `..._deck_posts_and_rails_...`) and
+  `roads::tests::the_bridge_cards_are_drawn_in_the_timber_s_palette`.
+- Art: `tools/art/bridge_cards.py` (`--check` holds the files), the two
+  manifest rows.
+- Captures (lavapipe, no frame times) from `road-bridge.jpg`'s spot:
+  `road-bridge-after.jpg` (11:00), `river-bank-after.jpg` (11:00, looking
+  down at the deck and the rails close) and `bridge-cards-2230.jpg`
+  (22:30; no lamp stands on this bridge, so it is lit by the moon and the
+  sky alone, as the bank is). The legs stand in the river and are seen
+  only through the water.
+
 **46. Jobs on the roads: a rockfall and a trader to walk with (task 8.5,
 2026-11-24; written before the code).** Two new kinds on a town's board,
 through the board, the taken jobs, the counting and the hand-in every town
@@ -2268,6 +2502,39 @@ stored `road`), so neither is posted where there is no road.
   allow: the job taken from the board, the rock dug with the same edit the
   dig makes, the walker moved along the road with the trader, the job
   handed in and paid.
+
+**47. A parcel's pick-up and drop-off (playtest, 2026-11-25; written
+before the code).** The owner: "Carry a parcel" has no place to pick the
+parcel up or drop it off. Today taking a delivery puts the parcel straight
+into the pack (`Shop::take`), talking to anyone in the job's town hands it
+over (`Shop::deliver`), and nothing on the compass or the map points the
+way.
+- **Pick-up.** Taking a delivery puts no parcel in the pack. The parcel
+  waits with the posting town's trader (`Keepers::trader`): talking to them
+  hands over every parcel waiting there, one pack slot each (a full pack
+  keeps it waiting, and the talk says "No room in the pack"). Where the
+  trader is the job giver too, the parcel is handed over as the job is
+  taken. The talk's line is "Here is the parcel".
+- **What is stored.** `TakenJobs` gains `waiting: BTreeSet<u64>` (serde
+  default, empty), the deliveries whose parcel is still with the trader.
+  Taking a delivery adds its id; the pick-up takes it out in the same line
+  that puts the parcel in the pack (`store_with_hands`). An abandoned
+  delivery still waiting takes nothing from the pack.
+- **Saves.** A record written before this has no `waiting`, so every
+  delivery in it reads as picked up: a parcel taken today stays in the pack
+  and is handed over as before. The schema stays 1 (a defaulted field).
+- **Drop-off.** Talking to anyone in the job's town still hands it over,
+  but only once it is picked up. A delivery picked up and not yet done
+  marks its town on the compass bar and the map, as a lost villager's job
+  marks the villager (`jobs.parcel_marker`, "Parcel drop-off"), at the
+  town's centre.
+- **The tracker** (playtest-fixes design 2) names the step: "Get the
+  parcel from the trader" while it waits, "Take the parcel to {town}"
+  after, "Hand it in at {town}" once delivered.
+- **Tests.** Taking a delivery leaves the pack as it was and the job
+  waiting; talking to the trader puts the parcel in the pack; the
+  destination's people take it only after; a record without `waiting`
+  reads every delivery as picked up, keeps its parcel and gains the marker.
 
 ## Risks / Trade-offs
 

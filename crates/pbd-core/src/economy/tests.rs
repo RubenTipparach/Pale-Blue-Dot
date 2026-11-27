@@ -809,3 +809,73 @@ fn an_abandoned_job_goes_back_and_a_lamps_job_waits_for_dusk() {
     assert!(super::jobs::shown_at(&fish, 12.0));
     assert!(super::jobs::is_dusk(18.0) && !super::jobs::is_dusk(23.0));
 }
+
+/// A delivery's parcel waits with the trader until picked up (`townsfolk`
+/// design 47); a record written before the waiting list reads every
+/// delivery as picked up.
+#[test]
+fn a_parcel_waits_until_picked_up_and_an_old_record_has_none_waiting() {
+    let (j, t, v) = (jobs(), trade(), values());
+    let b = board(&j, &t, &v);
+    let town = Town {
+        site: 5,
+        kind: SiteKind::Village,
+        neighbours: &[6],
+        roads_to: &[],
+    };
+    let parcel = b.make(town, JobKind::Deliver, 91, 7).unwrap();
+    let fish = b.make(town, JobKind::Fish, 92, 7).unwrap();
+    let mut taken = TakenJobs::default();
+    taken.take(parcel.clone()).unwrap();
+    taken.take(fish.clone()).unwrap();
+    assert!(taken.is_waiting(parcel.id) && !taken.is_waiting(fish.id));
+    assert_eq!(taken.waiting_at(5), [parcel.id]);
+    assert!(taken.waiting_at(6).is_empty());
+    assert_eq!(taken.carried().count(), 0);
+    assert!(taken.pick_up(parcel.id));
+    assert!(!taken.pick_up(parcel.id), "picked up once");
+    assert_eq!(taken.carried().map(|j| j.to).collect::<Vec<_>>(), [Some(6)]);
+    // A record from before: no `waiting` in it.
+    let mut before = TakenJobs::default();
+    before.take(parcel.clone()).unwrap();
+    before.waiting.clear();
+    let body = Record::of(super::jobs::JOBS_KIND, 0, super::jobs::JOBS_SCHEMA, &before);
+    assert!(!body.body.contains("waiting"), "{}", body.body);
+    let back: TakenJobs = body.read().unwrap();
+    assert!(!back.is_waiting(parcel.id));
+    assert_eq!(back.carried().count(), 1, "read as carried");
+    // Abandoned while waiting: it leaves the list too.
+    let mut again = TakenJobs::default();
+    again.take(parcel.clone()).unwrap();
+    again.abandon(parcel.id).unwrap();
+    assert!(again.waiting.is_empty());
+}
+
+/// Handing in or abandoning the tracked job clears the focus
+/// (playtest-fixes design 2).
+#[test]
+fn a_tracked_job_handed_in_is_no_longer_tracked() {
+    let (j, t, v) = (jobs(), trade(), values());
+    let b = board(&j, &t, &v);
+    let town = Town {
+        site: 5,
+        kind: SiteKind::Village,
+        neighbours: &[6],
+        roads_to: &[],
+    };
+    let lamps = b.make(town, JobKind::Lamps, 77, 1234).unwrap();
+    let mut taken = TakenJobs::default();
+    taken.take(lamps.clone()).unwrap();
+    taken.progress.focus = Some(lamps.mission_id());
+    for _ in 0..lamps.wanted() {
+        taken.record(&Happened::new(Kind::Light, scoped(5, "lamp"), 1));
+    }
+    assert!(taken.is_done(lamps.id));
+    assert_eq!(
+        taken.progress.focus,
+        Some(lamps.mission_id()),
+        "kept till handed in"
+    );
+    taken.hand_in(lamps.id, 5).unwrap();
+    assert_eq!(taken.progress.focus, None);
+}

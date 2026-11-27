@@ -12,6 +12,7 @@ mod drops_view;
 mod equipment;
 mod eye_path;
 mod farm;
+mod fire_play;
 mod forge;
 mod frame_graph;
 mod fruit;
@@ -28,13 +29,20 @@ mod mission_tree;
 mod missions;
 mod overlay_ui;
 mod pack;
+mod path_picker;
 mod planner;
 mod repro;
 mod scene;
 mod scroll_list;
+mod sea_gather;
 mod showcase;
 mod slots;
 mod sounds;
+mod survival_kit;
+// Survival's HUD, death, drinking and wear (`survival-mode`).
+mod survival_panels;
+mod survival_places;
+mod survival_play;
 mod talk;
 mod time_ui;
 mod toasts;
@@ -318,6 +326,12 @@ pub struct Launch {
     /// start, as a player holds it (`glowing-mushrooms` part B): a block as
     /// `block:torch`, a good by its code.
     pub hold: Option<String>,
+    /// `--survival-kit`: one of each survival good and both new stations in
+    /// the pack (`survival-mode` 4.10, a capture instrument).
+    pub survival_kit: bool,
+    /// `--lay-weapons <m>`: each weapon laid as a drop in a row that far
+    /// ahead (`survival-mode` 4.10, a capture instrument).
+    pub lay_weapons: Option<f32>,
     /// `--pitch <degrees>` starts the walker looking that far below (negative)
     /// or above the horizon. A capture that digs along the look needs to look
     /// DOWN to dig a pit the way a player does - a slanted run of cells, each
@@ -400,6 +414,11 @@ pub struct Launch {
     /// once the ground is in, every stone and shrub that near the player is
     /// taken through the same path F takes one, so a still shows them gone.
     pub gather_around: Option<f32>,
+    /// `--pick-wild-ago <days>` (playtest-fixes design 3, a capture
+    /// instrument): once the ground round the player is in, every wild plant
+    /// within 20 m is recorded as picked that many game days ago, as a pick
+    /// writes it, so a still shows one gone and one grown back.
+    pub pick_wild_ago: Option<f64>,
     /// `--paving [metres]` (`townsfolk` design 39 to 41, a capture
     /// instrument): a grinder and a mixer that far ahead either side, and a
     /// plan staked from beyond them along the view, its nearer half paved,
@@ -438,6 +457,22 @@ pub struct Launch {
     /// `town-missions-tree` design 6).
     pub tree_town: bool,
     pub town_focus: Option<String>,
+    /// `--mission-mode survival`: the missions follow a Survival world's
+    /// tree whatever the world's own mode (a capture instrument,
+    /// `survival-mode` 6.5, until worlds carry their mode).
+    pub mission_mode: Option<pbd_core::missions::Mode>,
+    /// `--combat <scene>`: a capture's combat scene (`survival-mode` combat
+    /// C1 to C3), a measurement instrument.
+    pub combat: Option<String>,
+    /// `--pick-path <branch>`: once the path picker is up, that path is
+    /// picked as a click on its card would (a capture instrument,
+    /// `survival-mode` 6.5).
+    pub pick_path: Option<String>,
+    /// `--tree-jobs`: the Missions tab shows the taken jobs once the town
+    /// tree is open; `--track-job`: the first job taken is tracked, as its
+    /// TRACK would (capture instruments, playtest-fixes design 2).
+    pub tree_jobs: bool,
+    pub track_job: bool,
     /// `--no-readout`: no debug readout at the top left, as in a showcase
     /// (a capture instrument).
     pub no_readout: bool,
@@ -604,6 +639,7 @@ impl Launch {
             farm_ripe: false,
             forge: None,
             gather_around: None,
+            pick_wild_ago: None,
             paving: None,
             road_plan: None,
             forge_panel: false,
@@ -619,6 +655,11 @@ impl Launch {
             tree_hover: None,
             tree_town: false,
             town_focus: None,
+            mission_mode: None,
+            combat: None,
+            pick_path: None,
+            tree_jobs: false,
+            track_job: false,
             no_readout: false,
             dig_ahead: false,
             take_trees: false,
@@ -626,6 +667,8 @@ impl Launch {
             pick_fruit: None,
             pick_glow: None,
             hold: None,
+            survival_kit: false,
+            lay_weapons: None,
             pitch: None,
             yaw: None,
             turn: 0.0,
@@ -901,12 +944,39 @@ impl Launch {
                     );
                 }
                 "--tree-town" => result.tree_town = true,
+                "--tree-jobs" => result.tree_jobs = true,
+                "--track-job" => result.track_job = true,
                 "--no-readout" => result.no_readout = true,
                 "--town-focus" => {
                     i += 1;
                     result.town_focus = Some(
                         args.get(i)
                             .expect("--town-focus takes a town mission id")
+                            .clone(),
+                    );
+                }
+                "--combat" => {
+                    i += 1;
+                    result.walk = true;
+                    result.combat = Some(
+                        args.get(i)
+                            .cloned()
+                            .expect("--combat takes a scene: fox-stalk, fox-warn, hound-warn, swing-hit, spear-throw or guard"),
+                    );
+                }
+                "--mission-mode" => {
+                    i += 1;
+                    result.mission_mode = Some(match args.get(i).map(String::as_str) {
+                        Some("survival") => pbd_core::missions::Mode::Survival,
+                        Some("explorer") => pbd_core::missions::Mode::Explorer,
+                        _ => panic!("--mission-mode takes survival or explorer"),
+                    });
+                }
+                "--pick-path" => {
+                    i += 1;
+                    result.pick_path = Some(
+                        args.get(i)
+                            .expect("--pick-path takes a path's branch id")
                             .clone(),
                     );
                 }
@@ -928,6 +998,14 @@ impl Launch {
                             .expect("--pick-fruit takes the frame to press F on"),
                     );
                 }
+                "--pick-wild-ago" => {
+                    i += 1;
+                    result.pick_wild_ago = Some(
+                        args.get(i)
+                            .and_then(|n| n.parse().ok())
+                            .expect("--pick-wild-ago takes game days"),
+                    );
+                }
                 "--pick-glow" => {
                     i += 1;
                     result.pick_glow = Some(
@@ -943,6 +1021,17 @@ impl Launch {
                             .cloned()
                             .expect("--hold takes an item: block:torch, glowing-mushroom"),
                     );
+                }
+                "--survival-kit" => result.survival_kit = true,
+                "--lay-weapons" => {
+                    i += 1;
+                    result.lay_weapons = Some(
+                        args.get(i)
+                            .and_then(|m| m.parse().ok())
+                            .filter(|m: &f32| m.is_finite() && *m > 0.0)
+                            .expect("--lay-weapons takes metres ahead"),
+                    );
+                    result.walk = true;
                 }
                 "--pick-trees" => {
                     result.take_trees = true;
@@ -1979,10 +2068,21 @@ pub fn run(args: &[String]) {
     // The starter missions (`starter-missions`): the chain, its counting
     // and the player's record; the HUD line and the tab are `missions`.
     .add_plugins(pbd_app::missions::MissionsPlugin)
+    .insert_resource(pbd_app::missions::ForcedMode(launch.mission_mode))
     // Coins, trade and town jobs (`townsfolk` design 5 to 12): the rules'
     // state and counting, then the coin count and the talk, trade and
     // board panels.
     .add_plugins((pbd_app::economy::EconomyPlugin, talk::TalkPlugin))
+    .add_plugins(survival_play::SurvivalPlayPlugin)
+    // Fire in the player's hands, in Survival (`wildfire` 4.1, 4.3, 4.4).
+    .add_plugins(fire_play::FirePlayPlugin)
+    // Combat (`survival-mode` combat C1 to C4): the swing's rule and its
+    // claim on the click run before the digging reads it.
+    .add_plugins(pbd_app::combat::CombatPlugin)
+    .configure_sets(
+        Update,
+        pbd_app::combat::CombatSet.before(digging::dig_and_place),
+    )
     // `--craft pack-locked`'s pointer, after the UI's focus pass (a capture
     // instrument, `tool-crafting` 5.5).
     .add_systems(
@@ -1998,6 +2098,8 @@ pub fn run(args: &[String]) {
                 missions::show_line,
                 mission_tree::tree_tabs,
                 mission_tree::switch_tree,
+                mission_tree::paint_jobs,
+                mission_tree::press_track,
                 mission_tree::steer,
                 mission_tree::relayout,
                 mission_tree::place,
@@ -2007,9 +2109,31 @@ pub fn run(args: &[String]) {
                 .chain(),
             missions::scripted.run_if(pbd_app::loading::ready),
             missions::scripted_town.run_if(pbd_app::loading::ready),
+            mission_tree::scripted_track
+                .run_if(pbd_app::loading::ready)
+                .run_if(|launch: Res<Launch>| launch.track_job),
             showcase::hide_readout.run_if(|launch: Res<Launch>| launch.no_readout),
             missions::night_watch.run_if(pbd_app::loading::ready),
             missions::about_watch.run_if(pbd_app::loading::ready),
+        ),
+    )
+    // Survival's paths (`survival-mode` design 18): the picker over the tree,
+    // and the watches that raise the deeds the game already sees.
+    .init_resource::<path_picker::Picker>()
+    .add_systems(
+        Update,
+        (
+            (
+                path_picker::offer,
+                path_picker::press,
+                path_picker::paint,
+                path_picker::light_lane,
+            )
+                .chain()
+                .after(mission_tree::hover_tip),
+            path_picker::scripted_pick.run_if(pbd_app::loading::ready),
+            missions::dawn_watch.run_if(pbd_app::loading::ready),
+            missions::water_watch.run_if(pbd_app::loading::ready),
         ),
     )
     // The world, loaded before the planet is built: `create_planet` reads its
@@ -2084,6 +2208,7 @@ pub fn run(args: &[String]) {
         (
             fruit::offer.in_set(pbd_app::interact::InteractSet::Offer),
             glow_plants::offer.in_set(pbd_app::interact::InteractSet::Offer),
+            sea_gather::offer.in_set(pbd_app::interact::InteractSet::Offer),
             farm::offer
                 .in_set(pbd_app::interact::InteractSet::Offer)
                 .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
@@ -2105,7 +2230,9 @@ pub fn run(args: &[String]) {
     .init_resource::<equipment::HandListOpen>()
     .init_resource::<toasts::Toasts>()
     .init_resource::<mission_tree::TreeView>()
-    .insert_resource(if launch.tree_town {
+    .insert_resource(if launch.tree_jobs {
+        mission_tree::ShownTree::Jobs
+    } else if launch.tree_town {
         mission_tree::ShownTree::Town
     } else {
         mission_tree::ShownTree::Starter
@@ -2133,6 +2260,7 @@ pub fn run(args: &[String]) {
                     missions::spawn,
                     breeding::spawn,
                     mission_tree::spawn,
+                    path_picker::spawn,
                 ),
                 boat::spawn,
             )
@@ -2272,12 +2400,23 @@ pub fn run(args: &[String]) {
                 .chain()
                 .after(fruit::pick)
                 .before(farm::use_key),
+            // The sea floor (`sea-gathering`): the takes read from the save,
+            // F on a piece, a creature or an ornament, right-click to set one.
+            (
+                sea_gather::refresh_takes,
+                sea_gather::use_key,
+                sea_gather::place,
+            )
+                .chain()
+                .after(glow_plants::pick)
+                .before(farm::use_key),
             (
                 farm::use_key,
                 forge::work,
                 forge::grey,
                 forge::paint,
                 craft::press,
+                craft::rebuild_hand_list,
                 craft::collect_hands,
                 craft::paint,
                 craft::paint_need_counts,
@@ -2300,9 +2439,11 @@ pub fn run(args: &[String]) {
             (pbd_app::kitchen::refresh_effects, kitchen::show_effects),
             kitchen::scripted.after(farm::scripted),
             glow_plants::hold_script.run_if(pbd_app::loading::ready),
+            (survival_kit::give_kit, survival_kit::lay_weapons).run_if(pbd_app::loading::ready),
             (farm::show, farm::show_note),
             farm::scripted.after(digging::scripted_dig),
             farm::scripted_gather.after(digging::scripted_dig),
+            farm::scripted_pick_wild.after(digging::scripted_dig),
             craft::scripted.after(digging::scripted_dig),
             // Water that flows (`water-flow` E5): F5, F6 and the capture rig.
             water::scripted
@@ -2504,6 +2645,8 @@ pub fn run(args: &[String]) {
             pbd_app::held::HeldPlugin,
             pbd_app::husbandry::HusbandryPlugin,
             pbd_app::beaver::BeaverPlugin,
+            // Forest fires and torches in the rain, in Survival (`wildfire`).
+            pbd_app::wildfire::WildfirePlugin,
             // The beavers' and otters' skinned bodies (`ocean-environments` B29).
             pbd_app::critters::CrittersPlugin,
             // The light a player carries (`glowing-mushrooms` part B).
@@ -2544,6 +2687,12 @@ pub fn run(args: &[String]) {
                 glow_plants::pick_script.after(bevy::input::InputSystems),
             );
         }
+        if sea_gather::shot_wanted().is_some() {
+            app.add_systems(
+                PreUpdate,
+                sea_gather::shot_script.after(bevy::input::InputSystems),
+            );
+        }
         if launch.break_s.is_some() || launch.tool.is_some() {
             app.add_systems(PreUpdate, break_script.after(bevy::input::InputSystems));
         }
@@ -2565,6 +2714,9 @@ pub fn run(args: &[String]) {
         }
         if let Some(scene) = launch.husbandry.clone() {
             app.insert_resource(pbd_app::husbandry::HusbandryScript { scene });
+        }
+        if let Some(scene) = launch.combat.clone() {
+            app.insert_resource(pbd_app::combat::CombatScript::new(scene));
         }
         if launch.cast {
             app.add_systems(
@@ -2804,8 +2956,18 @@ fn open_world(launch: &Launch) -> WorldSave {
     let asked = launch.world.clone();
     // A showcase plays a new world, kept in memory unless `--world` names
     // one: the owner's saves are not its to fill.
+    // A Survival showcase's world is a Survival one (`survival-mode` 6.4).
+    let mode = if launch.showcase.as_ref().is_some_and(|(_, f)| f.survival) {
+        pbd_core::survival::WorldMode::Survival
+    } else {
+        pbd_core::survival::WorldMode::Explorer
+    };
     if asked.is_none() && (launch.capture.is_some() || launch.showcase.is_some()) {
-        return WorldSave::memory_only();
+        let mut save = WorldSave::memory_only();
+        if mode.is_survival() {
+            save.identity.mode = Some(mode);
+        }
+        return save;
     }
     let listed = saves::list(&root);
     let slot = match asked.as_deref() {
@@ -2814,7 +2976,7 @@ fn open_world(launch: &Launch) -> WorldSave {
             listed
                 .into_iter()
                 .find(|slot| slot.id == id || slot.file.name == name)
-                .or_else(|| saves::create(&root, name, seed).ok())
+                .or_else(|| saves::create_in(&root, name, seed, mode).ok())
         }
         // No name: the one played most recently, which is what logging back
         // on means. A first run has none, and nothing is made behind the
@@ -5683,6 +5845,14 @@ fn capture(
         commands.queue(move |world: &mut World| {
             if let Some(place) = pbd_app::place::of_world(world) {
                 info!("PLACE capture {named} {}", place.line());
+            }
+            // The water under and round the walker (`townsfolk` design 42p's
+            // measure): its rule's top and its drawn top.
+            if let Some(feet) = pbd_app::walking::walker_feet(world)
+                && let Some(contact) = world.get_resource::<pbd_app::planet::PlanetContact>()
+            {
+                let (feet, round) = contact.water_probe(feet, 3.0);
+                info!("WATER_PROBE feet {feet:.2} (rule, drawn) {round:?}");
             }
         });
     }
