@@ -17,7 +17,7 @@ waits on their approval and a request to build. Forest fires and torches are
 
 ## 2. The mode
 
-- [ ] 2.1 The world's mode in its identity record, Explorer for every older save; the choice on the new-world screen and in the world list. Verify: a test that an old save opens as Explorer; a Survival world reopens as Survival. Core half built 2026-11-27: `survival::WorldMode` (`of_saved`), `Identity.mode` with `Identity::new_in` and `.mode()`; tests `survival::mode::tests::{an_old_save_opens_as_explorer, a_survival_world_reopens_as_survival}` and `saves::format::tests::an_old_save_opens_as_explorer_and_survival_reopens_as_survival` (written; not run in the cloud session for want of disk for a `pbd-app` test build). Left: the new-world screen and the world list.
+- [ ] 2.1 The world's mode in its identity record, Explorer for every older save; the choice on the new-world screen and in the world list. Verify: a test that an old save opens as Explorer; a Survival world reopens as Survival. Core half built 2026-11-27: `survival::WorldMode` (`of_saved`), `Identity.mode` with `Identity::new_in` and `.mode()`; tests `survival::mode::tests::{an_old_save_opens_as_explorer, a_survival_world_reopens_as_survival}` and `saves::format::tests::an_old_save_opens_as_explorer_and_survival_reopens_as_survival` (passing). Left: the new-world screen and the world list.
 
 ## 3. Rules in the core
 
