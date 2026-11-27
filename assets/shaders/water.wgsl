@@ -1303,6 +1303,25 @@ fn sea_ssr_uv(p: vec3<f32>) -> vec3<f32> {
     if (clip.w <= 1e-4) { return vec3<f32>(-1.0); }
     return vec3<f32>(clip.x/clip.w*0.5 + 0.5, 0.5 - clip.y/clip.w*0.5, 1.0);
 }
+// Whether a hit texel is part of a surface, not a sliver a pixel wide: a
+// neighbour beside it AND one above or below it at about its distance (a
+// surface's own edge still has one of each; a line a pixel wide, running any
+// way, lacks one or the other). The hit test
+// takes everything within `thickness` (0.4 m and up) behind a texel as
+// solid, so a fishing line one pixel wide caught every wave-tilted ray near
+// it, a scatter of glints in the water round the line at night (owner,
+// 2026-11-26: "shimmering around objects at night with water", "this
+// happens with fishing lines"; `ocean-environments` B26).
+fn sea_ssr_solid(px: vec2<i32>, w: f32, thickness: f32) -> bool {
+    let size = vec2<i32>(textureDimensions(ssr_history));
+    let a = textureLoad(ssr_history, clamp(px + vec2<i32>(1, 0), vec2<i32>(0), size - 1), 0).w;
+    let b = textureLoad(ssr_history, clamp(px - vec2<i32>(1, 0), vec2<i32>(0), size - 1), 0).w;
+    let c = textureLoad(ssr_history, clamp(px + vec2<i32>(0, 1), vec2<i32>(0), size - 1), 0).w;
+    let d = textureLoad(ssr_history, clamp(px - vec2<i32>(0, 1), vec2<i32>(0), size - 1), 0).w;
+    let across = abs(a - w) < thickness || abs(b - w) < thickness;
+    let down = abs(c - w) < thickness || abs(d - w) < thickness;
+    return across && down;
+}
 fn sea_ssr(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
     if (view.ssr_eye.w < 0.5) { return vec4<f32>(0.0); }
     let size = vec2<f32>(textureDimensions(ssr_history));
@@ -1328,7 +1347,8 @@ fn sea_ssr(origin: vec3<f32>, dir: vec3<f32>) -> vec4<f32> {
         if (texel.w <= 0.0) { break; }
         let behind = distance(p, view.ssr_eye.xyz) - texel.w;
         let thickness = clamp(0.4 + 0.08*t, 0.4, 3.0);
-        if (behind > 0.0 && behind_before < 0.0 && behind < thickness) {
+        if (behind > 0.0 && behind_before < 0.0 && behind < thickness
+            && sea_ssr_solid(vec2<i32>(at.xy*size), texel.w, thickness)) {
             let edge = min(min(at.x, 1.0 - at.x), min(at.y, 1.0 - at.y));
             return vec4<f32>(texel.rgb, smoothstep(0.0, 0.08, edge)*(1.0 - smoothstep(0.75*reach, reach, t)));
         }

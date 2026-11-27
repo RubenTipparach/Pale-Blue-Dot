@@ -1,0 +1,25 @@
+// MEASUREMENT (ocean-environments B26; the bench's bar): from a world with a
+// workbench, a rod made at the bench, bait dug, then a line cast over the
+// water at night, for stills taken through the control port.
+(
+    goal: "Goal: fish at night",
+    hour: 12.0,
+    shots: [
+        (
+            caption: "A rod at the bench",
+            max_s: 400.0,
+            acts: [Hand("axe"), Chop(Have("log", 1)), Hand("hand"), Craft("planks", 1), Hand("shovel"), Dig(Have("fibre", 8), 1), Craft("rope", 2), Bench("rod", 1)],
+        ),
+        (
+            caption: "Bait, and the shore",
+            max_s: 400.0,
+            acts: [Shore, Hand("shovel"), Dig(Have("bait", 6), 1)],
+        ),
+        (
+            caption: "Night fishing",
+            max_s: 300.0,
+            rate: Some(60.0),
+            acts: [Hour(22.5), Hand("rod"), Fish(Times(3))],
+        ),
+    ],
+)

@@ -3030,3 +3030,17 @@ move them about: a shimmer. B24's fix for the view from under the water.
 depth (`textureLoad`). The only other change is that what is seen through
 the water moves by whole pixels instead of blending between two, which the
 pixel look's nearest sampling everywhere else already does.
+
+**B26, the real cause (measured the same day).** The refraction fix above
+was a real mismatch but not the glints: on the night still they stayed, and
+with `--reflections off` they went. The sea's screen trace (`sea_ssr`) reads
+last frame's colour and distance from a small history (`ssr_capture.wgsl`),
+which took its colour filtered at the texel's centre and its distance from
+one whole pixel. A history texel near the line held the line's colour with
+the water's distance behind it, so a wave-tilted reflected ray meeting that
+distance came back the line's colour. The capture now reads colour from the
+same whole pixel as the distance, and a hit must have a neighbour beside it
+and one above or below at about its distance (`sea_ssr_solid`), so a sliver
+a pixel wide is not a mirror. Before and after:
+`docs/screenshots/fishing-line-glints/fishing-line-glints-before-after.png`
+(the few dots left at the float are there with reflections off too).
