@@ -245,11 +245,30 @@ pub fn show_line(
         Option<Res<pbd_app::town_missions::TownMissions>>,
         Option<Res<pbd_app::town_missions::TownChain>>,
     ),
-    (eco, towns): (
+    (eco, towns, view): (
         Option<Res<pbd_app::economy::Economy>>,
         Option<Res<pbd_app::towns::Towns>>,
+        Option<Res<pbd_app::compass::CompassView>>,
     ),
 ) {
+    // The nearest carried parcel's town and how far, for a deliver line
+    // (`job-waypoints` design 4).
+    let parcel_to: Option<(String, f32)> = eco
+        .as_deref()
+        .zip(towns.as_deref())
+        .zip(view.as_deref().filter(|v| v.up != Vec3::ZERO))
+        .and_then(|((eco, towns), view)| {
+            eco.jobs
+                .carried()
+                .filter_map(|j| j.to)
+                .filter_map(|to| towns.held.iter().find(|h| h.site.id == to))
+                .map(|h| {
+                    let d =
+                        h.site.direction.angle_between(view.up) * pbd_app::planet::PLANET_RADIUS;
+                    (h.site.name.clone(), d)
+                })
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+        });
     // A tracked job first (playtest-fixes design 2): its mission row named
     // for the tracker, since a job's own has no title or labels.
     let job = eco
@@ -415,6 +434,12 @@ pub fn show_line(
                         "missions.objective_metres",
                         &[("label", &o.label), ("count", &n), ("total", &o.count)],
                     )
+                } else if o.kind == pbd_core::missions::Kind::Deliver
+                    && n < o.count
+                    && let Some((town, d)) = &parcel_to
+                {
+                    let to = pbd_app::compass::name_line(town, *d);
+                    Localized::verbatim(format!("{} {n}/{}  {}", o.label, o.count, to.as_str()))
                 } else {
                     Localized::verbatim(format!("{} {n}/{}", o.label, o.count))
                 },
