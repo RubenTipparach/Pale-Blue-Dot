@@ -251,7 +251,26 @@ const PHASES = [
     { id: 'phase-3-test-logging', step: 'Logging', items: [
       { id: 'phase-3-test-logging.1', text: 'A log drifting down a river and coming to rest, shot on a GPU.' } ] },
   ] },
-  { id: 'phase-3b', num: '3b', name: 'Multiplayer', qs: [], issues: [
+  { id: 'phase-3b', num: '3b', name: 'Multiplayer', qs: [
+      { id: 'U1', q: 'Your character is a page of Options, open any time. When you make a new world, should the Character page come up once before the world loads, or not until you open Options?',
+        options: ['Once, before a new world loads', 'Only from Options'], rec: 0,
+        why: 'A new player gets to make their character before they first see it from behind in a boat or on a horse; after that it is always in Options.',
+        change: 'player-character (design, open questions)', asked: '2026-11-27',
+        link: { url: 'https://claude.ai/artifact/M4Mh9gpMWZYjnsVfnJYrh4#character', label: 'Multiplayer mockup (M40), the Character tab' },
+        images: [
+          { src: 'img/u1-character-screen.jpg', alt: 'The Options menu on its Character tab: build, height, skin, hair, beard, face, shirt, trousers, shoes and hat, beside the figure', caption: 'The Character page of Options.' },
+          { src: 'img/u1-title-menu.jpg', alt: 'The title menu with Continue, New world, Multiplayer, Options and Quit, the Continue worlds list and the Multiplayer servers list', caption: 'The new title menu, Continue and Multiplayer.' },
+        ] },
+      { id: 'U2', q: 'A hat in a vehicle: keep it on everywhere, or take off a helmet that a closed cockpit would clip?',
+        options: ['Keep it on, except a helmet in a closed cockpit', 'Always keep it on', 'Take every hat off in a vehicle'], rec: 0,
+        why: 'Your look stays yours in the boat, the cart, on the horse and in the car; only a tall helmet that would poke through a canopy comes off.',
+        change: 'player-character (design, open questions)', asked: '2026-11-27',
+        link: { url: 'https://claude.ai/artifact/M4Mh9gpMWZYjnsVfnJYrh4#character', label: 'Multiplayer mockup (M40), Character tab, Seen in' },
+        images: [
+          { src: 'img/u2-seen-in-day.jpg', alt: 'The character seated in a rowing boat, a hand cart, on a horse, in a car and in a plane, by day', caption: 'Seen in each craft and mount.' },
+          { src: 'img/u2-seen-in-close.jpg', alt: 'Close views of the character at the controls', caption: 'Hands on the oars, shafts, reins, wheel and stick.' },
+        ] },
+    ], issues: [
     { id: 'phase-3b-launcher', step: 'Launcher', items: [
       { id: 'phase-3b-launcher.1', blocking: true, text: 'The game is Private on itch, so nothing can check it for updates yet.' },
       { id: 'phase-3b-launcher.2', blocking: true, text: 'How a free game downloads from itch is not documented. A spike comes first.' } ] },

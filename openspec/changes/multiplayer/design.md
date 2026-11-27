@@ -1102,6 +1102,37 @@ Every word comes from the locale file. The mockup is M40's Join tab,
 updated with the Continue list. The game changes after the owner approves
 it.
 
+### 29. The digest round robin and the resync (task 7.1; 2026-11-27)
+
+Design 2 says what a region's digest is. This is how a joined game finds a
+region it has wrong and gets it right.
+
+- **The server** sends one region's digest every `DIGEST_EVERY_S` (2 s) to
+  every player: `Digest { region, seq, digest }`, the next region with an
+  edit in a fixed rotation (`Server::send_digest`). The host's game and the
+  dedicated server call it on their loops. It carries the server's
+  sequence, so a game still waiting for changes in flight is not alarmed
+  by them.
+- **A joined game** keeps the server's last sequence per region, from every
+  `Change` and `Snapshot` it applies. It does not use its own ledger's
+  count, which counts layers set and not the server's accepts. On a
+  `Digest` whose sequence it has reached, it compares its own digest of
+  the region. If they differ it sends `Resync { region }` once (it is
+  queued like a request, and not sent again while one is waiting).
+- **A snapshot replaces the region whole.** Edits are only ever added or
+  replaced, so a wrong extra layer would survive a merge. A snapshot first
+  clears every cell of that region in the game's copy (`Edits::clear_cell`,
+  new), then sets the snapshot's edits and recomputes those cells' digests
+  (`Ledger::resync`, new). The join's first snapshots go the same way.
+- The tier is brought round to the replaced cells through the same APPLY.
+
+**Checks:**
+- `Edits::clear_cell`;
+- the server's rotation visits every region with an edit;
+- a game whose copy of a region is wrong asks for it once, and the
+  snapshot makes its digest equal the server's;
+- a game that is behind in sequence does not ask.
+
 ## Risks / Trade-offs
 
 - **Every stateful rule moves to the server path.** This is most of the work,
