@@ -936,6 +936,8 @@ pub fn town_fight(
         return;
     }
     for (id, guard, at) in &mut fight.guards {
+        // A guard in a fight looks it; drawn only.
+        folk.set_expression(*id, pbd_core::townsfolk::face::Expression::Cross, 0.5);
         let d = at.distance(player_at) as f32;
         match guard.step(cfg, d, dt) {
             GuardAct::Close(mps) => {
@@ -964,6 +966,7 @@ pub fn town_fight(
     }
     let mut done = Vec::new();
     for (id, left, at) in &mut fight.fleeing {
+        folk.set_expression(*id, pbd_core::townsfolk::face::Expression::Worried, 0.5);
         *left -= dt;
         let away = *at + (*at - player_at).normalize_or(DVec3::X) * 10.0;
         let (next, dir) = stride_toward(*at, away, f64::from(3.0 * dt));
