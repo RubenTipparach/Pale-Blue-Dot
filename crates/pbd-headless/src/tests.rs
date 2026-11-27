@@ -17,8 +17,13 @@ fn three_bots_build_a_hut_and_agree_with_the_server() {
         .map(|r| r.refused.get("Unchanged").copied().unwrap_or(0))
         .sum();
     assert!(accepted > 20, "the hut was built: {accepted}");
-    // Each pit's second dig of air, and two of three centre roof tries.
-    assert!(unchanged >= 3 + 2, "refusals seen: {unchanged}");
+    // Each pit's second dig of air is always refused. The centre's roof
+    // block is tried by every bot that has not yet heard it was placed (a
+    // bot skips a cell its copy shows filled), so how many of the three
+    // tries are refused rather than skipped depends on timing: what holds is
+    // that it is taken at most once, which every bot's copy agreeing with
+    // the server's (each report ok) shows.
+    assert!(unchanged >= 3, "the pits' second digs refused: {unchanged}");
 }
 
 /// The site and the hut are the same for every bot, and the hut leaves
