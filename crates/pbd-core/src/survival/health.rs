@@ -25,6 +25,8 @@ pub enum Cause {
     Creature,
     /// A townsperson's blow.
     Townsfolk,
+    /// Standing in or beside a burning cell (`wildfire` design 10).
+    Fire,
 }
 
 /// Health refilled a second of play with `food_fp` in the body and `water`

@@ -2619,6 +2619,8 @@ pub fn run(args: &[String]) {
             pbd_app::held::HeldPlugin,
             pbd_app::husbandry::HusbandryPlugin,
             pbd_app::beaver::BeaverPlugin,
+            // Forest fires and torches in the rain, in Survival (`wildfire`).
+            pbd_app::wildfire::WildfirePlugin,
             // The beavers' and otters' skinned bodies (`ocean-environments` B29).
             pbd_app::critters::CrittersPlugin,
             // The light a player carries (`glowing-mushrooms` part B).

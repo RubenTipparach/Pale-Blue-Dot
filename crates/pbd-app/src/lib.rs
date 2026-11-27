@@ -111,6 +111,9 @@ pub mod water_flow;
 pub mod weapon_models;
 #[cfg(feature = "desktop")]
 pub mod weather;
+// Fire in a Survival world (`wildfire` tasks 4.1 to 4.4).
+#[cfg(feature = "desktop")]
+pub mod wildfire;
 pub mod world_map;
 
 #[cfg(all(test, feature = "desktop"))]
