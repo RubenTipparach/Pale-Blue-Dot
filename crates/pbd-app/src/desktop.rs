@@ -2416,6 +2416,7 @@ pub fn run(args: &[String]) {
                 forge::grey,
                 forge::paint,
                 craft::press,
+                craft::rebuild_hand_list,
                 craft::collect_hands,
                 craft::paint,
                 craft::paint_need_counts,

@@ -1455,6 +1455,14 @@ before the code (recommendations taken, ask only with screenshots):
   swim). The rest of the order (the still, the cactus, the bow, the long
   shot, fishing, farming, the smelt, the torch's relight) is left for later
   runs.
+- **Found by the run: the pack's Craft list in a Survival world.** The
+  list is built when the pack is first spawned, from the recipe book as it
+  was then (Explorer's: a world's mode is applied to the book a frame
+  later), so a Survival world's pack listed only Explorer's hand recipes
+  (no straw, spear, arrows, hats or bedroll), and a row's press named the
+  wrong recipe, since a row is the hands' k-th recipe of the book as it is
+  now. Fix: the list's rows are rebuilt whenever the hands' recipes change
+  (`craft::rebuild_hand_list`); the list keeps its height and scrolls.
 - **In the cloud** the run renders on lavapipe (no GPU) at a reduced window
   (`PBD_WINDOW=960x600`, `--render-scale 50`) about one frame a second; the
   bot's clock steps at most 0.1 s a frame, so a run takes many times its
