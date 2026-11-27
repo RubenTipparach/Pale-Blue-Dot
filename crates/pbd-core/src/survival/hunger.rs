@@ -15,17 +15,41 @@ pub fn idle_burn_fp_per_s(cfg: &SurvivalConfig, shivering: bool) -> f32 {
     }
 }
 
+/// A tree's crop that is not eaten: the pine cone is wood (`values.ron`).
+const NOT_EATEN: [&str; 1] = ["pine-cone"];
+
+/// The code a good is eaten as in `survival.ron`'s tables: every tree fruit
+/// (`flora::FRUIT_GOODS`, less the pine cone) is the one `fruit` row;
+/// anything else is itself.
+pub fn food_code(good: &str) -> &str {
+    if crate::flora::FRUIT_GOODS.contains(&good) && !NOT_EATEN.contains(&good) {
+        "fruit"
+    } else {
+        good
+    }
+}
+
+/// Whether `good` is eaten for food or water in Survival.
+pub fn is_eaten(cfg: &SurvivalConfig, good: &str) -> bool {
+    let code = food_code(good);
+    cfg.fills.contains_key(code) || cfg.drinks.eaten.contains_key(code)
+}
+
 /// Food a good fills when eaten at `stars` (1 to 3; a raw food is eaten at
 /// one), or `None` for a good that is not eaten for food.
 pub fn fills(cfg: &SurvivalConfig, good: &str, stars: u8) -> Option<f32> {
-    let one = *cfg.fills.get(good)?;
+    let one = *cfg.fills.get(food_code(good))?;
     let i = usize::from(stars.clamp(1, 3) - 1);
     Some(one * cfg.star_fill_mult[i])
 }
 
 /// Water a good gives when eaten (milk, fruit, stew), or 0.
 pub fn eaten_water(cfg: &SurvivalConfig, good: &str) -> f32 {
-    cfg.drinks.eaten.get(good).copied().unwrap_or(0.0)
+    cfg.drinks
+        .eaten
+        .get(food_code(good))
+        .copied()
+        .unwrap_or(0.0)
 }
 
 #[cfg(test)]
@@ -43,6 +67,25 @@ mod tests {
         assert!((fills(&cfg, "raw-meat", 1).unwrap() - 8.0).abs() < 1e-6);
         // Raw fish, and anything not a food, fills nothing.
         assert_eq!(fills(&cfg, "stone", 1), None);
+    }
+
+    #[test]
+    fn every_tree_fruit_is_eaten_as_fruit() {
+        let cfg = SurvivalConfig::shipped();
+        for fruit in crate::flora::FRUIT_GOODS
+            .iter()
+            .filter(|f| **f != "pine-cone")
+        {
+            assert_eq!(food_code(fruit), "fruit");
+            assert_eq!(fills(&cfg, fruit, 1), Some(6.0), "{fruit}");
+            assert_eq!(eaten_water(&cfg, fruit), 4.0, "{fruit}");
+            assert!(is_eaten(&cfg, fruit));
+        }
+        assert!(!is_eaten(&cfg, "pine-cone"));
+        assert_eq!(food_code("raw-meat"), "raw-meat");
+        assert!(is_eaten(&cfg, "milk"));
+        assert!(is_eaten(&cfg, "raw-meat"));
+        assert!(!is_eaten(&cfg, "stone"));
     }
 
     #[test]

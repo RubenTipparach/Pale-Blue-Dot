@@ -245,11 +245,46 @@ pub fn show_line(
         Option<Res<pbd_app::town_missions::TownMissions>>,
         Option<Res<pbd_app::town_missions::TownChain>>,
     ),
-    (eco, towns): (
+    (eco, towns, view): (
         Option<Res<pbd_app::economy::Economy>>,
         Option<Res<pbd_app::towns::Towns>>,
+        Option<Res<pbd_app::compass::CompassView>>,
     ),
 ) {
+    // The nearest carried parcel's town and how far, for a deliver line
+    // (`job-waypoints` design 4).
+    let parcel_to: Option<(String, f32)> = eco
+        .as_deref()
+        .zip(towns.as_deref())
+        .zip(view.as_deref().filter(|v| v.up != Vec3::ZERO))
+        .and_then(|((eco, towns), view)| {
+            eco.jobs
+                .carried()
+                .filter_map(|j| j.to)
+                .filter_map(|to| towns.held.iter().find(|h| h.site.id == to))
+                .map(|h| {
+                    let d =
+                        h.site.direction.angle_between(view.up) * pbd_app::planet::PLANET_RADIUS;
+                    (h.site.name.clone(), d)
+                })
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+        });
+    // With no parcel carried, the nearest town and how far: where a
+    // delivery job is taken (`job-waypoints` design 5).
+    let parcel_from: Option<(String, f32)> = towns
+        .as_deref()
+        .zip(view.as_deref().filter(|v| v.up != Vec3::ZERO))
+        .and_then(|(towns, view)| {
+            towns
+                .held
+                .iter()
+                .map(|h| {
+                    let d =
+                        h.site.direction.angle_between(view.up) * pbd_app::planet::PLANET_RADIUS;
+                    (h.site.name.clone(), d)
+                })
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+        });
     // A tracked job first (playtest-fixes design 2): its mission row named
     // for the tracker, since a job's own has no title or labels.
     let job = eco
@@ -414,6 +449,33 @@ pub fn show_line(
                     tr_with(
                         "missions.objective_metres",
                         &[("label", &o.label), ("count", &n), ("total", &o.count)],
+                    )
+                } else if o.kind == pbd_core::missions::Kind::Deliver
+                    && n < o.count
+                    && let Some((town, d)) = &parcel_to
+                {
+                    let to = pbd_app::compass::name_line(town, *d);
+                    Localized::verbatim(format!("{} {n}/{}  {}", o.label, o.count, to.as_str()))
+                } else if matches!(
+                    o.kind,
+                    pbd_core::missions::Kind::Deliver
+                        | pbd_core::missions::Kind::Job
+                        | pbd_core::missions::Kind::Escort
+                        | pbd_core::missions::Kind::Repair
+                        | pbd_core::missions::Kind::Light
+                        | pbd_core::missions::Kind::Goodwill
+                ) && n < o.count
+                    && let Some((town, d)) = &parcel_from
+                {
+                    tr_with(
+                        "missions.parcel_from",
+                        &[
+                            ("label", &o.label),
+                            ("count", &n),
+                            ("total", &o.count),
+                            ("town", town),
+                            ("distance", &pbd_app::compass::distance_text(*d)),
+                        ],
                     )
                 } else {
                     Localized::verbatim(format!("{} {n}/{}", o.label, o.count))

@@ -234,6 +234,9 @@ pub struct BreathConfig {
 pub struct SuitAirConfig {
     pub reserve_s: f32,
     pub refill_s: f32,
+    /// Height above the body's mean radius past which the air is too thin
+    /// to breathe on foot, m.
+    pub thin_above_m: f32,
 }
 
 /// A sip from a source.
@@ -691,6 +694,7 @@ impl SurvivalConfig {
         non_negative("breath.drown_pts_per_s", self.breath.drown_pts_per_s)?;
         positive("suit_air.reserve_s", self.suit_air.reserve_s)?;
         positive("suit_air.refill_s", self.suit_air.refill_s)?;
+        positive("suit_air.thin_above_m", self.suit_air.thin_above_m)?;
 
         let d = &self.drinks;
         non_negative("drinks.fresh.water", d.fresh.water)?;

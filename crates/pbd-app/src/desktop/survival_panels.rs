@@ -657,6 +657,7 @@ fn bench_repair(
 /// A town's repair (design 11): the talk's REPAIR plaque (painted by the
 /// talk with its price) is greyed while the purse is short, and a press
 /// pays and restores every use; the talk says what happened.
+#[allow(clippy::too_many_arguments)]
 fn town_repair(
     screen: Res<Screen>,
     mut talking: ResMut<super::talk::Talking>,
@@ -718,6 +719,106 @@ impl Plugin for SurvivalPanelsPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The pack's stats panel and its four rows, without the kit's art.
+    fn pack_app(survival: Survival, mode: pbd_core::survival::WorldMode) -> App {
+        let mut app = App::new();
+        let mut save = WorldSave::memory_only();
+        save.identity.mode = Some(mode);
+        app.insert_resource(Screen::Pack)
+            .insert_resource(survival)
+            .insert_resource(save)
+            .insert_resource(SurvivalIcons {
+                heart: Handle::default(),
+                stamina: Handle::default(),
+                food: Handle::default(),
+                water: Handle::default(),
+                breath: Handle::default(),
+                sun: Handle::default(),
+                snow: Handle::default(),
+                fire: Handle::default(),
+            })
+            .init_resource::<Assets<Image>>()
+            .add_systems(Update, paint_stats);
+        app.world_mut().spawn((
+            Node {
+                display: Display::None,
+                ..default()
+            },
+            StatsPanel,
+        ));
+        for k in 0..4 {
+            app.world_mut().spawn((ImageNode::default(), StatIcon(k)));
+            app.world_mut().spawn((Node::default(), StatFill(k)));
+            app.world_mut().spawn((
+                KitText::new(Localized::empty(), ui_kit::LABEL),
+                StatNumber(k),
+            ));
+        }
+        app
+    }
+
+    fn numbers(app: &mut App) -> Vec<(usize, String)> {
+        let mut out: Vec<(usize, String)> = app
+            .world_mut()
+            .query::<(&StatNumber, &KitText)>()
+            .iter(app.world())
+            .map(|(k, t)| (k.0, t.text.to_string()))
+            .collect();
+        out.sort();
+        out
+    }
+
+    fn panel_shown(app: &mut App) -> bool {
+        app.world_mut()
+            .query_filtered::<&Node, With<StatsPanel>>()
+            .single(app.world())
+            .unwrap()
+            .display
+            == Display::Flex
+    }
+
+    #[test]
+    fn the_pack_shows_all_four_bars_full_or_not() {
+        use pbd_core::survival::{Vitals, WorldMode};
+        let cfg = play::rules();
+        // Full: the left stack hides every bar, the pack still shows four.
+        let mut full = Vitals::new(cfg);
+        full.food_fp = f64::from(cfg.food.max_fp);
+        full.water = f64::from(cfg.water.max);
+        let mut app = pack_app(
+            Survival {
+                vitals: Some(full.clone()),
+                ..default()
+            },
+            WorldMode::Survival,
+        );
+        app.update();
+        assert!(panel_shown(&mut app));
+        let shown = numbers(&mut app);
+        assert_eq!(shown.len(), 4);
+        assert!(shown.iter().all(|(_, n)| n == "100"), "{shown:?}");
+        // Low: each row reads its own share.
+        let mut low = full;
+        low.food_fp = f64::from(cfg.food.max_fp) * 0.4;
+        low.water = f64::from(cfg.water.max) * 0.25;
+        app.insert_resource(Survival {
+            vitals: Some(low),
+            ..default()
+        });
+        app.update();
+        let shown = numbers(&mut app);
+        assert_eq!(shown[2].1, "40");
+        assert_eq!(shown[3].1, "25");
+        assert_eq!(shown[0].1, "100");
+    }
+
+    #[test]
+    fn an_explorer_pack_has_no_stats_panel() {
+        let mut app = pack_app(Survival::default(), pbd_core::survival::WorldMode::Explorer);
+        app.update();
+        assert!(!panel_shown(&mut app));
+    }
 
     #[test]
     fn every_panel_word_is_in_the_locale_file() {

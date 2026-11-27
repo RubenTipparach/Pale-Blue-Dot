@@ -728,15 +728,7 @@ mod tests {
         let axe = melee_damage(&cfg, &Held::Weapon("bronze-hunting-axe".into()));
         let mut fell = Vec::new();
         for _ in 0..10 {
-            match yard.strike(
-                &cfg,
-                &roster,
-                WorldMode::Survival,
-                woolback,
-                axe,
-                None,
-                1.0,
-            ) {
+            match yard.strike(&cfg, &roster, WorldMode::Survival, woolback, axe, None, 1.0) {
                 Outcome::Killed { drops, .. } => {
                     fell = drops;
                     break;
@@ -745,7 +737,8 @@ mod tests {
                 other => panic!("{other:?}"),
             }
         }
-        let has = |drops: &[(String, u16)], good: &str| drops.iter().any(|(g, n)| g == good && *n > 0);
+        let has =
+            |drops: &[(String, u16)], good: &str| drops.iter().any(|(g, n)| g == good && *n > 0);
         for good in ["raw-meat", "wool", "bone"] {
             assert!(has(&fell, good), "no {good} in {fell:?}");
         }

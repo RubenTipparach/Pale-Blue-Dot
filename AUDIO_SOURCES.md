@@ -25,6 +25,7 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [WavesOnTheShore.wav](https://freesound.org/people/richardemoore/sounds/260263/) | Freesound | richardemoore | CC0 | `amb_surf` |
 | [Kirkstall Rock Crumble .wav](https://freesound.org/people/rokenjocu/sounds/262118/) | Freesound | rokenjocu | CC0 | `break_stone` |
 | [Seagull single call](https://freesound.org/people/steaq/sounds/263786/) | Freesound | steaq | CC0 | `gull` |
+| [Footsteps Dirt 01](https://freesound.org/people/aglinder/sounds/264469/) | Freesound | aglinder | CC0 | `step_dirt` |
 | [Thunder (close up)](https://freesound.org/people/Martineerok/sounds/264826/) | Freesound | Martineerok | CC0 | `thunder_close` |
 | [metal shovel into icy snow](https://freesound.org/people/jobel0092/sounds/268056/) | Freesound | jobel0092 | CC0 | `break_snow`, `dig_snow` |
 | [Park ambience - mostly birds](https://freesound.org/people/Mafon2/sounds/274175/) | Freesound | Mafon2 | CC0 | `amb_meadow_day` |
@@ -39,7 +40,6 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [Steam.wav](https://freesound.org/people/sniperous/sounds/365071/) | Freesound | sniperous | CC0 | `fire_hiss` |
 | [Waves Up Close 3](https://freesound.org/people/amholma/sounds/376805/) | Freesound | amholma | CC0 | `amb_surf` |
 | [MUDDY AND WET FOOTSTEPS.wav](https://freesound.org/people/Alex_hears_things/sounds/376809/) | Freesound | Alex_hears_things | CC0 | `step_wet` |
-| [Footsteps Dirt 01](https://freesound.org/people/aglinder/sounds/264469/) | Freesound | aglinder | CC0 | `step_dirt` |
 | [Swimming.wav](https://freesound.org/people/13FPanska_Marval_Lukas/sounds/379334/) | Freesound | 13FPanska_Marval_Lukas | CC0 | `swim_stroke`, `swim_stroke_under` |
 | [Carrot Crunching.wav](https://freesound.org/people/Leafs67/sounds/379343/) | Freesound | Leafs67 | CC0 | `eat_crisp` |
 | [NIAGARA WATERS ROARING.mp3](https://freesound.org/people/KevinT1001/sounds/379905/) | Freesound | KevinT1001 | CC0 | `fall_roar` |
@@ -62,6 +62,7 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [waterfall small or water fountain splashy close stream into water.flac](https://freesound.org/people/kyles/sounds/454340/) | Freesound | kyles | CC0 | `fall_light` |
 | [Autumn wind and dry leaves.wav](https://freesound.org/people/Stek59/sounds/457318/) | Freesound | Stek59 | CC0 | `amb_wind_low` |
 | [Footsteps on hollow wood](https://freesound.org/people/florianreichelt/sounds/459970/) | Freesound | florianreichelt | CC0 | `step_wood` |
+| [dog_growling 1.wav](https://freesound.org/people/15GPanskaBokstefflova_Nicola/sounds/461519/) | Freesound | 15GPanskaBokstefflova_Nicola | CC0 | `predator_growl` |
 | [Owl Hoot](https://freesound.org/people/Breviceps/sounds/465697/) | Freesound | Breviceps | CC0 | `owl` |
 | [R23-36-Water Against Wooden Boat.wav](https://freesound.org/people/craigsmith/sounds/480838/) | Freesound | craigsmith | CC0 | `bow_splash` |
 | [R23-11-Water Lapping Against Speed Boat.wav](https://freesound.org/people/craigsmith/sounds/482848/) | Freesound | craigsmith | CC0 | `amb_open_water`, `hull_lap` |
@@ -90,6 +91,7 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [Thrust Loop](https://freesound.org/people/unfa/sounds/584181/) | Freesound | unfa | CC0 | `thruster_loop` |
 | [Foley_Natural_Water_Jump_Mono.wav](https://freesound.org/people/Nox_Sound/sounds/585744/) | Freesound | Nox_Sound | CC0 | `water_exit` |
 | [rowing boat rear wave.wav](https://freesound.org/people/Fenodyrie/sounds/588308/) | Freesound | Fenodyrie | CC0 | `hull_water` |
+| [Chewing.wav](https://freesound.org/people/Rehanjo/sounds/593596/) | Freesound | Rehanjo | CC0 | `eat_soft` |
 | [Light rain](https://freesound.org/people/morsine/sounds/607070/) | Freesound | morsine | CC0 | `rain_hit_water` |
 | [Day Time Sounds in Malaysian Jungle.wav](https://freesound.org/people/paulprit/sounds/619264/) | Freesound | paulprit | CC0 | `amb_jungle_day` |
 | [water lake waves light gentle lap at boats on beach.flac](https://freesound.org/people/kyles/sounds/637945/) | Freesound | kyles | CC0 | `amb_open_water` |
@@ -99,21 +101,19 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [digging sand with hands.WAV](https://freesound.org/people/schneidi67/sounds/662864/) | Freesound | schneidi67 | CC0 | `break_sand`, `dig_sand` |
 | [Looping Gentle Wind Ambience on an Open Desert Plain.wav](https://freesound.org/people/dhallcomposer/sounds/697217/) | Freesound | dhallcomposer | CC0 | `amb_desert_day`, `amb_night_crickets`, `amb_wind_low` |
 | [Water Paddle Splashing rowing in a canoe](https://freesound.org/people/egeexyz/sounds/702386/) | Freesound | egeexyz | CC0 | `paddle_stroke` |
-| [CHEWING_02_44100](https://freesound.org/people/stevielematt/sounds/707806/) | Freesound | stevielematt | CC0 | `eat_soft` |
 | [CHEWING_03_44100](https://freesound.org/people/stevielematt/sounds/707807/) | Freesound | stevielematt | CC0 | `eat_soft` |
-| [CHEWING_04_44100](https://freesound.org/people/stevielematt/sounds/707808/) | Freesound | stevielematt | CC0 | `eat_soft` |
 | [Fishing Rod Cast - Swoosh](https://freesound.org/people/mwchristian95/sounds/725426/) | Freesound | mwchristian95 | CC0 | `cast_whoosh` |
 | [Axe chopping wood](https://freesound.org/people/xkeril/sounds/753925/) | Freesound | xkeril | CC0 | `dig_wood` |
+| [Person Eating](https://freesound.org/people/DuranBurrus/sounds/798398/) | Freesound | DuranBurrus | CC0 | `eat_soft` |
 | [Closeup Thunder Strike 01](https://freesound.org/people/loganzsound/sounds/840628/) | Freesound | loganzsound | CC0 | `strike_hit_ground`, `strike_hit_tree`, `thunder_crack` |
 | [Splashing Footsteps Shallow Water](https://freesound.org/people/ChristopherJngs/sounds/861369/) | Freesound | ChristopherJngs | CC0 | `jump_shallow`, `land_shallow`, `step_shallow` |
 | [Tumbleweed Firestarter Torch Ignite Denoised 02](https://freesound.org/people/loganzsound/sounds/872960/) | Freesound | loganzsound | CC0 | `fire_ignite` |
 | [SPLASH.wav](https://freesound.org/people/petenice/sounds/9508/) | Freesound | petenice | CC0 | `catch_splash` |
-| [dog_growling 1.wav](https://freesound.org/people/15GPanskaBokstefflova_Nicola/sounds/461519/) | Freesound | 15GPanskaBokstefflova_Nicola | CC0 | `predator_growl` |
-| [Impact Sounds · Kenney](https://kenney.nl/assets/impact-sounds) | Kenney | Kenney | CC0 | `break_dirt`, `break_grass`, `break_snow`, `break_stone`, `dig_grass`, `dig_stone`, `float_dry`, `jump_grass`, `jump_snow`, `jump_stone`, `jump_wood`, `land_dirt`, `land_grass`, `land_hard`, `land_shallow`, `land_snow`, `land_stone`, `land_wood`, `place_dirt`, `place_dry`, `place_grass`, `place_lamp`, `place_sand`, `place_snow`, `place_stone`, `place_wood`, `step_grass`, `step_snow`, `step_stone`, `step_wood` |
-| [RPG Audio · Kenney](https://kenney.nl/assets/rpg-audio) | Kenney | Kenney | CC0 | `amb_town_night`, `break_wood`, `jump_dirt`, `jump_dry`, `jump_grass`, `jump_sand`, `jump_shallow`, `jump_snow`, `jump_stone`, `jump_wood`, `land_dirt`, `place_dirt`, `rigging_creak` |
+| [impact sounds](https://kenney.nl/assets/impact-sounds) | Kenney | Kenney | CC0 | `break_dirt`, `break_grass`, `break_snow`, `break_stone`, `dig_grass`, `dig_stone`, `float_dry`, `jump_grass`, `jump_snow`, `jump_stone`, `jump_wood`, `land_dirt`, `land_grass`, `land_hard`, `land_shallow`, `land_snow`, `land_stone`, `land_wood`, `place_dirt`, `place_dry`, `place_grass`, `place_lamp`, `place_sand`, `place_snow`, `place_stone`, `place_wood`, `step_grass`, `step_snow`, `step_stone`, `step_wood` |
+| [rpg audio](https://kenney.nl/assets/rpg-audio) | Kenney | Kenney | CC0 | `amb_town_night`, `break_wood`, `jump_dirt`, `jump_dry`, `jump_grass`, `jump_sand`, `jump_shallow`, `jump_snow`, `jump_stone`, `jump_wood`, `land_dirt`, `place_dirt`, `rigging_creak` |
 
 ## Not recorded
 
 - Layered with our own synthesis (`tools/audio/gen_sfx.py`): `amb_cave`, `fire_ignite`, `land_hard`, `strike_hit_ground`, `thunder_crack`, `thunder_roll`, `water_enter_big`.
-- Synthesised outright: `catch_chime`, `mission_done`, `pickup`, `stall_warn`, `ui_back`, `ui_click`, `ui_hover`, `ui_slot`, `ui_toggle`.
+- Synthesised outright: `catch_chime`, `hook_jingle`, `mission_done`, `pickup`, `stall_warn`, `ui_back`, `ui_click`, `ui_hover`, `ui_slot`, `ui_toggle`.
 - Music: none yet (a music change, `music-authoring` skill).

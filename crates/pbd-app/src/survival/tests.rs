@@ -871,3 +871,131 @@ fn sea_water_poured_above_the_sea_stays_salt() {
     let far = point + point.normalize().any_orthonormal_vector() * 40.0;
     assert_eq!(places::water_source_in(&save, far, top), WaterSource::Fresh);
 }
+
+/// A Survival save with its bars at 40 food and 40 water.
+fn hungry_and_thirsty() -> WorldSave {
+    let mut save = survival_memory();
+    let mut vitals = save.vitals().unwrap();
+    vitals.food_fp = 40.0;
+    vitals.water = 40.0;
+    save.put_vitals(vitals);
+    save
+}
+
+#[test]
+fn a_dish_eaten_in_survival_fills_food() {
+    let mut save = hungry_and_thirsty();
+    let eaten = fill_from(
+        &mut save,
+        pbd_core::goods::Good::by_code("roast-meat").unwrap(),
+    )
+    .expect("a meal fills in Survival");
+    assert!((eaten.food_fp - 35.0).abs() < 1e-4);
+    let vitals = save.vitals().unwrap();
+    assert!((vitals.food_fp - 75.0).abs() < 1e-3, "{}", vitals.food_fp);
+    // Stew fills water too (design 15).
+    fill_from(
+        &mut save,
+        pbd_core::goods::Good::by_code("meat-stew").unwrap(),
+    )
+    .unwrap();
+    assert!((save.vitals().unwrap().water - 60.0).abs() < 1e-3);
+}
+
+#[test]
+fn an_apple_eaten_in_survival_fills_food_and_water_and_survives_a_reload() {
+    let (root, slot) = survival_world("apple");
+    let mut save = WorldSave::open(root.clone(), slot);
+    let mut vitals = save.vitals().unwrap();
+    vitals.food_fp = 40.0;
+    vitals.water = 40.0;
+    save.put_vitals(vitals);
+    let mut carried = held("apple");
+    let (good, eaten) = eat_raw(&mut save, &mut carried).expect("an apple is eaten raw");
+    assert_eq!(good.code(), "apple");
+    assert_eq!((eaten.food_fp, eaten.water), (6.0, 4.0));
+    assert!(carried.held().is_none(), "the apple left the hand");
+    drop(save);
+    let save = reopen(&root);
+    let vitals = save.vitals().unwrap();
+    assert!((vitals.food_fp - 46.0).abs() < 1e-3, "{}", vitals.food_fp);
+    assert!((vitals.water - 44.0).abs() < 1e-3, "{}", vitals.water);
+    assert!(
+        save.carried.as_ref().unwrap().held().is_none(),
+        "the hands were saved"
+    );
+}
+
+#[test]
+fn raw_meat_is_eaten_only_in_survival_and_a_stone_never() {
+    let mut save = hungry_and_thirsty();
+    let mut carried = held("raw-meat");
+    let (_, eaten) = eat_raw(&mut save, &mut carried).unwrap();
+    assert!((eaten.food_fp - 8.0).abs() < 1e-4);
+    let mut stone = held("stone");
+    assert!(eat_raw(&mut save, &mut stone).is_none());
+    assert!(stone.held().is_some(), "a stone stays in the hand");
+    let mut pine = held("pine-cone");
+    assert!(eat_raw(&mut save, &mut pine).is_none());
+
+    let mut explorer = WorldSave::memory_only();
+    let mut meat = held("raw-meat");
+    assert!(eat_raw(&mut explorer, &mut meat).is_none());
+    assert!(meat.held().is_some(), "Explorer eats no raw food");
+    assert!(
+        fill_from(
+            &mut explorer,
+            pbd_core::goods::Good::by_code("roast-meat").unwrap()
+        )
+        .is_none(),
+        "Explorer's meal leaves no bars"
+    );
+    assert!(explorer.vitals().is_none());
+}
+
+#[test]
+fn high_up_the_air_is_thin() {
+    let mean = f64::from(crate::planet::terrain_config().radius_m);
+    assert!(!thin_air_at(mean), "sea level breathes");
+    assert!(!thin_air_at(mean + 150.0), "a summit breathes");
+    assert!(
+        thin_air_at(mean + 700.0),
+        "high above the summits it is thin"
+    );
+}
+
+#[test]
+fn thin_air_spends_the_suit_then_health() {
+    let mut save = survival_memory();
+    let thin = Conditions {
+        thin_air: true,
+        ..Conditions::default()
+    };
+    let reserve = rules().suit_air.reserve_s;
+    let health = save.vitals().unwrap().health;
+    for _ in 0..(reserve as usize * 10 - 10) {
+        save.survive(&thin, 0.1).unwrap();
+    }
+    let v = save.vitals().unwrap();
+    assert!(
+        v.breath.suit_s > 0.0 && v.breath.suit_s < 2.0,
+        "{}",
+        v.breath.suit_s
+    );
+    assert!((v.health - health).abs() < 1e-3, "the suit's air holds");
+    for _ in 0..50 {
+        save.survive(&thin, 0.1).unwrap();
+    }
+    let v = save.vitals().unwrap();
+    assert_eq!(v.breath.suit_s, 0.0);
+    assert!(v.health < health, "past the reserve, health drains");
+    // A cabin's air refills the suit.
+    let cabin = Conditions {
+        in_cabin: true,
+        ..Conditions::default()
+    };
+    for _ in 0..60 {
+        save.survive(&cabin, 0.1).unwrap();
+    }
+    assert!((save.vitals().unwrap().breath.suit_s - reserve).abs() < 1e-3);
+}

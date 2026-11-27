@@ -54,6 +54,10 @@
         max_schools: 8,
         max_life: 6,
         step_hz: 30.0,
+        // fish-at-the-float: a school of what lives there spawns this far
+        // from a resting float (m), after a wait drawn from float_s (s).
+        float_s: (10.0, 30.0),
+        float_m: (4.0, 8.0),
     ),
     fishing: (
         charge_s: 1.2,

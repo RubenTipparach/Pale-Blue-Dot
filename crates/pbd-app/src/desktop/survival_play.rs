@@ -1379,7 +1379,8 @@ fn recipes_for_mode(save: Res<WorldSave>, recipes: Option<ResMut<pbd_app::config
 /// and its bars set to a HUD state of the approved mockup, so each state's
 /// `--capture` shot shows it: `full`, `thirsty50`, `thirsty25`, `winded`,
 /// `hot` (the heat stroke warning), `under` (breath), `dead` (the pack
-/// dropped), `worn` (a worn and then a broken pickaxe), `bag` (the pack
+/// dropped), `out` (passed out from heat stroke), `hit` (the hit's red
+/// edge), `worn` (a worn and then a broken pickaxe), `bag` (the pack
 /// dropped a step ahead with the player alive, for its look and its map
 /// marker), `bedroll` (a bedroll laid a step ahead), `still` (every still
 /// placed by `--place-row` given four sips of sea water and three minutes
@@ -1406,7 +1407,7 @@ fn instrument(
     if time.elapsed_secs() < after_s {
         return;
     }
-    let once = matches!(state.as_str(), "dead" | "bag" | "bedroll" | "still");
+    let once = matches!(state.as_str(), "dead" | "bag" | "bedroll" | "still" | "out");
     if once && *done >= 2 {
         return;
     }
@@ -1476,6 +1477,7 @@ fn set_state(world: &mut World, state: &str, first: bool) {
     let mut v = pbd_core::survival::Vitals::new(cfg);
     let mut line = None;
     let mut die = false;
+    let mut hit = false;
     match state {
         "full" => {}
         "thirsty50" => {
@@ -1510,6 +1512,18 @@ fn set_state(world: &mut World, state: &str, first: bool) {
             v.stamina.pts = 70.0;
         }
         "dead" => die = true,
+        // Passed out from heat stroke, held there.
+        "out" => {
+            v.body_c = 40.1;
+            v.water = 3.0;
+            v.health = 64.0;
+            v.consciousness = pbd_core::survival::passout::Consciousness::pass_out(cfg);
+        }
+        // Just hit: the red edge, held there.
+        "hit" => {
+            v.health = 72.0;
+            hit = true;
+        }
         "salt" => line = Some(pbd_core::survival::Note::SaltWater),
         "bag" | "bedroll" => place_ahead(world, state),
         "still" => {
@@ -1584,6 +1598,9 @@ fn set_state(world: &mut World, state: &str, first: bool) {
         survival.dead = true;
         survival.died_now = true;
     }
+    if hit {
+        survival.hit_s = play::HIT_S;
+    }
     if first {
         info!("SURVIVAL_STATE {state}");
     }
@@ -1592,6 +1609,38 @@ fn set_state(world: &mut World, state: &str, first: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn warning_shown(body_c: Option<f32>) -> bool {
+        let mut app = App::new();
+        let vitals = body_c.map(|c| {
+            let mut v = pbd_core::survival::Vitals::new(play::rules());
+            v.body_c = c;
+            v
+        });
+        app.insert_resource(Screen::Playing)
+            .insert_resource(Survival {
+                vitals,
+                ..default()
+            })
+            .add_systems(Update, paint_overlay);
+        app.world_mut().spawn((Node::default(), HeatWarning));
+        app.update();
+        app.world_mut()
+            .query_filtered::<&Node, With<HeatWarning>>()
+            .single(app.world())
+            .unwrap()
+            .display
+            == Display::Flex
+    }
+
+    #[test]
+    fn the_heat_warning_shows_past_39_5_c_and_goes_below_it() {
+        assert!(!warning_shown(Some(37.0)));
+        assert!(warning_shown(Some(39.6)));
+        assert!(warning_shown(Some(40.2)), "and through heat stroke");
+        assert!(!warning_shown(Some(39.4)));
+        assert!(!warning_shown(None), "Explorer shows none");
+    }
 
     #[test]
     fn every_hud_word_is_in_the_locale_file() {

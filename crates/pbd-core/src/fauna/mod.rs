@@ -577,6 +577,13 @@ pub struct SpawnSettings {
     pub max_life: u8,
     /// The schools step at this rate, Hz, on the simulation clock.
     pub step_hz: f32,
+    /// While a float rests on the water, a school of a fish that lives there
+    /// spawns by it after a wait drawn from this range, s, each time
+    /// (`fish-at-the-float`; owner, 2026-11-27: "random between 10 and 30").
+    pub float_s: (f32, f32),
+    /// The float's school spawns this far from the float, m: outside the
+    /// lure's scent reach, so it is seen swimming in.
+    pub float_m: (f32, f32),
 }
 
 impl Default for SpawnSettings {
@@ -588,6 +595,8 @@ impl Default for SpawnSettings {
             max_schools: 8,
             max_life: 6,
             step_hz: 30.0,
+            float_s: (10.0, 30.0),
+            float_m: (4.0, 8.0),
         }
     }
 }
@@ -808,10 +817,17 @@ impl FaunaSettings {
                 s.despawn_m,
                 s.attempts_per_s,
                 s.step_hz,
+                s.float_s.0,
+                s.float_s.1,
+                s.float_m.0,
+                s.float_m.1,
             ],
         )?;
         if s.ring_m.1 < s.ring_m.0 || s.despawn_m <= s.ring_m.1 {
             return Err("spawn: the ring must be ordered and inside the despawn range".into());
+        }
+        if s.float_s.1 < s.float_s.0 || s.float_m.1 < s.float_m.0 {
+            return Err("spawn: float_s and float_m must be ordered".into());
         }
         let r = &self.fishing;
         finite_positive(

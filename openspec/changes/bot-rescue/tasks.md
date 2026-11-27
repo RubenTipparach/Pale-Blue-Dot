@@ -1,0 +1,2 @@
+- [x] 1.1 `rescue_watch`, `RESCUE_AFTER_S`, `Intent::rescue` and the queued `put_ashore`
+- [ ] 1.2 Seen once in a run: a `BOT_RESCUE` line, the bot on dry land, the act carrying on
