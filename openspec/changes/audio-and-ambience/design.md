@@ -806,3 +806,5 @@ is hissier than the gasp, and reads as one.
 few separate bursts ending at nothing) and their energy above 4 kHz,
 before and after; the audio test that `Munched` asks for the cue at the
 eye. Only the owner's ears approve it.
+
+**Approved** (owner, 2026-11-27): "eating sounds are great".
