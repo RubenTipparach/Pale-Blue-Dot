@@ -62,6 +62,10 @@ pub struct Fishery {
     pub line: Line,
     step_s: f32,
     spawn_s: f32,
+    /// How long the float has rested on the water, s, and when its next
+    /// school is due (0 until drawn): `fish-at-the-float`.
+    float_wait_s: f32,
+    float_due_s: f32,
     spawned: u64,
     rng: fauna::Rng,
     /// The bed under points already asked about, on a half-metre grid. The
@@ -140,6 +144,8 @@ impl Default for Fishery {
             line: Line::new(0x0f15_4a11),
             step_s: 0.0,
             spawn_s: 0.0,
+            float_wait_s: 0.0,
+            float_due_s: 0.0,
             spawned: 0,
             rng: fauna::Rng::new(0x5c4001),
             beds: Mutex::new(HashMap::new()),
@@ -824,9 +830,41 @@ fn fish(
                     Vec::new()
                 };
             try_spawn(
-                &o, fishery, feet, sea, air, contact, roster, settings, seconds, &colonies,
+                &o, fishery, feet, None, sea, air, contact, roster, settings, seconds, &colonies,
             );
         }
+    }
+    // A resting float draws a fish that lives there every 10-30 s, whatever
+    // the ring holds (`fish-at-the-float`).
+    if fishery.line.phase == Phase::Floating {
+        if fishery.float_due_s <= 0.0 {
+            let (lo, hi) = settings.spawn.float_s;
+            fishery.float_due_s = fishery.rng.range(lo, hi);
+        }
+        fishery.float_wait_s += dt;
+        if fishery.float_wait_s >= fishery.float_due_s {
+            fishery.float_wait_s = 0.0;
+            fishery.float_due_s = 0.0;
+            if let Some(air) = air {
+                let float = fishery.line.float;
+                try_spawn(
+                    &o,
+                    fishery,
+                    feet,
+                    Some(float),
+                    sea,
+                    air,
+                    contact,
+                    roster,
+                    settings,
+                    seconds,
+                    &[],
+                );
+            }
+        }
+    } else {
+        fishery.float_wait_s = 0.0;
+        fishery.float_due_s = 0.0;
     }
 }
 
@@ -1176,12 +1214,14 @@ fn drop_far(fishery: &mut Fishery, feet: Vec3, despawn_m: f32) {
 
 /// One attempt to spawn a school in the ring round the player: a random
 /// place, its water class and temperature now, and a species that lives
-/// there and is under its cap.
+/// there and is under its cap. With `at_float`, a biting school by the
+/// resting float instead, past every cap (`fish-at-the-float`).
 #[allow(clippy::too_many_arguments)]
 fn try_spawn(
     o: &pbd_core::world_frame::SimOrigin,
     fishery: &mut Fishery,
     feet: Vec3,
+    at_float: Option<Vec3>,
     sea: &Sea,
     air: &Air,
     contact: Option<&PlanetContact>,
@@ -1199,21 +1239,25 @@ fn try_spawn(
     };
     let fish_now = fishery.schools.iter().filter(|s| biting(s)).count();
     let life_now = fishery.schools.len() - fish_now;
-    let fish_room = fish_now < settings.spawn.max_schools as usize;
-    let life_room = life_now < settings.spawn.max_life as usize;
+    let fish_room = at_float.is_some() || fish_now < settings.spawn.max_schools as usize;
+    let life_room = at_float.is_none() && life_now < settings.spawn.max_life as usize;
     if roster.is_empty() || (!fish_room && !life_room) {
         return;
     }
     // The place is found by planet directions; the school is put in local
     // space (`world-frames`).
-    let up = o.up_at(feet);
+    let centre = at_float.unwrap_or(feet);
+    let up = o.up_at(centre);
     let east = Vec3::Y.cross(up).normalize_or(Vec3::X);
     let north = up.cross(east);
-    let feet = o.query_point(feet);
+    let feet = o.query_point(centre);
     let bearing = fishery.rng.range(0.0, std::f32::consts::TAU);
-    let distance = fishery
-        .rng
-        .range(settings.spawn.ring_m.0, settings.spawn.ring_m.1);
+    let (near, far) = if at_float.is_some() {
+        settings.spawn.float_m
+    } else {
+        settings.spawn.ring_m
+    };
+    let distance = fishery.rng.range(near, far);
     let direction =
         (feet + (east * bearing.cos() + north * bearing.sin()) * distance).normalize_or(up);
     // Fresh water the world holds (a river, a lake, a pond, poured water)
@@ -1256,12 +1300,13 @@ fn try_spawn(
                 && sp.env_allows(here)
                 && colony_allows(sp, direction, colonies)
                 && if sp.can_bite() { fish_room } else { life_room }
-                && fishery
-                    .schools
-                    .iter()
-                    .filter(|s| s.species as usize == *i)
-                    .count()
-                    < sp.max_schools as usize
+                && (at_float.is_some()
+                    || fishery
+                        .schools
+                        .iter()
+                        .filter(|s| s.species as usize == *i)
+                        .count()
+                        < sp.max_schools as usize)
         })
         .map(|(i, _)| i)
         .collect();
@@ -1289,9 +1334,14 @@ fn try_spawn(
         });
     }
     debug!(
-        "{} school of {} spawned in {} at {:.1} C, {:.0} m out",
+        "{} school of {} spawned{} in {} at {:.1} C, {:.0} m out",
         roster[pick].id,
         school.len(),
+        if at_float.is_some() {
+            " by the float"
+        } else {
+            ""
+        },
         class.name(),
         temperature,
         distance

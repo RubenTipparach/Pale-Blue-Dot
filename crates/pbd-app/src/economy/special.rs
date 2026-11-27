@@ -477,6 +477,19 @@ pub fn gap_point(towns: &Towns, repair: &Repair, radius_m: f32) -> Option<Vec3> 
     Some(mid * (radius_m + alt + 1.2))
 }
 
+/// Where each taken, unfinished repair job's broken wall stands, as
+/// directions from the planet's centre: what the compass and the map mark
+/// (`job-waypoints`). Only while its town is held, since the gap is read
+/// off the town's chart.
+pub fn repair_directions(eco: &Economy, save: &WorldSave, towns: &Towns) -> Vec<Vec3> {
+    open_jobs(eco, JobKind::Repair)
+        .iter()
+        .filter_map(|j| repair_of(save, j.id))
+        .filter_map(|r| gap_point(towns, &r, crate::planet::PLANET_RADIUS))
+        .filter_map(|p| p.try_normalize())
+        .collect()
+}
+
 /// The repair jobs: break each taken job's wall once its town stands, and
 /// stand the town again with the gap.
 pub fn repairs(eco: Res<Economy>, save: Option<ResMut<WorldSave>>, mut towns: ResMut<Towns>) {
