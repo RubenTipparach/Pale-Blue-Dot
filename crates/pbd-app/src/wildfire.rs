@@ -280,7 +280,8 @@ pub struct Scars {
 ///   before the clock, so the shot shows its scar;
 /// - `tree[:<ticks>]` and `tree-snag:<days>`: the same with the driest tree
 ///   in view, burning and then charred;
-/// - `torch-out`: every placed torch put out by the rain.
+/// - `torch-out`: every placed torch, and the torch in hand, put out by the
+///   rain.
 ///
 /// Unset, nothing is forced.
 pub fn capture_scene() -> Option<String> {
@@ -336,6 +337,7 @@ pub fn instrument(
     sun: Option<Res<crate::sky::Sun>>,
     frame: Option<Res<crate::planet::PlanetRenderFrame>>,
     cameras: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
+    mut torch_out: ResMut<TorchOut>,
     mut done: Local<u32>,
 ) {
     let Some(scene) = capture_scene() else {
@@ -364,18 +366,20 @@ pub fn instrument(
         save.identity.mode = Some(pbd_core::survival::WorldMode::Survival);
     }
     *done += 1;
-    // A few frames in, once the camera stands where the shot is taken.
-    if *done != 20 {
-        return;
-    }
-    let cfg = &rules.0;
+    // The rain's work: from a few frames in, every placed torch (whenever
+    // a scripted row puts one down) and the torch in hand are out.
     if scene == "torch-out" {
+        torch_out.held = *done >= 20;
+        if *done < 20 {
+            return;
+        }
         let torches: Vec<(u32, u16)> = save
             .edits
             .all()
             .into_iter()
             .filter(|e| e.material == Material::Torch)
             .map(|e| (e.cell, e.layer))
+            .filter(|&(c, l)| !torch::is_out(&save.records, c, l))
             .collect();
         for (cell, layer) in torches {
             let proposal = Proposal {
@@ -388,6 +392,11 @@ pub fn instrument(
         }
         return;
     }
+    // A few frames in, once the camera stands where the shot is taken.
+    if *done != 20 {
+        return;
+    }
+    let cfg = &rules.0;
     let Some((_, eye)) = cameras.iter().find(|(c, _)| c.is_active) else {
         warn!("FIRE_CAPTURE {scene}: no camera");
         return;

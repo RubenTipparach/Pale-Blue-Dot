@@ -602,14 +602,27 @@ Recommendations taken (ask only with screenshots):
 - **Danger**: the player's harm is `harm_at` (in a burning cell, within
   0.6 of a cell; beside it, within 1.5 cells), taken a whole point at a
   time through the survival server (`Cause::Fire`), and the warmth is
-  `survival.ron`'s `wildfire` row. Animals' flight is `flee_from`, built
-  and tested; wiring it into the herds (`husbandry.rs`) waits for the
-  combat change in flight in that file.
-- **Charcoal from a snag** is `scar::snag_gives`; the axe on a snag in
-  the game waits: the axe's chop is the digging change in flight, and a
-  burnt tree's cleared bit hides it from `grows_tree` meanwhile.
-- **Capture instrument**: `PBD_FIRE=front[:ticks] | scar:<days> |
-  torch-out` (`wildfire::capture_scene`), `tools/capture_wildfire.sh`.
+  `survival.ron`'s `wildfire` row. Every animal, wild, kept or hunting,
+  within `flee_m` of a burning cell runs 12 m on away from the nearest
+  flame at its run (`husbandry::fire_goal`); a herd's members, standing
+  together, run the same way, and a kept animal stays in its pen.
+- **Charcoal from a snag**: a burnt tree standing charred (`Snag` or
+  `Scorched`) is a trunk the axe meets; its one stroke gives
+  `snag.count` of a new good, `charcoal` (worth what coal is; as a forge
+  fuel it waits on the forge's own change), and fells the tree in the
+  same line (`wildfire::take_snag`), so its stump regrows as a felled
+  tree's does and the snag leaves the draw. A sapling gives none.
+- **The settled climate opens as before.** A shipped settled climate (a
+  `PBDATM04` state) restores every field it carries to the byte; a state
+  saved now writes the newer header and the wetness after it
+  (`atmosphere::settled_tests::a_new_world_opens_on_the_settled_climate`).
+- **Capture instrument**: `PBD_FIRE=front[:ticks] | tree[:ticks] |
+  scar:<days> | tree-snag:<days> | torch-out` (`wildfire::capture_scene`),
+  `tools/capture_wildfire.sh`. The shots stand on a dry mountain meadow
+  found by the ignored `wildfire::tests::find_dry_grassland`: the fields
+  biome is wooded everywhere (about a third of its cells stand a tree), so
+  its floor sits near the 0.5 line and its fires stay one or two cells,
+  as decision 12 means them to.
 
 ## Questions for the owner (with screenshots), 2026-11-26
 

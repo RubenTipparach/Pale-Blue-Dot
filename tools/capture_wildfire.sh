@@ -14,11 +14,12 @@ shift || true
 cd "$(dirname "$0")/.."
 mkdir -p "$D"
 EXE=target/fast/pbd-app
-# A fields meadow away from water for the fire (the survival meadow at
-# -37.5 -84 lies along a river, too green to carry one), the survival
-# meadow for the torch.
-AT="--at 32.9505 4.01833"
-MEADOW="--at -37.5 -84"
+# A dry mountain meadow for the fire, open grass with a few pines (found
+# by the ignored test `wildfire::tests::find_dry_grassland`: 291 of its
+# 421 cells near read plant_dry 0.7 or more in the dry season), and the
+# survival meadow for the torch. No debug readout (`--no-readout`).
+AT="--at -37.5 -107.5 --no-readout"
+MEADOW="--at -37.5 -84 --no-readout"
 shot() {
   local name=$1 scene=$2; shift 2
   PBD_FIRE=$scene timeout 1500 xvfb-run -a -s "-screen 0 1440x900x24" $EXE "$@" --weather-at 7200 --capture "$D/$name.png" > "$D/$name.log" 2>&1
@@ -27,13 +28,15 @@ shot() {
 }
 # Each shot opens a world of its own, made afresh: a world kept from an
 # earlier run would open where its player stood, not at --at.
-rm -rf saves/wf-1 saves/wf-2 saves/wf-3 saves/wf-4 saves/wf-5
+rm -rf saves/wf-1 saves/wf-2 saves/wf-3 saves/wf-4 saves/wf-5 saves/wf-6 saves/wf-7
 want() { [ -z "$WANT" ] || [[ " $WANT " == *" $1 "* ]]; }
 WANT="$*"
-want front-night && shot front-night front:25 --world wf-1 $AT --walk --rain 0 --time 2.5 --yaw 35 --pitch -20 --frames 160
-want scar-next-day && shot scar-next-day scar:1 --world wf-2 $AT --walk --rain 0 --time 15 --yaw 35 --pitch -22 --frames 160
-want scar-day-30 && shot scar-day-30 scar:30 --world wf-3 $AT --walk --rain 0 --time 15 --yaw 35 --pitch -22 --frames 160
-# The torch stands under the camera (`--torch`), so the shot looks down
-# at it; `lit` sets no scene but the Survival world, for the before.
-want torch-lit-rain && shot torch-lit-rain lit --world wf-5 $MEADOW --walk --torch --rain 1 --time 2.5 --pitch -70 --frames 160
-want torch-out-rain && shot torch-out-rain torch-out --world wf-4 $MEADOW --walk --torch --rain 1 --time 2.5 --pitch -70 --frames 160
+want front-night && shot front-night front:90 --world wf-1 $AT --walk --rain 0 --time 2.5 --pitch -12 --frames 160
+want tree-burning-night && shot tree-burning-night tree:25 --world wf-6 $AT --walk --rain 0 --time 2.5 --pitch -6 --frames 160
+want tree-snag-next-day && shot tree-snag-next-day tree-snag:1 --world wf-7 $AT --walk --rain 0 --time 19.2 --pitch -6 --frames 160
+want tree-snag-day-30 && shot tree-snag-day-30 tree-snag:30 --world wf-2 $AT --walk --rain 0 --time 19.2 --pitch -6 --frames 160
+# A row of every lamp 3 m ahead (`--lamps`), the torch first: lit in the
+# rain, then put out, its body shown by the lanterns beside it. `lit` sets
+# no scene but the Survival world, for the before.
+want torch-lit-rain && shot torch-lit-rain lit --world wf-5 $MEADOW --walk --lamps 3 0 --rain 1 --time 2.5 --yaw -25 --pitch -18 --frames 160
+want torch-out-rain && shot torch-out-rain torch-out --world wf-4 $MEADOW --walk --lamps 3 0 --rain 1 --time 2.5 --yaw -25 --pitch -18 --frames 160
