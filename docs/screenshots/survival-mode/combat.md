@@ -1,6 +1,6 @@
 # Combat in the game (`survival-mode` tasks 1.6, 4.3, 4.4, 4.5)
 
-Round 2's shots carry no debug readout (`--no-readout`). Headless `--capture` shots in a Claude Code cloud container, rendered on
+Every shot carries no debug readout (`--no-readout`): round 1's were retaken on 2026-11-27 (`combat-fox-stalk-night.jpg` in a fresh capture world, the old one having filled up with earlier runs' blocks). Headless `--capture` shots in a Claude Code cloud container, rendered on
 lavapipe (software Vulkan, no GPU) at 1440 x 900 under Xvfb, stepped at a
 fixed 1/60 s: they show what things look like, never how fast or how smoothly
 they draw. Smoothness is judged on the owner's machine. Every shot is a
