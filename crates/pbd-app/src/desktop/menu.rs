@@ -123,6 +123,10 @@ pub enum MenuAction {
     Weather(u8),
     /// Set the clock to this hour: a time preset (`time_ui` acts).
     Time(u8),
+    /// Run the clock this many times its own pace (`time-speed`).
+    Speed(u16),
+    /// Move the clock this many hours ahead (`time-speed`).
+    Skip(u8),
     /// Show this overlay: 0 is off, then `Overlay::ALL` in order.
     Overlay(u8),
     /// Open this species' entry in the field guide (`guide::press` acts).
@@ -150,6 +154,8 @@ pub enum MenuAction {
     Volume(u8),
     /// Arrows on the flowing water, on or off (`water-flow` 3.4).
     FlowArrows,
+    /// The DEBUG page's time controls (`time-speed`).
+    TimeControls,
     /// Put the open Input sub-tab's keys back to their defaults.
     ResetTab,
     /// The breeding screen's species tab, by roster index.
@@ -511,6 +517,7 @@ fn settings_checked(
         MenuAction::Antialiasing => player.antialiasing,
         MenuAction::MissionLine => player.mission_line,
         MenuAction::FlowArrows => player.flow_arrows,
+        MenuAction::TimeControls => player.time_controls,
         MenuAction::AutoStep => player.auto_step,
         _ => return None,
     })
@@ -540,6 +547,7 @@ pub fn press_graphics(
             MenuAction::Antialiasing => changed.antialiasing = !changed.antialiasing,
             MenuAction::MissionLine => changed.mission_line = !changed.mission_line,
             MenuAction::FlowArrows => changed.flow_arrows = !changed.flow_arrows,
+            MenuAction::TimeControls => changed.time_controls = !changed.time_controls,
             _ => {}
         }
         if changed != *player {
@@ -573,7 +581,9 @@ pub struct Check;
 /// The settings page's tabs: Picture (with the rain shadow and the
 /// reflections), Weather (the storm forcing), World (the clock and the globe overlay), Movement, Input.
 /// Each is an id: its label is `menu.tab.<id>` in the locale file.
-pub const SETTINGS_TABS: [&str; 6] = ["picture", "weather", "world", "movement", "input", "sound"];
+pub const SETTINGS_TABS: [&str; 7] = [
+    "picture", "weather", "world", "movement", "input", "sound", "debug",
+];
 
 /// A settings tab's label.
 fn settings_tab_label(id: &str) -> Localized {
@@ -583,6 +593,7 @@ fn settings_tab_label(id: &str) -> Localized {
         "world" => tr("menu.tab.world"),
         "movement" => tr("menu.tab.movement"),
         "input" => tr("menu.tab.input"),
+        "debug" => tr("menu.tab.debug"),
         _ => tr("menu.tab.sound"),
     }
 }
@@ -1233,6 +1244,18 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                         for (which, label) in labels.into_iter().enumerate() {
                             slider_row(rows, kit, label, MenuAction::Volume(which as u8));
                         }
+                    });
+                    // DEBUG (`time-speed`): tools for testing, each off by
+                    // default; first the clock's speed and jumps.
+                    let debug = page(panel, 6);
+                    panel.commands().entity(debug).with_children(|rows| {
+                        check_row(
+                            rows,
+                            kit,
+                            tr("menu.time_controls"),
+                            MenuAction::TimeControls,
+                        );
+                        super::time_ui::spawn_speed(rows, kit);
                     });
                     panel
                         .spawn(Node {
@@ -2144,7 +2167,7 @@ pub fn press(
             MenuAction::EditName => name.focused = true,
             MenuAction::Weather(percent) => forcing.0 = f32::from(percent.min(100)) / 100.0,
             // The clock's own control answers it (`time_ui::press`).
-            MenuAction::Time(_) => {}
+            MenuAction::Time(_) | MenuAction::Speed(_) | MenuAction::Skip(_) => {}
             MenuAction::Overlay(row) => overlay.0 = super::overlay_ui::mode_for(row),
             MenuAction::Resume => {
                 front.0 = false;
@@ -2244,6 +2267,7 @@ pub fn press(
             | MenuAction::MissionLine
             | MenuAction::Volume(_)
             | MenuAction::FlowArrows
+            | MenuAction::TimeControls
             | MenuAction::ResetTab => {}
             MenuAction::Load(row) => {
                 let Some(slot) = index.slots.get(row).cloned() else {
