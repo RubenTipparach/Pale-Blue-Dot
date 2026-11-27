@@ -230,6 +230,8 @@ pub struct Player {
     pub vitals: Option<pbd_core::survival::Vitals>,
     /// Seconds of play since the vitals were last journaled.
     pub since_vitals_s: f32,
+    /// Where they were last seen (design 24).
+    pub pose: Option<pbd_core::net::protocol::Pose>,
 }
 
 /// A world's crew missions as the server counts them: the chain and the
@@ -355,6 +357,7 @@ impl Server {
                 joined_s: self.clock_s,
                 vitals: None,
                 since_vitals_s: 0.0,
+                pose: None,
             },
         );
         self.send(
@@ -403,7 +406,28 @@ impl Server {
     pub fn leave(&mut self, player: u32) -> Option<Player> {
         let left = self.players.remove(&player)?;
         self.away.insert(player, left.slots.clone());
+        // Everyone still in stops drawing them (design 24).
+        self.broadcast(ToClient::Gone { player });
         Some(left)
+    }
+
+    /// Where `player` is now (design 24): kept, and passed to every other
+    /// player, never back to them. The host's own player's comes this way
+    /// too, so the host is seen as any player is.
+    pub fn presence(&mut self, player: u32, pose: pbd_core::net::protocol::Pose) {
+        let Some(p) = self.players.get_mut(&player) else {
+            return;
+        };
+        p.pose = Some(pose);
+        let others: Vec<u32> = self
+            .players
+            .keys()
+            .copied()
+            .filter(|&n| n != player)
+            .collect();
+        for to in others {
+            self.send(To::Player(to), ToClient::Presence { player, pose });
+        }
     }
 
     /// One message from a joined player.
@@ -433,6 +457,7 @@ impl Server {
             }
             // Subscription, presence, transactions and chat come with their
             // tasks (6.3, 8.1, 8.5).
+            ToServer::Presence { pose } => self.presence(player, pose),
             _ => {}
         }
     }

@@ -884,3 +884,35 @@ fn a_guests_dig_drop_is_told_to_everyone_and_picked_once() {
         }
     )));
 }
+
+/// Design 24: a pose goes to every other player and never back to its
+/// sender; a player who leaves is told to everyone still in as gone.
+#[test]
+fn a_pose_goes_to_the_others_and_a_leaver_is_gone() {
+    use pbd_core::net::protocol::Pose;
+    use pbd_core::world_frame::{FrameId, WorldPos};
+    let (mut s, mut st) = server();
+    let players = joined(&mut s, &[1, 2, 3], Slots::default());
+    let pose = Pose {
+        at: WorldPos::new(FrameId(0), glam::DVec3::new(0.0, 4800.0, 0.0)),
+        yaw: 0.5,
+        pitch: -0.1,
+    };
+    s.handle(&mut st, players[1], ToServer::Presence { pose });
+    let sent = s.drain();
+    let to: Vec<To> = sent.iter().map(|(to, _)| *to).collect();
+    assert_eq!(to, vec![To::Player(players[0]), To::Player(players[2])]);
+    assert!(sent.iter().all(|(_, m)| *m
+        == ToClient::Presence {
+            player: players[1],
+            pose
+        }));
+    assert_eq!(s.player(players[1]).unwrap().pose, Some(pose));
+    s.leave(players[2]);
+    let sent = s.drain();
+    assert_eq!(sent.len(), 2);
+    assert!(
+        sent.iter()
+            .all(|(_, m)| *m == ToClient::Gone { player: players[2] })
+    );
+}

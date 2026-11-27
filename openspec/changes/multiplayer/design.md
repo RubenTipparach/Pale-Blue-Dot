@@ -855,6 +855,70 @@ rest of 8.2, with 6.3's snapshots).
   the item;
 - the host's game adds a guest's drop to its `Drops` once.
 
+### 24. Other players in the world (task 8.1; 2026-11-27)
+
+The owner, 2026-11-27, on the handoff's list: "I asked to get it all
+done". Seeing another player is the gap the handoff names first. The
+protocol has carried a pose both ways since 3.2 (`ToServer::Presence`,
+`ToClient::Presence`), but nothing sends it, the server drops it, and no
+game draws it.
+
+**What is sent.** Each game sends its own player's pose at 20 Hz while it
+is joined or hosting:
+- the feet, as a `WorldPos` in the home body's frame (f64): the walker's
+  centre brought down by its half height, from the origin's own methods,
+  never from a planet-centred f32;
+- yaw, the way the camera faces, measured in the tangent plane at the feet
+  from a fixed tangent frame (`protocol::tangent_frame`: east from the
+  body's Z axis crossed with up, Y when up is along Z; north completes
+  it). `yaw_of` and `forward_of` are one core pair, so the sender and the
+  drawer cannot disagree.
+- pitch, the camera's look up or down.
+
+**The server** keeps each player's last pose and passes each one it
+receives to every other player as `ToClient::Presence`, never back to
+its sender. The host's own pose goes through the same call
+(`Server::presence`), so the host is seen as any player is. When a
+player leaves, everyone is told with a new `ToClient::Gone { player }`.
+It rides the one reliable stream, as everything does today; unreliable
+datagrams for presence (design 1) wait for a measured need.
+
+**Each game** keeps, per other player, the last two poses it received with
+the time each arrived (`Others`). It draws them 100 ms behind (the gap at
+20 Hz, and a little more), interpolating the feet in f64 along the
+chord and putting them back on the sphere's radius. Yaw turns the
+short way. The stored state is f64 in the body's frame, so a rebase of
+one game's origin moves nothing it stores; the figure's local position
+is worked out from the origin each frame. Once the last pose is 2 s
+old, the player stays where they were last seen.
+
+**The figure is the townsfolk's**, approved in M5 and drawn by
+`townsfolk`: one shaped, textured body with a face, its walk animation,
+the field's light, and its fade in and out. Other players are the
+people of a reserved site, `PLAYERS_SITE`, with one person each,
+numbered by the player, a look generated from the player's number with a
+village tunic. They are driven each frame (`Townsfolk::drive`) and walk
+when they move faster than 0.3 m/s. They are not townsfolk to anything
+else:
+- `everyone()` leaves them out, so combat, guards and town missions never
+  see them; a swing at another player does nothing
+  (`survival-mode` 4.7's single-player half stands);
+- they get no `Talker`.
+- The walker's solids include them, as they do townsfolk, so players
+  cannot walk through each other.
+
+Their name over them waits for mockup 5.2 (names are empty today: the
+join sends none).
+
+**Checks:**
+- `yaw_of` and `forward_of` round trip, at the poles too;
+- the server passes a pose to the others and not back to the sender, and
+  tells everyone `Gone` when a player leaves;
+- interpolation is 100 ms behind and on the sphere;
+- two games with different origins put the same other player at the same
+  world point;
+- a visitor is not in `everyone()`, and has no `Talker`.
+
 ## Risks / Trade-offs
 
 - **Every stateful rule moves to the server path.** This is most of the work,

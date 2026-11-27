@@ -230,3 +230,24 @@ fn a_talk_holds_a_person_and_they_go_on_from_where_they_stopped() {
     );
     assert_eq!(place_of(l, 45.0, radius).feet, person.at(15.0, radius).feet);
 }
+
+/// `multiplayer` design 24: another player is drawn as a townsperson of
+/// their own site, driven where they are, and is not a townsperson to
+/// anything that asks `everyone()`; gone, they are forgotten.
+#[test]
+fn another_player_is_a_visitor_not_a_townsperson() {
+    let mut folk = Townsfolk::default();
+    let feet = DVec3::new(0.0, 4800.0, 0.0);
+    let forward = DVec3::X;
+    folk.visit(3, feet, forward, true, 0x4a6a8a);
+    folk.visit(3, feet + DVec3::X, forward, true, 0x4a6a8a);
+    let id = PersonId {
+        site: PLAYERS_SITE,
+        index: 3,
+    };
+    assert_eq!(folk.people(PLAYERS_SITE).count(), 1, "made once");
+    assert!(folk.driven(id));
+    assert_eq!(folk.everyone().count(), 0);
+    folk.unvisit(3);
+    assert_eq!(folk.people(PLAYERS_SITE).count(), 0);
+}

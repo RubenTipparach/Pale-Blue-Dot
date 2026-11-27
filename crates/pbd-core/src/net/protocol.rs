@@ -121,6 +121,30 @@ pub struct Pose {
     pub pitch: f32,
 }
 
+/// A fixed tangent frame at `up` (a unit vector from the body's centre),
+/// east then north, that every game works yaw in (design 24): east is the
+/// body's Z axis crossed with up, or its Y axis near the poles of Z.
+pub fn tangent_frame(up: DVec3) -> (DVec3, DVec3) {
+    let axis = if up.z.abs() < 0.9 { DVec3::Z } else { DVec3::Y };
+    let east = axis.cross(up).normalize();
+    let north = up.cross(east);
+    (east, north)
+}
+
+/// The yaw of `forward` at `up`, radians from north toward east, in the
+/// plane tangent there (design 24).
+pub fn yaw_of(forward: DVec3, up: DVec3) -> f32 {
+    let (east, north) = tangent_frame(up);
+    forward.dot(east).atan2(forward.dot(north)) as f32
+}
+
+/// The unit tangent at `up` that faces `yaw` (the inverse of [`yaw_of`]).
+pub fn forward_of(yaw: f32, up: DVec3) -> DVec3 {
+    let (east, north) = tangent_frame(up);
+    let yaw = f64::from(yaw);
+    north * yaw.cos() + east * yaw.sin()
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum ToServer {
     /// The first message: the versions, the install's key and a name.
@@ -239,6 +263,10 @@ pub enum ToClient {
     DropLeft {
         id: u64,
         left: u16,
+    },
+    /// A player left the world (design 24).
+    Gone {
+        player: u32,
     },
 }
 
@@ -777,6 +805,10 @@ impl ToClient {
                 w.u64(*id);
                 w.u16(*left);
             }
+            Self::Gone { player } => {
+                w.u8(15);
+                w.u32(*player);
+            }
         }
         w.0
     }
@@ -873,6 +905,7 @@ impl ToClient {
                 id: r.u64()?,
                 left: r.u16()?,
             },
+            15 => Self::Gone { player: r.u32()? },
             other => return Err(Decode::Unknown(other)),
         };
         r.end(message)
@@ -1015,6 +1048,7 @@ mod tests {
                 },
             },
             ToClient::DropLeft { id: 41, left: 0 },
+            ToClient::Gone { player: 3 },
         ];
         out.extend(
             JOIN_REFUSALS
@@ -1027,6 +1061,31 @@ mod tests {
                 .map(|&reason| ToClient::Refused { id: 1, reason }),
         );
         out
+    }
+
+    /// Design 24: a forward made into yaw and back is the same tangent,
+    /// anywhere on the sphere, the poles of Z and Y included.
+    #[test]
+    fn yaw_and_forward_round_trip_everywhere() {
+        let ups = [
+            DVec3::X,
+            DVec3::Y,
+            DVec3::Z,
+            -DVec3::Z,
+            DVec3::new(0.3, -0.2, 0.93).normalize(),
+            DVec3::new(-0.7, 0.7, 0.1).normalize(),
+        ];
+        for up in ups {
+            let (east, north) = tangent_frame(up);
+            assert!(east.dot(up).abs() < 1e-12 && north.dot(up).abs() < 1e-12);
+            for k in 0..12 {
+                let yaw = -3.0 + 0.5 * k as f32;
+                let f = forward_of(yaw, up);
+                assert!((f.length() - 1.0).abs() < 1e-9 && f.dot(up).abs() < 1e-9);
+                let back = forward_of(yaw_of(f, up), up);
+                assert!((back - f).length() < 1e-6, "{up:?} {yaw}");
+            }
+        }
     }
 
     /// Carried slots with one of each kind of item, at both ends of the

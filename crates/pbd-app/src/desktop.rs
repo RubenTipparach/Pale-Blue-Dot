@@ -2149,9 +2149,15 @@ pub fn run(args: &[String]) {
     // rather than appearing when the player first walks.
     .insert_resource(world)
     // The network, hosting or joined (`multiplayer` design 20).
+    .init_resource::<pbd_app::net_play::Others>()
     .add_systems(
         Update,
-        pbd_app::net_play::play.after(digging::dig_and_place),
+        (
+            pbd_app::net_play::play.after(digging::dig_and_place),
+            // Other players: this one's pose out, theirs drawn (design 24).
+            pbd_app::net_play::send_presence,
+            pbd_app::net_play::draw_others.after(pbd_app::net_play::play),
+        ),
     )
     // The clock: pinned and stopped where a capture asked for an hour, so a
     // picture is a function of its flags rather than of when it was taken.
