@@ -32,4 +32,4 @@ mockup first; game code waits on their approval and a request to build.
 ## 5. Close
 
 - [ ] 5.1 Screenshots of each state for the owner; the video task waits for the batch (CLAUDE.md).
-- [ ] 5.2 Move `world/fire` into `openspec/specs/` requirement by requirement with the test that proves each; `openspec validate --all`.
+- [ ] 5.2 Move `world/fire` into `openspec/specs/` requirement by requirement with the test that proves each; `openspec validate --all`. Seven of eight moved 2026-11-27 to `openspec/specs/world/fire/spec.md`, each with the tests that pin it: the ground's wetness, plant dryness, small fires, the one spread rule, what stops fire, the scar and its regrowth, torches in the rain. Left in the change: "Forest fires start only in the dry season, in Survival", whose lightning half waits on 4.5 (`lightning-fire`).

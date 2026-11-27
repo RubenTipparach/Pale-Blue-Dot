@@ -59,5 +59,5 @@ waits on their approval and a request to build. Forest fires and torches are
 
 ## Workflow follow-up
 
-- Sync `player/survival` into `openspec/specs/` requirement by requirement, with the test that proves each.
+- Sync `player/survival` into `openspec/specs/` requirement by requirement, with the test that proves each. 2026-11-27: falls, hunger, tool wear (weapons with it), body temperature and hunting moved to `openspec/specs/player/survival/spec.md` (hunting's test `husbandry::hunt::tests::wild_game_gives_meat_hide_and_bone_and_each_has_its_use` and the cold end's `body::tests::past_either_end_health_drains` added for them), and all four mission requirements to `openspec/specs/player/missions/spec.md`. Left in the change, not yet true in the game: breath (the game never reports thin air, so the suit's reserve is never spent on foot), water (fruit gives no water: eating an apple names `apple`, not the table's `fruit`), heat stroke (no revive by another player), the HUD (the pack's every-stat panel has no test of its own), and the server deciding (task 4.7).
 - Follow-ups: armour, butchering kept animals, food spoiling, a larger suit tank with the rocketry tiers, craft crash damage, a mode switch if the owner wants one.

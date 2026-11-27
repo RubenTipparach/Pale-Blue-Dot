@@ -524,6 +524,31 @@ mod tests {
         assert!(v.body_c < cfg.body.exhaustion_c && v.body_c > cfg.body.hot_c);
     }
 
+    /// Past either end of the body's range health drains: heat exhaustion
+    /// in the desert sun, hypothermia on a tundra night.
+    #[test]
+    fn past_either_end_health_drains() {
+        let cfg = cfg();
+        let mut hot = Vitals::new(&cfg);
+        hot.body_c = cfg.body.exhaustion_c + 0.1;
+        run(&mut hot, &cfg, &desert_noon(), 2.0);
+        assert_eq!(hot.state(&cfg), BodyState::Exhaustion);
+        assert!(hot.health < cfg.health.max_pts, "{}", hot.health);
+        let mut cold = Vitals::new(&cfg);
+        cold.body_c = cfg.body.hypothermia_c - 1.0;
+        let night = Conditions {
+            exposure: Exposure {
+                air_c: -30.0,
+                wind_mps: 8.0,
+                ..Exposure::default()
+            },
+            ..Conditions::default()
+        };
+        run(&mut cold, &cfg, &night, 5.0);
+        assert_eq!(cold.state(&cfg), BodyState::Hypothermia);
+        assert!(cold.health < cfg.health.max_pts, "{}", cold.health);
+    }
+
     #[test]
     fn a_hit_wakes_and_its_damage_lands() {
         let cfg = cfg();

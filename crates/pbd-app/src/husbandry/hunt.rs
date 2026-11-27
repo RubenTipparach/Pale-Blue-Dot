@@ -707,6 +707,88 @@ mod tests {
         assert_ne!(mode, Mode::Hunt);
     }
 
+    /// The hunting requirement (`player/survival`, "Wild game is hunted for
+    /// meat, hide and bone"): a wild woolback struck down in the yard drops
+    /// its meat, wool and bones, and dressed with a hunting axe its hide and
+    /// more meat; raw meat cooks at the campfire, hide tans to leather at the
+    /// tanning rack, and bone makes arrows and fertiliser, in a Survival
+    /// world's recipe book.
+    #[test]
+    fn wild_game_gives_meat_hide_and_bone_and_each_has_its_use() {
+        let cfg = SurvivalConfig::shipped();
+        let roster = roster();
+        let mut yard = Farmyard::default();
+        let woolback = yard.place_wild(
+            index_of(&roster, "woolback"),
+            Vec3::Z * 2.0,
+            Vec3::Y,
+            Vec3::X,
+            2,
+        );
+        let axe = melee_damage(&cfg, &Held::Weapon("bronze-hunting-axe".into()));
+        let mut fell = Vec::new();
+        for _ in 0..10 {
+            match yard.strike(
+                &cfg,
+                &roster,
+                WorldMode::Survival,
+                woolback,
+                axe,
+                None,
+                1.0,
+            ) {
+                Outcome::Killed { drops, .. } => {
+                    fell = drops;
+                    break;
+                }
+                Outcome::Hurt => {}
+                other => panic!("{other:?}"),
+            }
+        }
+        let has = |drops: &[(String, u16)], good: &str| drops.iter().any(|(g, n)| g == good && *n > 0);
+        for good in ["raw-meat", "wool", "bone"] {
+            assert!(has(&fell, good), "no {good} in {fell:?}");
+        }
+        let Outcome::Dressed { drops, .. } = yard.strike(
+            &cfg,
+            &roster,
+            WorldMode::Survival,
+            woolback,
+            axe,
+            Some(Blade::HuntingAxe),
+            1.0,
+        ) else {
+            panic!("not dressed");
+        };
+        assert!(has(&drops, "hide") && has(&drops, "raw-meat"), "{drops:?}");
+        // What each becomes, in a Survival world's book.
+        let read = |f: &str| {
+            std::fs::read_to_string(format!(
+                "{}/../../assets/config/{f}",
+                env!("CARGO_MANIFEST_DIR")
+            ))
+            .unwrap()
+        };
+        let file: pbd_core::station::RecipeFile = ron::from_str(&read("recipes.ron")).unwrap();
+        let book = file.resolve().unwrap().for_mode(true);
+        let made_from = |station: &str, good: &str| {
+            let item = pbd_core::station::item_named(good).unwrap();
+            book.offered()
+                .filter(|r| r.station.code == station && r.inputs.iter().any(|&(i, _)| i == item))
+                .map(|r| r.code.clone())
+                .collect::<Vec<_>>()
+        };
+        assert!(made_from("tanning-rack", "hide").contains(&"tan-hide".to_string()));
+        let bone = [made_from("workbench", "bone"), made_from("hand", "bone")].concat();
+        assert!(bone.contains(&"bone-arrows".to_string()), "{bone:?}");
+        assert!(bone.contains(&"bone-meal".to_string()), "{bone:?}");
+        let cooking = read("cooking.ron");
+        assert!(
+            cooking.contains("roast-meat") && cooking.contains("raw-meat"),
+            "raw meat cooks at the campfire"
+        );
+    }
+
     /// A kill writes its `hunted` record's key and the herd member is left
     /// out until it is back.
     #[test]
