@@ -7593,11 +7593,15 @@ fn job(bot: &mut Bot, s: &Sight, out: &mut Intent) -> Status {
             // Nobody in reach gives work here (2026-11-27: Holingmouth's five,
             // four drawn, none the giver): on to the next town and ask there,
             // twice at most.
-            if bot.job_towns < 2 {
+            // First back into the middle of this town (a rescue or a
+            // shore walk can leave the giver past the drawing range), then
+            // the next town, twice.
+            if bot.job_towns < 3 {
                 bot.job_towns += 1;
-                info!("showcase: job: no giver in reach here; on to another town");
+                let next = if bot.job_towns == 1 { "town" } else { "other-town" };
+                info!("showcase: job: no giver in reach here; seeking {next}");
                 bot.not_giver.clear();
-                bot.injected.push_back(file::Act::Seek("other-town".into()));
+                bot.injected.push_back(file::Act::Seek(next.into()));
                 bot.act_s = 0.0;
                 return Status::Running;
             }
