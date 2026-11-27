@@ -55,6 +55,8 @@ Groups 1 and 2 are the dependencies, and each is its own change.
 
 ## 9. The owner's gate
 
+- [ ] 6.6 (Design 27.) The on-disk store for `pbd-headless` (the save's journal format in a crate without Bevy), `--server <port> --world <id>`, `deploy/fly/` (Dockerfile, fly.toml with a UDP service and the `/data` volume) and `.github/workflows/server-deploy.yml`, the Tenebris way. Verify: the store's lines byte for byte with a `WorldSave`'s; a restarted server keeps its world; the image builds in CI. The first deploy is the owner's (a `FLY_API_TOKEN` secret, a dedicated IPv4 address).
+- [ ] 5.3 (Design 28.) The title menu: Continue (the worlds, Load latest), New world, Multiplayer (the hosted server, LAN, by address), Options (with Character), Quit. Mockup in M40 first. Verify: the owner approves it, then `--capture` shots.
 - [ ] 9.1 Screenshots in `docs/screenshots/` of two clients side by side: digging the same cell, a dropped item crossing, a tamed animal, flooding water. Verify: the owner has seen them.
 - [ ] 9.2 The gameplay demo (CLAUDE.md "Demos"): two bots with a stated goal, for example "build a farm together and cook a meal from it", recorded with `obs-record` by the owner. Verify: the owner watches and approves.
 - [ ] 9.3 The owner runs `perf_suite.py` on the desktop with a second client connected; a report in `docs/benchmarks/`. Verify: the report is checked in and linked from the tracker.

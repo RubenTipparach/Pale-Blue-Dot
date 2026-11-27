@@ -1009,6 +1009,99 @@ and `Gained` counts for a joined player (missions are a later writer).
 - the host's sowing through the server writes the line `store_with_hands`
   always wrote.
 
+### 27. A persistent server on Fly.io, the Tenebris way (2026-11-27)
+
+The owner, 2026-11-27: "Use tenebris hosting pattern for now where we can
+deploy a persistent server to fly.io, but yea the option is there if
+someone wants to host server themselves". Hosting from the pause menu
+(design 20, mockup 5.1) stays. Alongside it, a dedicated server runs on
+Fly.io and is the game's default server, as `tenebris.fly.dev` is
+Tenebris's.
+
+**What Tenebris does** (`RubenTipparach/tenebris`: `tenebris-rs/Dockerfile`,
+`tenebris-rs/fly.toml`, `server-js/fly.toml`,
+`.github/workflows/server.yml`):
+- a two-stage Dockerfile: `rust:bookworm` builds the server crate with
+  `--release --locked`, and `debian:bookworm-slim` runs only the binary and
+  its config tree;
+- `fly.toml`: one app in `ord`, one shared-CPU machine, and the volume
+  `tenebris_saves` mounted at `/data`, which holds the worlds and survives
+  every deploy. Its comment warns that `fly launch --copy-config` strips the
+  mount;
+- a `/health` check and an `/admin` page (open for now, or behind an
+  `ADMIN_TOKEN` secret);
+- a GitHub workflow, run by hand or called by the release workflow. It
+  needs a `FLY_API_TOKEN` deploy token, makes the volume the first time,
+  and deploys with `fly deploy --ha=false`, one deploy at a time.
+
+**What differs here, and the choice made** (recommendation taken, ask
+only with screenshots):
+- Tenebris speaks WebSocket over Fly's HTTP proxy. This game speaks QUIC
+  over UDP (`pbd-net`, design 20).
+- Fly serves UDP through a `[[services]]` block with `protocol = "udp"`.
+  The server binds `fly-global-services`, and the app needs a dedicated
+  IPv4 address.
+- Fly's proxy does not start a stopped machine for UDP, so the machine is
+  kept running (`min_machines_running = 1`). Tenebris's machines stop when
+  idle.
+- **Taken:** keep QUIC and pay for the dedicated address. A second
+  transport (QUIC for self-hosting, WebSocket for Fly) would split one
+  protocol into two to keep working, the thing the one-rule principle
+  forbids. If Fly's UDP proves troublesome, a WebSocket transport is the
+  fallback: `pbd-net` keeps its channels and swaps the socket.
+- `/health` and `/admin` are served over HTTP on a separate TCP port by
+  the same binary.
+
+**The server binary** is `pbd-headless`'s `serve` (design 21) with two
+additions:
+- a store on disk, not `MemoryStore`: the same journal format as a
+  `WorldSave` (the save's format module moves to a crate both can use,
+  without Bevy), under `/data/worlds/<id>/`;
+- `--server <port> --world <id>`, which opens or makes a world with a
+  seed and serves it. The world clock runs only while someone is on
+  (design 11).
+
+**What goes in the repository:** `deploy/fly/Dockerfile`,
+`deploy/fly/fly.toml` (app `pale-blue-dot`, volume `pbd_worlds` at
+`/data`), and `.github/workflows/server-deploy.yml`. Deploying needs the
+owner's Fly account, a `FLY_API_TOKEN` repository secret and the
+dedicated IPv4 address: the owner's to set up, once.
+
+**In the game:** the Multiplayer menu (design 28) lists the hosted server
+first, then LAN games, then joining by address. Hosting stays in the
+pause menu.
+
+**Checks:**
+- the on-disk store writes and reads back the same journal a `WorldSave`
+  does (a byte-for-byte test);
+- `pbd-headless --server` restarted keeps its world;
+- the image builds in CI.
+
+The first real deploy is the owner's, with a bot soak against it from the
+Mac.
+
+### 28. The title menu: Continue, New world, Multiplayer, Options, Quit (2026-11-27)
+
+The owner, 2026-11-27: "Change menu to continue, new world, multiplayer,
+options and quit. Continue will have worlds you can load. Or load latest
+save".
+
+- **Continue** opens the saved worlds list (today's saves page), with
+  **Load latest** at its top. A plain launch's front door is still that
+  list (CLAUDE.md, the saves page).
+- **New world**: today's new world flow.
+- **Multiplayer**:
+  - the hosted server (design 27), then games found on the LAN, then
+    join by address, with the refusal messages of mockup 5.1;
+  - hosting your own open world stays in the pause menu.
+- **Options**: today's settings, with a Character page beside them
+  (`player-character`).
+- **Quit.**
+
+Every word comes from the locale file. The mockup is M40's Join tab,
+updated with the Continue list. The game changes after the owner approves
+it.
+
 ## Risks / Trade-offs
 
 - **Every stateful rule moves to the server path.** This is most of the work,

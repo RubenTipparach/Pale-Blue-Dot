@@ -1,6 +1,6 @@
 ## 1. Mockup
 
-- [ ] 1.1 M40's Character tab: the screen, with every choice from M5's parts and palettes and a Random button; the figure seated in a rowing boat, a hand cart, on a horse, in a car and in a plane, by day and lit at night. Published, on the tracker, the open questions in the survey with its screenshots. Verify: the owner approves it for build.
+- [ ] 1.1 M40's Character tab: the screen, with every choice from M5's parts and palettes and a Random button; the figure seated in a rowing boat, a hand cart, on a horse, in a car and in a plane, by day and lit at night. Shown as a page of the Options menu. Published, on the tracker, the open questions in the survey with its screenshots (owner, 2026-11-27: "Questions go in the survey for later"). Verify: the owner approves it for build.
 
 ## 2. The look
 
@@ -9,7 +9,7 @@
 
 ## 3. The screen
 
-- [ ] 3.1 The Character screen in the UI kit, from a new world and the pause menu, every word from the locale file. Verify: `--capture` shots by day and at night.
+- [ ] 3.1 The Character page of the Options menu in the UI kit (title and pause menu), offered once on a new world, every word from the locale file. Verify: `--capture` shots by day and at night.
 
 ## 4. Seen
 

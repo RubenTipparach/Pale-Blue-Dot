@@ -23,8 +23,10 @@ number (`multiplayer` design 24), so they cannot choose how they look.
   - a hat or none;
   - the face they wear at rest.
   Each choice is from M5's palettes and parts.
-- **Where it is made:** a Character screen when a new world is made, and
-  from the pause menu at any time. It shows the figure turning only when
+- **Where it is made:** a Character page in the Options menu, open at
+  any time, from the title or the pause menu (owner, 2026-11-27: "Fully
+  customizable in options menu"; "Character fully customizable for
+  multiplayer"). A new world offers it once before it loads. It shows the figure turning only when
   dragged, by day and lit at night, with a Random button that rolls a look
   as `look::generate` does.
 - **Where it is kept:** one look per install, beside the saves
