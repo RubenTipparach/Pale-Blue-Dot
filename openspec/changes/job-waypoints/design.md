@@ -41,3 +41,13 @@ those are already on the bar.
 A deliver objective on the tracker now ends with the carried parcel's town
 and its distance, as the compass names it: "Carry a parcel 0/1  Holbrook
 1.2 km". It shows the nearest carried parcel and nothing when none is carried.
+
+## 5. Where to get a parcel (owner, 2026-11-27)
+
+"So how could carry parcel show up and not tell you where to go to pick up a
+parcel". The deliver mission assumed the player knew a delivery job comes from
+a town's job giver, and nothing in the game said so. With no parcel carried,
+the deliver line names the nearest town and its distance: "Carry a parcel 0/1
+Job from Holbrook 1.2 km". Once a parcel is carried it names the drop-off
+instead (design 4). Marking the job giver in the town itself is the survey's
+question.
