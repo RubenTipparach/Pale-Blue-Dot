@@ -151,12 +151,18 @@ fn make_looks(images: &mut Assets<Image>, materials: &mut Assets<StandardMateria
         )))
     });
     let ember = materials.add(unlit(None));
+    let smoke_texture = image(
+        include_bytes!("../../../../assets/textures/fire/smoke.png"),
+        images,
+    );
     let smoke = materials.add(StandardMaterial {
         base_color: Color::WHITE,
-        base_color_texture: Some(image(
-            include_bytes!("../../../../assets/textures/fire/smoke.png"),
-            images,
-        )),
+        base_color_texture: Some(smoke_texture.clone()),
+        // The flames' glow on its underside, faint: lit by the field, the
+        // smoke is as dark as the night away from the fire, and this keeps
+        // it from vanishing over the flames that make it.
+        emissive: LinearRgba::rgb(0.22, 0.09, 0.03),
+        emissive_texture: Some(smoke_texture),
         alpha_mode: AlphaMode::Blend,
         perceptual_roughness: 1.0,
         reflectance: 0.0,

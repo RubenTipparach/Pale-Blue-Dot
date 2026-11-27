@@ -1265,24 +1265,6 @@ pub fn dig_and_place(
     }
 }
 
-/// The tree whose trunk the eye ray meets nearer than `before_m` and within
-/// reach, by its cell's key: a vertical column at the centre of a cell that
-/// grows a tree (`pbd_core::flora::grows_tree`, the foliage pass's own rule),
-/// the trunk's width low down and the canopy's higher up.
-///
-/// Only a tree `standing` says still stands: a felled tree is not drawn, and
-/// its trunk taking the ray left the ground where it stood undiggable by any
-/// tool (`dig-fixes` 1).
-pub fn tree_on_ray(
-    fine: &PlanetFine,
-    eye: Vec3,
-    look: Vec3,
-    before_m: f32,
-    standing: impl Fn(u32) -> bool,
-) -> Option<u32> {
-    tree_or_snag_on_ray(fine, eye, look, before_m, standing, |_| false)
-}
-
 /// A burnt tree standing charred on `cell` (`wildfire` design 8): its
 /// generated tree is hidden from the foliage's rule, and its snag drawn.
 fn is_snag(fire: Option<&pbd_app::wildfire::FireNow>, cell: u32) -> bool {
@@ -1297,7 +1279,17 @@ fn is_snag(fire: Option<&pbd_app::wildfire::FireNow>, cell: u32) -> bool {
     })
 }
 
-/// [`tree_on_ray`], with the burnt trees' snags `snag` names as trunks too.
+/// The tree whose trunk the eye ray meets nearer than `before_m` and within
+/// reach, by its cell's key: a vertical column at the centre of a cell that
+/// grows a tree (`pbd_core::flora::grows_tree`, the foliage pass's own rule),
+/// the trunk's width low down and the canopy's higher up.
+///
+/// Only a tree `standing` says still stands: a felled tree is not drawn, and
+/// its trunk taking the ray left the ground where it stood undiggable by any
+/// tool (`dig-fixes` 1).
+///
+/// A burnt tree's snag `snag` names (`wildfire` design 8) is a trunk too:
+/// its generated tree is hidden from the foliage's rule while it stands.
 pub fn tree_or_snag_on_ray(
     fine: &PlanetFine,
     eye: Vec3,

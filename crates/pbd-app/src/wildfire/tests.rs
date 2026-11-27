@@ -453,3 +453,97 @@ fn a_snag_chopped_gives_charcoal_and_is_felled() {
         "and gone from the draw"
     );
 }
+
+/// A measurement instrument for the capture (`wildfire` 4.2's shots), not
+/// a check: the open, dry grassland on the shipped world nearest to burn,
+/// as the rule reads it in a dry late summer. `cargo test ... --ignored
+/// find_dry_grassland -- --nocapture`.
+#[test]
+#[ignore]
+fn find_dry_grassland() {
+    use pbd_core::planet_gen::{self, Biome};
+    let cfg = FireConfig::shipped();
+    let tc = terrain_config();
+    let mut coarse = Vec::new();
+    let mut lat = -55.0f32;
+    while lat <= 55.0 {
+        let mut lon = -180.0f32;
+        while lon < 180.0 {
+            let d = pbd_core::geo::direction(pbd_core::geo::LatLon {
+                lat: lat.to_radians(),
+                lon: lon.to_radians(),
+            });
+            let h = planet_gen::surface_altitude(tc, d);
+            let biome = planet_gen::biome_at(tc, d, h);
+            if h > tc.sea_level_m + 2.0
+                && !matches!(biome, Biome::Ocean | Biome::Swamp | Biome::Jungle)
+                && !planet_gen::in_river(tc, d)
+                && lat.abs() > 20.0
+            {
+                coarse.push((biome as usize, lat, lon, d));
+            }
+            lon += 2.5;
+        }
+        lat += 2.5;
+    }
+    println!("{} candidates", coarse.len());
+    // Up to eight of each biome, spread over the list.
+    let mut picked = Vec::new();
+    for b in 0..8 {
+        let of: Vec<_> = coarse.iter().filter(|c| c.0 == b).collect();
+        let step = (of.len() / 8).max(1);
+        picked.extend(of.into_iter().step_by(step).take(8).copied());
+    }
+    let mut scored = Vec::new();
+    for (biome, lat, lon, d) in picked {
+        let (fine, _) = crate::planet::test_ground(d);
+        let marked = BTreeMap::new();
+        let ground = TierGround {
+            set: &fine.set,
+            odds: odds_of(None),
+            air: Air {
+                ground_wet: 0.12,
+                humidity: 0.32,
+                air_c: 29.0,
+                ..Air::default()
+            },
+            marked: &marked,
+        };
+        let records = pbd_core::records::Records::new();
+        let yields = pbd_core::records::YieldSet::new();
+        let world = blaze::World {
+            cfg: &cfg,
+            seed: 1,
+            ground: &ground,
+            records: &records,
+            yields: &yields,
+            now_s: 0.0,
+            year_fraction: if d.y >= 0.0 { 0.10 } else { 0.60 },
+        };
+        let near: Vec<u32> = fine
+            .set
+            .finest_records()
+            .iter()
+            .filter(|r| {
+                Vec3::from_slice(&r.direction_height[..3])
+                    .normalize()
+                    .angle_between(d)
+                    * PLANET_RADIUS
+                    < 30.0
+            })
+            .map(|r| r.key())
+            .collect();
+        let dry = near.iter().filter(|&&k| world.plant_dry(k) >= 0.7).count();
+        let trees = near
+            .iter()
+            .filter(|&&k| ground.land(k).is_some_and(|l| l.plant.is_tree()))
+            .count();
+        println!(
+            "biome {biome} {lat} {lon}: {dry} of {} dry, {trees} trees",
+            near.len()
+        );
+        scored.push((dry, biome, lat, lon, trees));
+    }
+    scored.sort_by_key(|s| std::cmp::Reverse(s.0));
+    println!("best: {:?}", &scored[..scored.len().min(6)]);
+}

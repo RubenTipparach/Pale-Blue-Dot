@@ -1726,6 +1726,12 @@ fn herd_trace() -> Option<HerdTrace> {
 }
 
 /// Move and animate every animal.
+/// The fire the herds run from (`wildfire` design 10).
+type FireNear<'w> = (
+    Option<Res<'w, crate::wildfire::FireNow>>,
+    Option<Res<'w, crate::wildfire::FireRules>>,
+);
+
 fn step(
     world: World,
     mut yard: ResMut<Farmyard>,
@@ -1734,10 +1740,7 @@ fn step(
     (save, survival, fire): (
         Option<Res<WorldSave>>,
         Option<Res<crate::survival::Survival>>,
-        (
-            Option<Res<crate::wildfire::FireNow>>,
-            Option<Res<crate::wildfire::FireRules>>,
-        ),
+        FireNear,
     ),
 ) {
     let trace = trace.get_or_insert_with(herd_trace);

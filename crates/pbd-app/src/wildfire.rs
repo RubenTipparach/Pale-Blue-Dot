@@ -271,13 +271,15 @@ pub struct Scars {
 /// MEASUREMENT (capture instrument, `wildfire` 4.2's shots):
 /// `PBD_FIRE=<scene>` makes a capture's world a Survival one in a dry late
 /// summer (the weather the rule reads is held at two dry weeks, warm, with
-/// no wind) and sets a scene once the tier is in:
+/// a 3 m/s west wind) and sets a scene once the tier is in:
 /// - `front[:<ticks>]`: a blaze lit by a torch on the driest plant in
-///   view, 5 to 20 m ahead (24 for a scar), and run up to `<ticks>` world
-///   seconds at once (60 unset), stopped while it still burns, so the shot
+///   view, 5 to 14 m ahead (20 for a scar), and run up to `<ticks>` world
+///   seconds at once (60 unset), stopped where it burns widest, so the shot
 ///   shows its flames;
 /// - `scar:<days>`: the same blaze run until it is out, `<days>` world days
 ///   before the clock, so the shot shows its scar;
+/// - `tree[:<ticks>]` and `tree-snag:<days>`: the same with the driest tree
+///   in view, burning and then charred;
 /// - `torch-out`: every placed torch put out by the rain.
 ///
 /// Unset, nothing is forced.
@@ -285,16 +287,18 @@ pub fn capture_scene() -> Option<String> {
     std::env::var("PBD_FIRE").ok()
 }
 
-/// The air the rule reads under [`capture_scene`]: two dry weeks of late
-/// summer, no wind. `None` when no scene is set.
-fn forced_air() -> Option<Air> {
+/// The air the rule reads under [`capture_scene`] at `direction`: two dry
+/// weeks of late summer and a 3 m/s wind from the west (design 12's
+/// typical fire). `None` when no scene is set.
+fn forced_air(direction: Vec3) -> Option<Air> {
     capture_scene()?;
+    let east = Vec3::Y.cross(direction).normalize_or(Vec3::X);
     Some(Air {
         ground_wet: 0.12,
         humidity: 0.32,
         air_c: 29.0,
         rain_mm_h: 0.0,
-        wind: Vec3::ZERO,
+        wind: east * 3.0,
         snow: false,
     })
 }
@@ -302,6 +306,24 @@ fn forced_air() -> Option<Air> {
 /// Late summer at a direction's own hemisphere.
 fn late_summer_at(direction: Vec3) -> f64 {
     if direction.y >= 0.0 { 0.10 } else { 0.60 }
+}
+
+/// The capture instrument's dry sky ([`capture_scene`]): a fire scene's
+/// shot is of the dry season, so the drawn weather is held dry (no rain on
+/// the lens, no wet ground), as the rule's air is. The torch scenes keep
+/// their rain.
+pub fn dry_sky_for_capture(mut weather: Option<ResMut<crate::weather::Weather>>) {
+    let Some(scene) = capture_scene() else {
+        return;
+    };
+    if scene.starts_with("torch") || scene == "lit" {
+        return;
+    }
+    if let Some(w) = weather.as_deref_mut() {
+        w.rain = 0.0;
+        w.wetness = 0.0;
+        w.cover = w.cover.min(0.2);
+    }
 }
 
 /// The capture instrument's system ([`capture_scene`]).
@@ -384,7 +406,7 @@ pub fn instrument(
     let ground = TierGround {
         set: &fine.set,
         odds,
-        air: forced_air().unwrap_or_default(),
+        air: forced_air(target).unwrap_or_default(),
         marked: &marked,
     };
     let world = blaze::World {
@@ -396,11 +418,13 @@ pub fn instrument(
         now_s: sun.clock.seconds,
         year_fraction: year,
     };
+    // A tree's scenes light a tree; the others the driest plant.
+    let trees = scene.starts_with("tree");
     let near: Vec<u32> = fine
         .set
         .finest_records()
         .iter()
-        // In view: 5 to 20 m ahead (24 for a scar), within 25 degrees of
+        // In view: 5 to 14 m ahead (20 for a scar), within 25 degrees of
         // the look.
         .filter(|r| {
             let d = Vec3::from_slice(&r.direction_height[..3])
@@ -410,14 +434,18 @@ pub fn instrument(
             off -= up * off.dot(up);
             let along = off.dot(ahead.normalize_or(DVec3::X));
             let far = if scene.starts_with("scar") {
-                24.0
-            } else {
                 20.0
+            } else {
+                14.0
             };
             (5.0..far).contains(&along) && off.length() * 0.906 <= along
         })
         .map(|r| r.key())
-        .filter(|&k| ground.land(k).is_some_and(|l| l.plant.burns()))
+        .filter(|&k| {
+            ground
+                .land(k)
+                .is_some_and(|l| l.plant.burns() && (!trees || l.plant.is_tree()))
+        })
         .collect();
     // The driest plant near the point ahead.
     let best = near
@@ -433,9 +461,9 @@ pub fn instrument(
         return;
     };
     let (ticks, back_days) = match scene.split_once(':') {
-        Some(("front", n)) => (n.parse().unwrap_or(60), 0.0),
-        Some(("scar", d)) => (900, d.parse::<f64>().unwrap_or(1.0)),
-        _ if scene == "front" => (60, 0.0),
+        Some(("front", n)) | Some(("tree", n)) => (n.parse().unwrap_or(60), 0.0),
+        Some(("scar", d)) | Some(("tree-snag", d)) => (900, d.parse::<f64>().unwrap_or(1.0)),
+        _ if scene == "front" || scene == "tree" => (60, 0.0),
         _ => {
             warn!("PBD_FIRE {scene}: no such scene");
             return;
@@ -447,8 +475,17 @@ pub fn instrument(
         cfg, &mut save, &fine.set, &air.now, &marked, &odds, cell, start, year,
     );
     info!("FIRE_CAPTURE {scene}: {lit:?} at cell {cell}");
+    // A front's shot is taken where it burns widest: the same ticks run
+    // first on a copy of the records (the rule is pure), then for real to
+    // that tick. A scar's runs until it is out.
+    let ticks = if back_days == 0.0 {
+        widest_tick(
+            cfg, &save, &fine.set, &marked, &odds, cell, start, year, ticks,
+        )
+    } else {
+        ticks
+    };
     let mut ran = 0;
-    let mut peak = 0;
     for k in 0..ticks {
         if run_once(
             cfg,
@@ -464,16 +501,6 @@ pub fn instrument(
             break;
         }
         ran += 1;
-        // A front's shot is taken while it burns: stopped once it is past
-        // its height and before it is out.
-        let burning: usize = blaze::live(&save.records)
-            .iter()
-            .map(|(_, b)| b.burning.len())
-            .sum();
-        peak = peak.max(burning);
-        if back_days == 0.0 && ran >= 8 && burning > 0 && (burning < peak || burning <= 2) {
-            break;
-        }
     }
     info!(
         "FIRE_CAPTURE ran {ran} ticks: {} burning, {} burnt",
@@ -483,6 +510,64 @@ pub fn instrument(
             .sum::<usize>(),
         save.records.of_kind(blaze::BURNT_KIND).count()
     );
+}
+
+/// The capture's dry run: the tick, up to `most`, at which the blaze just
+/// lit at `cell` burns widest (or first has 30 cells alight), on a copy of
+/// the records under the capture's held air.
+#[allow(clippy::too_many_arguments)]
+fn widest_tick(
+    cfg: &FireConfig,
+    save: &WorldSave,
+    set: &crate::planet::lod::FineSet,
+    marked: &BTreeMap<u32, u32>,
+    odds: &Odds,
+    cell: u32,
+    start: f64,
+    year: f64,
+    most: u32,
+) -> u32 {
+    let toward = pbd_core::roads::centre(cell).unwrap_or(Vec3::Y);
+    let ground = TierGround {
+        set,
+        odds: *odds,
+        air: forced_air(toward).unwrap_or_default(),
+        marked,
+    };
+    let mut records = save.records.clone();
+    let (mut best, mut widest) = (0, 0);
+    for k in 0..most {
+        let ids: Vec<u64> = blaze::live(&records).iter().map(|(id, _)| *id).collect();
+        if ids.is_empty() {
+            break;
+        }
+        let world = blaze::World {
+            cfg,
+            seed: save.identity.seed,
+            ground: &ground,
+            records: &records,
+            yields: &save.yields,
+            now_s: start + 1.0 + f64::from(k),
+            year_fraction: year,
+        };
+        for (_, p) in blaze::run(&world, &ids) {
+            for r in p.records {
+                records.put(r);
+            }
+        }
+        let burning: usize = blaze::live(&records)
+            .iter()
+            .map(|(_, b)| b.burning.len())
+            .sum();
+        if burning > widest {
+            (best, widest) = (k + 1, burning);
+        }
+        if burning >= 30 {
+            break;
+        }
+    }
+    info!("FIRE_CAPTURE widest at tick {best}: {widest} alight");
+    best.max(1)
 }
 
 /// Once a world second, in a Survival world: every live blaze on the tier
@@ -551,8 +636,8 @@ pub fn run_once(
         return 0;
     };
     let toward = pbd_core::roads::centre(first.1.origin).unwrap_or(Vec3::Y);
-    let air = forced_air().unwrap_or_else(|| air_at(atmosphere, toward));
-    let year_fraction = if forced_air().is_some() {
+    let air = forced_air(toward).unwrap_or_else(|| air_at(atmosphere, toward));
+    let year_fraction = if capture_scene().is_some() {
         late_summer_at(toward)
     } else {
         year_fraction
@@ -600,8 +685,8 @@ pub fn light(
         return blaze::Lighting::Nothing;
     }
     let toward = pbd_core::roads::centre(cell).unwrap_or(Vec3::Y);
-    let air = forced_air().unwrap_or_else(|| air_at(atmosphere, toward));
-    let year_fraction = if forced_air().is_some() {
+    let air = forced_air(toward).unwrap_or_else(|| air_at(atmosphere, toward));
+    let year_fraction = if capture_scene().is_some() {
         late_summer_at(toward)
     } else {
         year_fraction
@@ -1055,6 +1140,10 @@ impl Plugin for WildfirePlugin {
                     .chain()
                     .run_if(crate::world_open),
             );
+        app.add_systems(
+            Update,
+            dry_sky_for_capture.after(crate::weather::WeatherSystems),
+        );
         fx::build(app);
     }
 }
