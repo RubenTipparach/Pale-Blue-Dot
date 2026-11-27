@@ -434,13 +434,17 @@ playtesting stuff. You are headless just implement and unit test". In a
 Claude Code cloud session (no GPU, lavapipe):
 - implement the change and prove it with unit and app tests (`cargo test`),
   `openspec validate --all`, fmt and clippy;
-- no bot runs, showcase plays or playtests, and no `--capture` sessions to
-  check how a change plays: that is the desktop session's;
+- **no end-to-end playtests**: no bot runs, showcase plays, scripted
+  plays through the game, two-client runs or `--capture` sessions to check
+  how a change plays or looks. That is the desktop session's;
+- a test that drives the game's systems inside `cargo test` (an app test
+  on a Bevy `App`) is a unit test and stays;
 - a task whose proof is a playtest, a bot run or screenshots is left open
   and marked "for the desktop session's playtest", never ticked off from
   the cloud.
-This overrides the older guidance below to render changes with headless
-`--capture` shots from a cloud session.
+This overrides the older guidance to render changes with headless
+`--capture` shots from a cloud session, and the screenshot gates elsewhere
+in this file: in a cloud session those shots are owed by the desktop.
 
 ## One pull request, not many (owner, 2026-11-18)
 
@@ -812,9 +816,9 @@ silently. The current baseline is `docs/benchmarks/2026-09-25-baseline/`.
 (owner, 2026-09-26).** The cloud container has no GPU and renders on lavapipe,
 so its frame times say nothing about the game's. Don't run `perf_suite.py`
 there; say in the write-up and the PR that the frame cost was not measured.
-The owner runs it on real hardware. **Do render the change in the game**:
-headless `--capture` shots of what changed are what the owner wants from a
-cloud session, and they go in `docs/screenshots/` with the change.
+The owner runs it on real hardware. Rendering and playtesting the change
+in the game is no longer a cloud session's either (owner, 2026-11-27): see
+"Cloud sessions implement and unit test; the desktop playtests".
 
 **Keep the HTML report current (owner, 2026-09-25).** Every so often when a
 benchmark is run - and always when a result changes the picture (a new
