@@ -103,10 +103,18 @@ HUD and the danger look go to the owner as mockups.
   Protected and kept animals cannot be hunted. Design 16 and 17.
 - **Worn things**: a straw hat and a wool cloak, two worn slots, for the
   heat and the cold. Design 13.
-- **A Survival branch of the starter missions** (2026-11-26), shown only
-  in Survival worlds: drink, eat, a spear, a hunt, a cooked meal and a first
-  night, with side branches for hunting and weapons, heat and cold, the
-  body in water, and fire. Design 18.
+- **Survival's missions** (2026-11-26, reshaped 2026-11-27): the starter
+  tree as the game has it up to "Make a fire", then paths the player picks
+  (owner, 2026-11-27: "Survival: consist of the starter tree today then (in
+  the game) then branch off to all survival stuff like eating and drinking,
+  hunting etc."): Eat and drink, Hunting, Fishing, Farming, Shelter and
+  weather, In the water, and the starter tree's other branches. When the
+  fire is made the Missions screen opens with a path picker ("after making a
+  fire present players with the tree and show them options on what branch
+  to take"); the path picked is the current goal, the others stay open, and
+  the picker shows again when the path is done. Survival missions show only
+  in Survival worlds. Drink missions count fresh water only (owner,
+  2026-11-27: "Keep in mind salt water is undrinkable"). Design 18.
 - **The HUD**: health, stamina, hunger, water and body temperature show
   only in Survival, stacked at the left edge, and only when they matter: a
   full bar is hidden, and hunger and water show only at 50% or lower (owner,
@@ -121,9 +129,9 @@ HUD and the danger look go to the owner as mockups.
   mockup's Stamina tab (G6: "Some sort of js animation would be nice to see
   this in action. Add an expand button to lazy load"); heat stroke as drawn
   (G8); the weapons' looks approved for the animation step (G10); the
-  Survival branch off "Open the pack", its first mission the goal right
-  after it in a Survival world (G11: "Go right into survival after pack is
-  opened (if survival mode is active)").
+  Survival branch off "Open the pack" (G11: "Go right into survival after
+  pack is opened (if survival mode is active)"), superseded on 2026-11-27 by
+  the paths after the fire above.
 
 Not in this change: PvP (still off in multiplayer), armour, disease, sleep
 needs, food spoiling, difficulty levels beyond one tuning file, and craft
@@ -137,7 +145,7 @@ crash damage. Forest fires and torches going out are `wildfire`.
   heat stroke, breath and suit air, hunting and weapons, tool wear and
   repair, death and the dropped pack, and respawn.
 - `player/missions` (added to, as `starter-missions` adds it): the Survival
-  branch, shown only in Survival worlds.
+  paths after the fire and the path picker, shown only in Survival worlds.
 
 ### Modified Capabilities
 <!-- None in openspec/specs: predators (`animal-husbandry`), townsfolk,
@@ -171,5 +179,5 @@ what each gains in Survival, and each keeps its Explorer behaviour. -->
   `animation` skill.
 - **Mockups first**: `docs/mockups/survival.html` (the HUD, the stamina and
   food curve with sliders, a forest fire at night, the weapons at true
-  scale), M33's Survival tab for the branch, then a predator hunt by day and
+  scale), M33's Survival tab for the paths and the picker, then a predator hunt by day and
   lit at night, and death with its dropped pack.

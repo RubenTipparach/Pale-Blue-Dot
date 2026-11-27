@@ -434,6 +434,41 @@ The owner: "When in hot weather the body will need to consume more water",
   | Meat stew | + 20 | eat it |
   | A cactus, with a straw in hand | + 8 a sip, 1.5 s | aim at a standing cactus within reach, hold use |
   | Sea water | 0 | "Salt water", and nothing taken |
+  | A still (`still`, decision 18) | + 10 a sip, up to 6 | beside a lit campfire, filled at the sea or by rain; drink from it as from fresh water |
+
+- **Salt water is undrinkable** (owner, 2026-11-27: "Keep in mind salt
+  water is undrinkable"). Every drink in the table above is fresh: the sea,
+  and a bucket filled at the sea, give nothing, and no mission counts them.
+  Drinking from a bucket of sea water reads "Salt water" as the sea does.
+- **Trying to drink is one way to tell** (owner, 2026-11-27: "So that should
+  be one way to test water salinity"). A sip from salt water costs nothing:
+  no time beyond the second the sip takes, no water, no health, and the note
+  "Salt water" above the hotbar. The owner's "one way" leaves room for
+  others, proposed here (recommendation taken, ask only with screenshots):
+  - **the look**: the sea's own colour and its surf, against a river's or a
+    lake's clearer, greener water, as the water shader already draws them
+    (no new rule, only kept distinct);
+  - **a salt crust**: a pale rime on the shore's stones and sand just above
+    the sea's waterline, drawn on the cells `planet_gen` already marks as
+    sea shore, never on a lake's;
+  - **the map**: sea and lakes drawn apart on the map (the map already names
+    the sea places), with fresh water in its own colour;
+  - **estuaries**: a river's last cells where it meets the sea are brackish
+    and count as salt until a little way upstream (the cells within 6 of
+    the sea along the river's own flow), so the sip test and the look agree
+    at a river mouth.
+- **Drinkable water on a coast or an island** (recommendation taken, ask only
+  with screenshots). A Survival world can start where fresh water is far:
+  - a new Survival world's spawn search prefers dry land within 150 m of
+    fresh water (a river, a lake or a swamp pool), and falls back to today's
+    rule when none is in reach; this is the spawn point only, not terrain, so
+    no generator version moves and no saved world changes;
+  - rain is fresh: standing in rain with an empty hand held up gives + 2 a
+    second, an empty bucket left out fills in a minute of rain, and a still
+    collects it too;
+  - the still at the fire (decision 18) makes fresh water from the sea for
+    an island with no river;
+  - a cactus with a straw, fruit, milk and stew still count (the table).
 
 - **The straw.** `straw`, by hand in the pack's Craft row: 2 fibre, 1 s.
   It is a tool with 30 sips of wear (design 11). A desert cactus
@@ -539,95 +574,196 @@ The owner: "Hunger is a thing, hunting is a thing too."
   `fertilizer` (an existing good) from 1 bone. Feathers fletch arrows.
 - **The server decides** every hit, kill and drop (decision 10).
 
-### 18. The Survival branch of the starter missions (owner, 2026-11-26)
+### 18. Survival's missions: the starter trunk, then paths after the fire (owner, 2026-11-26 and 2026-11-27)
 
-The owner: "we're gonna work on survival mode which will add new branch to
-starter missions to handle survival."
+The owner, 2026-11-26: "we're gonna work on survival mode which will add
+new branch to starter missions to handle survival." Then, 2026-11-27:
 
-- **One tree, one more branch.** The branch is `8 · SURVIVAL` in the
-  starter tree (`starter-missions`, "Missions are a tree that unlocks the
-  tech"), not a third tree: the survival loop is the same loop with its
-  pressures on, and the town tree stays the town's. Each of its missions
-  carries `mode: survival` in `missions.ron`; the Missions screen of an
-  Explorer world never shows them, and they are never counted there.
-- **It opens with the pack** (`pack`, the trunk's second mission), so the
-  first thing a new Survival player is told is to drink: water empties
-  first. The owner, 2026-11-26 (survey G11): "Off Open the pack", and "Go
-  right into survival after pack is opened (if survival mode is active)".
-  So in a Survival world, the moment "Open the pack" is done, "Drink water"
-  is the **current goal** (the one the HUD's mission line and the Missions
-  screen's Now point at), ahead of the trunk's "Craft an axe", and
-  "Something to eat" after it; the starter trunk stays open beside them and
-  is the goal again after the meal, because "Make a spear" needs a log and
-  so the axe (recommendation taken, ask only with screenshots: the owner's
-  words set the first goal, the meal after it is ours). In an Explorer
-  world nothing changes: "Craft an axe" follows the pack as today.
-  It keeps the tree's rules: one parent each, a hidden `after` gate
-  for an extra need, unlocks as each mission's reward.
-- Mocked up on M33's Survival tab (`docs/mockups/mission-tree.html#survival`).
+> "Survival: consist of the starter tree today then (in the game) then
+> branch off to all survival stuff like eating and drinking, hunting etc."
 
-| id | Mission | Parent (after) | Objectives | Unlocks |
-| --- | --- | --- | --- | --- |
-| `drink` | Drink water | `pack` | drink 3 sips of fresh water (**new** kind `drink`) | `straw` |
-| `forage` | Something to eat | `drink` | eat 2 raw foods (fruit, an egg) | `stone-spear` |
-| `spear` | Make a spear | `forage` | craft a stone spear | - |
-| `hunt` | Hunt | `spear` | **kill** 1 wild hen, hare or goat (**new** kind `kill`) | - |
-| `cook-meat` | Cook meat | `hunt` (`fire`) | cook 2 `roast-meat` | `meat-stew` |
-| `first-night` | The first night | `cook-meat` | be out past 20:00 and alive at 06:00 (**new** kind `dawn`) | `bedroll` |
-| `dress` | Dress a kill | `hunt` | take 1 hide from a kill | `tanning-rack` |
-| `tan` | Tan a hide | `dress` | make 1 leather at the tanning rack | `bow`, `stone-arrows` |
-| `bow` | Bow and arrows | `tan` | craft a bow and 8 arrows | `bone-arrows` |
-| `long-shot` | A long shot | `bow` | kill 1 animal with an arrow from 20 m or more | `bronze-hunting-axe` |
-| `hunting-axe` | A hunting axe | `long-shot` (`smelt`) | craft a bronze hunting axe; dress a kill with it | `bronze-sword`, `bronze-spear`, `bronze-arrows` |
-| `sword` | A sword | `hunting-axe` | craft a bronze sword | `iron-sword`, `iron-spear`, `iron-hunting-axe` (with `iron`) |
-| `fend-off` | Drive off a predator | `sword` | make a predator flee or kill it (**new** kind `drive-off`) | - |
-| `straw` | A cactus straw | `drink` | craft a straw | - |
-| `cactus` | Cactus juice | `straw` | drink 3 sips from a cactus | `straw-hat` |
-| `cool-down` | Out of the heat | `cactus` | cool from hot to fine (**new** kind `cool`) | - |
-| `warm-up` | Warm by the fire | `cool-down` (`fire`) | warm from cold to fine within a fire's reach (**new** kind `warm`) | `wool-cloak` |
-| `dress-weather` | Dress for the weather | `warm-up` | wear a straw hat or a wool cloak (**new** kind `wear`) | - |
-| `long-swim` | A long swim | `forage` | swim 100 m without being winded (kind `swim`, held) | - |
-| `hold-breath` | Hold your breath | `long-swim` | stay under for 15 s and surface (**new** kind `dive`) | - |
-| `soft-landing` | Into the water | `hold-breath` | fall 10 layers or more into deep water unhurt (**new** kind `fall`) | - |
-| `relight` | Relight a torch | `cook-meat` (`torch`) | relight a torch the rain put out (`wildfire`; **new** kind `relight`) | - |
-| `put-out` | Put out a fire | `relight` | put out 3 burning cells with water (`wildfire`; **new** kind `douse`) | - |
+> "Important note: after making a fire present players with the tree and
+> show them options on what branch to take. Then when they click on that
+> topic show them the tree branch, then the tree continues along their
+> chosen path"
 
-- **Fishing and farming sit under the Survival branch in a Survival world**
-  (owner, 2026-11-26: "can you move farming and fishing under the survival
-  tree too?", then "it seems more logical to make it a follow up after making
-  a fire", "so the player has all basic tools first"). Their missions are the
-  starter tree's own (no copies, the same ids and records); a Survival world's
-  Missions screen draws the two branches as `8 · SURVIVAL · FISHING` and
-  `8 · SURVIVAL · FARMING`, under the Survival branch, and an Explorer world
-  keeps them as `1 · FISHING` and `2 · FARMING`. Their parents:
+**This supersedes the owner's G11 answer of 2026-11-26** ("Off Open the
+pack", "Go right into survival after pack is opened (if survival mode is
+active)"), which hung a Survival branch off "Open the pack" and made "Drink
+water" the goal right after it. Nothing survival hangs off the pack now:
+the first survival missions open with "Make a fire", and the player picks
+which to follow.
 
-  | id | Mission | Parent (after), Survival world | Why |
-  | --- | --- | --- | --- |
-  | `rod` | Make a fishing rod (Fishing's first) | `fire` | a follow-up to making a fire |
-  | `find-seeds` | Find seeds (Farming's first) | `fire` | a follow-up to making a fire |
+#### The shape
 
-  "Make a fire" (`fire`) waits on "Stone tools" (`stone-tools`), which waits
-  on the workbench, planks and rope and the axe, so by the time it is done
-  the stone axe, pickaxe and shovel are all made: no extra hidden `after`
-  gate is needed for "all basic tools first", and none is added (the rule
-  holds by the trunk's order; a test pins that `fire`'s ancestors include
-  every basic tool mission). The bot plays the two branches right after the
-  Survival trunk's "The first night", before the rest of the Survival
-  branch. Mocked up on M33's Survival tab, version 10.
-- **Rewards** are unlocks, as the rest of the starter tree's are: the branch
-  opens the survival recipes in the order the player needs them. The
-  `bedroll` (by hand: 2 hide, 1 wool) is the branch's own payoff: laid on the
-  ground it sets the player's spawn (decision 8), so a Survival player has a
-  place to wake before they can build a bed.
+- **One tree.** A Survival world's tree is the starter tree (`starter-missions`,
+  "Missions are a tree that unlocks the tech") exactly as `missions.ron`
+  has it today, up to and including "Make a fire": `gather`, `pack`, `axe`,
+  `wood`, `planks-rope`, `crafting-table`, `stone-tools`, `fire`, and the
+  trunk's `storage` after it. By the fire the stone axe, pickaxe and shovel
+  are all made ("so the player has all basic tools first", 2026-11-26), and
+  a test pins that `fire`'s ancestors hold every basic tool mission.
+- **After "Make a fire" the tree branches into paths.** Each child branch of
+  `fire` is a path: four new survival paths, and the starter tree's own
+  Fishing, Farming, Herding, Mining and smelting, and Light and building,
+  which already hang off `fire`. Cooking and Getting about open after "Go
+  fishing", as they do today, and join the paths when they open. The
+  survival missions carry `mode: survival` and a `branch` of their path;
+  an Explorer world never shows or counts them, and its tree is unchanged.
+- **The tree's rules hold**: one parent each, a hidden `after` gate for an
+  extra need, unlocks as each mission's reward, ids append-only.
+- Mocked up on M33's Survival tab, version 11
+  (`docs/mockups/mission-tree.html#survival`).
+
+| Path (branch) | id | Mission | Parent (after) | Objectives | Unlocks |
+| --- | --- | --- | --- | --- | --- |
+| Eat and drink (`eat-drink`) | `drink` | Drink water | `fire` | drink 3 sips of fresh water (**new** kind `drink`; fresh only, decision 15) | `straw`, `still` |
+| | `forage` | Something to eat | `drink` | eat 2 raw foods (fruit, an egg) | - |
+| | `cook-meal` | A hot meal | `forage` | cook 1 dish at the campfire; eat it | - |
+| | `straw` | A cactus straw | `drink` | craft a straw | - |
+| | `cactus` | Cactus juice | `straw` | drink 3 sips from a cactus | `straw-hat` |
+| | `still` | Water from the sea | `drink` | set a still beside a lit campfire; drink 3 sips from it (`drink`, what `still`) | - |
+| Hunting (`hunting`) | `spear` | Make a spear | `fire` | craft a stone spear | - |
+| | `hunt` | Hunt | `spear` | **kill** 1 wild hen, hare or goat (**new** kind `kill`) | - |
+| | `cook-meat` | Cook meat | `hunt` | cook 2 `roast-meat` | `meat-stew` |
+| | `dress` | Dress a kill | `hunt` | take 1 hide from a kill | `tanning-rack` |
+| | `tan` | Tan a hide | `dress` | make 1 leather at the tanning rack | `bow`, `stone-arrows` |
+| | `bow` | Bow and arrows | `tan` | craft a bow and 8 arrows | `bone-arrows` |
+| | `long-shot` | A long shot | `bow` | kill 1 animal with an arrow from 20 m or more | `bronze-hunting-axe` |
+| | `hunting-axe` | A hunting axe | `long-shot` (`smelt`) | craft a bronze hunting axe; dress a kill with it | `bronze-sword`, `bronze-spear`, `bronze-arrows` |
+| | `sword` | A sword | `hunting-axe` | craft a bronze sword | `iron-sword`, `iron-spear`, `iron-hunting-axe` (with `iron`) |
+| | `fend-off` | Drive off a predator | `sword` | make a predator flee or kill it (**new** kind `drive-off`) | - |
+| Fishing (`fishing`) | `rod` ... `sea-fishing` | the starter tree's own | `fire` | as `missions.ron` | as today |
+| Farming (`farming`) | `find-seeds` ... `feast` | the starter tree's own | `fire` | as `missions.ron` | as today |
+| Shelter and weather (`shelter`) | `first-night` | The first night | `fire` | be out past 20:00 and alive at 06:00 (**new** kind `dawn`) | `bedroll` |
+| | `warm-up` | Warm by the fire | `first-night` | warm from cold to fine within a fire's reach (**new** kind `warm`) | `wool-cloak` |
+| | `dress-weather` | Dress for the weather | `warm-up` | wear a straw hat or a wool cloak (**new** kind `wear`) | - |
+| | `cool-down` | Out of the heat | `first-night` | cool from hot to fine (**new** kind `cool`) | - |
+| | `relight` | Relight a torch | `first-night` (`torch`) | relight a torch the rain put out (`wildfire`; **new** kind `relight`) | - |
+| | `put-out` | Put out a fire | `relight` | put out 3 burning cells with water (`wildfire`; **new** kind `douse`) | - |
+| In the water (`water`) | `long-swim` | A long swim | `fire` | swim 100 m without being winded (kind `swim`, held) | - |
+| | `hold-breath` | Hold your breath | `long-swim` | stay under for 15 s and surface (**new** kind `dive`) | - |
+| | `soft-landing` | Into the water | `hold-breath` | fall 10 layers or more into deep water unhurt (**new** kind `fall`) | - |
+| Herding, Mining and smelting, Light and building | `fence`, `dig-deep`, `build` ... | the starter tree's own | `fire` | as `missions.ron` | as today |
+| Cooking, Getting about | `cook-fish`, `map` ... | the starter tree's own | `go-fishing` | as `missions.ron` | as today |
+
+25 survival missions, the 23 of 2026-11-26 and two new ones (`cook-meal`
+and `still`), each marked `mode: survival`. What moved from the 2026-11-26 table: `drink`
+now hangs off `fire`, not `pack`; `spear` heads Hunting off `fire`, not
+`forage`; `cook-meat` loses its `after: fire` (the fire is its ancestor
+now); `first-night` heads Shelter and weather off `fire`; `cool-down`,
+`warm-up` and `relight` hang off `first-night` (and `warm-up` loses its
+`after: fire`); `long-swim` heads In the water off `fire`. Fishing and
+Farming keep `fire` as their parent, as decided on 2026-11-26; in a Survival
+world they are paths beside the survival ones rather than drawn under one
+Survival lane.
+
+- **The spear's recipe** is named by no mission, so by the tree's own rule
+  it is open from the start of a Survival world (a spear needs a log, so in
+  practice the axe first). Every other weapon's recipe stays locked until
+  its mission; in Explorer none of them exist (decision 16). Recommendation
+  taken (ask only with screenshots).
+- **The still** (`still`, a station, new; recommendation taken, ask only with
+  screenshots): made at the workbench from 6 stone, 2 planks and 1 rope, set
+  down within 2 cells of a campfire. Use it with an empty hand while it
+  stands in reach of sea water (or pour a bucket of sea water in) to fill
+  it; while the fire beside it burns it turns 1 sip of salt water into 1 sip
+  of fresh water a minute, up to 6, drunk from it like fresh water (+ 10 a
+  sip). Rain falling on it adds a sip a minute with the fire out too. See
+  decision 15, "Drinkable water on a coast or an island".
+
+#### The path picker
+
+The owner's "present players with the tree and show them options on what
+branch to take", as M33 version 11 draws it:
+
+- **When "Make a fire" completes** in a Survival world, the Missions screen
+  opens on its own with the picker over the tree. Its heading is "Choose a
+  path" over the line "The fire is lit.". (Decision; alternative: a HUD
+  prompt "Choose a path (O)" that waits for the player to open the screen.
+  The owner's words are "present players with the tree", so it opens; it
+  opens only on that moment and on a path's end, never mid-swing.)
+- **A card a path** in the stone-and-carved-wood kit (the side panel's stone
+  frame, a stone card, carved oak on hover): the path's icon in a slot, its
+  name, one plain line ("Fresh water, wild food and a hot meal.", "A spear
+  and a hunt, then a bow and blades.", "Seeds, a field and bread."), its
+  first mission ("First: Drink water") and its count (0/6). The lines are
+  game text, from the locale file (`mission_path.<branch>.line`).
+- **A click picks it.** The picker closes, the tree pans to that path with
+  its lane lit and its first open mission is **Now**; the HUD's mission
+  block follows it, with the path's name over the mission's title.
+- **The other paths stay open** (decision). Their missions open by the
+  tree's rule and count whenever their work is done, as every open mission
+  does today (`starter-missions` decision 9); the choice only says which is
+  Now. A player can change path at any time from the picker (the Missions
+  screen's **Paths** button). The alternative, locking the paths not taken
+  until the chosen one is done, was weighed and not taken: it would take
+  away work a player has already done in the world (a fish caught before
+  the fishing path was picked would not count), it fights the tree's "every
+  open mission counts", and the owner's words ask that the tree "continues
+  along their chosen path", which Now does, not that the others close.
+- **Now on a path** is the first open mission of the path in file order;
+  when it is done, Now moves to the next open one of the same path.
+- **When the path has nothing open**, because it is done or because its next
+  mission waits on another path's (Hunting's `hunting-axe` waits on `smelt`,
+  Shelter's `relight` on `torch`), the picker opens again, headed "Choose a
+  path" over "Eat and drink is done." (or, for a path that waits, "Hunting
+  waits on Smelt bronze."). It shows every path
+  with something open, and a started path that waits keeps its card,
+  greyed, with "Waits on Smelt bronze". A finished path is left off. When no
+  path has anything open, Now falls back to the first open mission in file
+  order, as today (the trunk's "A chest").
+- **Later** closes the picker without a choice: the HUD then reads "Choose a
+  path" and the picker shows when the Missions screen next opens.
+- **Saved.** The chosen path is one more field of the player's `missions`
+  record (`path`, a branch id, optional), schema 2, read as none from schema
+  1; an older Survival world (there are none yet: decision 1) and every
+  Explorer world read none and keep today's Now. In multiplayer each player
+  picks their own path; the missions record is already the player's.
+- **Explorer** has no picker: its Now is today's rule. (Recommendation taken,
+  ask only with screenshots; the picker could come to Explorer later.)
+
+#### Water before the fire
+
+Water and food drain from the start in a Survival world, and the trunk to
+the fire takes the first ten to twenty minutes, so the player may need a
+drink before any mission says so. They are told by the HUD, not by a
+mission (recommendation taken, ask only with screenshots):
+
+- the water bar appears at 50% (decision 9, G7);
+- at 50% the line "Thirsty" shows once above the hotbar for four seconds,
+  where heat stroke's warning goes (G8), and again at 25% as "Very thirsty";
+- the first time it shows in a world, the help line under it reads
+  "Drink at a river or lake." (the same words as the drink mission's help);
+- a sip of sea water gives nothing and the note "Salt water" (decision 15),
+  so a player on a coast learns it the first time they try.
+
+The mockup's bot plays this on a coastal start: "Thirsty" after "Gather
+wood", a sip from the sea ("Salt water", nothing taken), then a river.
+
+#### Rewards, help lines, saves, the bot
+
+- **Rewards** are unlocks, as the rest of the starter tree's are: the paths
+  open the survival recipes in the order the player needs them. The
+  `bedroll` (by hand: 2 hide, 1 wool) is Shelter and weather's payoff: laid
+  on the ground it sets the player's spawn (decision 8), so a Survival player
+  has a place to wake before they can build a bed.
 - **Help lines** are short and plain, in the locale file: "Crouch at a river
-  or lake and hold use.", "Hunt with the spear. Thrown, it hits harder.",
-  "Stand in the shade or get in the water.", "Fires start in the dry season."
+  or lake and hold use. Sea water is salt.", "Hunt with the spear. Thrown, it
+  hits harder.", "Stand in the shade or get in the water.", "Fill the still at
+  the sea. The fire boils the salt out.", "Fires start in the dry season."
 - **The weapons' recipes are locked** in Survival until their mission
-  (unlocks); in Explorer they do not exist (decision 16).
-- **Saves.** The branch's ids join the world's `missions` record,
+  (unlocks), the spear excepted (above); in Explorer they do not exist
+  (decision 16).
+- **Saves.** The paths' ids join the world's `missions` record,
   append-only; an older world is Explorer (decision 1) and never sees them.
-- **The bot** plays the branch as its own goal: "survive the first night in
-  Survival" (task 5.1) is this branch's trunk, `drink` to `first-night`.
+- **The bot** picks through the same picker by the player's input. Its order:
+  Eat and drink, Hunting (to the long shot), Shelter and weather, In the
+  water, Fishing, Cooking, Farming, Herding, Mining and smelting (which opens
+  the hunting axe), Hunting again, Light and building (which opens the
+  torch), Shelter again, Getting about, then the chest. "Survive the first
+  night in Survival" (task 5.1) is the trunk, Eat and drink, and Shelter and
+  weather's "The first night".
 
 ### 19. Explorer and Survival side by side
 
@@ -641,7 +777,7 @@ starter missions to handle survival."
 | Predators | never attack | decision 6 |
 | Hunting, weapons, worn slots | none | decisions 13, 16, 17 |
 | Tool wear | none | decision 11 |
-| The Survival branch | hidden | decision 18 |
+| The Survival paths and the path picker | hidden; today's tree | decision 18 |
 | Torches | as today: always lit, light only the world | they light things and the rain puts them out (`wildfire`) |
 | Forest fires | none; lightning's short fires stay weather (`lightning-fire`) | they start in the dry season and spread (`wildfire`) |
 
@@ -758,7 +894,7 @@ published.
 | G7 | The survival HUD: four short bars and a thermometer above the hotbar | as drawn; a vertical stack at the left edge; bars only when not full | as drawn: one glance beside the hotbar, Explorer unchanged | `hud-day-fine.png`, `hud-night-fine.png`, `hud-day-hot.png`, `hud-night-cold.png`, `hud-night-winded.png`, `hud-day-worn.png` |
 | G8 | Heat stroke and passing out: the edge warms, then the view fades for 30 s | as drawn; no pass-out, health only | as drawn: the owner asked for passing out, and it is telegraphed from 38 C | `hud-day-stroke.png`, `hud-day-hot.png` |
 | G10 | The weapons' looks: stone spear, bow and arrow, bronze hunting axe, bronze sword | approve for the animation step; change a look | approve, then the held models and swings go through the `animation` skill (M36) | `weapons-day-all.png`, `weapons-night-all.png`, `weapons-day-spear.png`, `weapons-day-bow.png`, `weapons-day-axe.png`, `weapons-day-sword.png` |
-| G11 | Where the Survival branch hangs: off "Open the pack" | off the pack; off "Make a fire" | off the pack: water empties first, so drinking is taught first | `m33-survival-fit.png`, `m33-survival-hunt.png`, `m33-survival-hunting.png`, `m33-survival-heat.png` |
+| G11 | Where the Survival branch hangs: off "Open the pack" (answered, then superseded 2026-11-27: off "Make a fire", as paths) | off the pack; off "Make a fire" | off the pack: water empties first, so drinking is taught first | `m33-survival-fit.png`, `m33-survival-hunt.png`, `m33-survival-hunting.png`, `m33-survival-heat.png` |
 
 (G9 is `wildfire`'s.)
 
@@ -770,7 +906,7 @@ published.
 | G7 | "a vertical stack at the left edge"; "Don't need to show food or water till it's 50% or lower. You can check in pack these stats at any time..if stats are full hide them." | design 9: the left stack, full bars hidden, hunger and water from 50%, the pack's stats panel |
 | G8 | as drawn; "Just show stroke warning above hot bar. See G 7 for data" | design 9 and 14: the warning above the hotbar |
 | G10 | approved as drawn, for the animation step | design 16 |
-| G11 | "Off Open the pack"; "Go right into survival after pack is opened (if survival mode is active)" | design 18: "Drink water" is the current goal right after the pack |
+| G11 | "Off Open the pack"; "Go right into survival after pack is opened (if survival mode is active)" | **superseded 2026-11-27** by the owner's "Survival: consist of the starter tree today then (in the game) then branch off to all survival stuff like eating and drinking, hunting etc." and "after making a fire present players with the tree and show them options on what branch to take": design 18 now opens the survival paths at "Make a fire", with the path picker |
 
 **Recommendations taken (ask only with screenshots)**, not the owner's own
 words: every number in design 12 to 17 and 20; tool work spends no stamina;
@@ -778,9 +914,13 @@ cold hurts but never knocks the player down; a winded swimmer floats; two
 worn slots (hat, cloak) that are not armour; drinking by hand at fresh water;
 the straw from 2 fibre with 30 sips; no hunting, weapons or worn slots in
 Explorer; kept and bought animals cannot be struck (butchering a follow-up);
-a kill's hide needs dressing; herds back after 3 world days; the branch as
-a branch of the starter tree, not a third tree; rewards as unlocks, the
-bedroll as its payoff; and, after G7 and G8, health and stamina hidden only
+a kill's hide needs dressing; herds back after 3 world days; the survival
+paths as branches of the starter tree, not a third tree; rewards as unlocks,
+the bedroll as its payoff; (2026-11-27) the picker opening on its own at the
+fire, the paths not taken staying open, the waiting path's card, Explorer
+without a picker, the spear's recipe open from the start, the still, the
+"Thirsty" warning before the fire, the other ways to tell salt water, and
+the spawn near fresh water; and, after G7 and G8, health and stamina hidden only
 when full, the thermometer shown only outside fine (36 to 38 C), the stroke
 warning from heat exhaustion (39.5 C), and the pack's stats panel holding
 the worn slots.
