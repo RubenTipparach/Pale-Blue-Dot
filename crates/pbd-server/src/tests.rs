@@ -549,6 +549,16 @@ impl Store for NoRecords {
     fn commit_record(&mut self, _: &Author, _: Record) -> bool {
         false
     }
+    fn commit_toss(
+        &mut self,
+        author: &Author,
+        stack: pbd_core::inventory::Stack,
+        at: glam::DVec3,
+        made_s: f64,
+        carried: &Slots,
+    ) -> Option<ItemDrop> {
+        self.0.commit_toss(author, stack, at, made_s, carried)
+    }
 }
 
 /// A crew record the store refuses leaves the crew's progress as it was;
@@ -915,4 +925,67 @@ fn a_pose_goes_to_the_others_and_a_leaver_is_gone() {
         sent.iter()
             .all(|(_, m)| *m == ToClient::Gone { player: players[2] })
     );
+}
+
+/// Design 25: a guest's toss takes the stack from their slots, makes a drop
+/// where they asked that everyone is told of, and sends them their slots.
+#[test]
+fn a_guests_toss_makes_a_drop_everyone_sees() {
+    use pbd_core::inventory::Stack;
+    let (mut s, mut st) = server();
+    let mut carried = Slots::default();
+    carried.set(4, Some(Stack::new(Item::Block(Material::Stone), 6)));
+    let players = joined(&mut s, &[1, 2], carried);
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Request {
+            id: 5,
+            request: Request::Toss {
+                slot: 4,
+                count: 2,
+                at_mm: [1_500, 4_800_250, -3_000],
+            },
+        },
+    );
+    let sent = s.drain();
+    let drops: Vec<ItemDrop> = sent
+        .iter()
+        .filter_map(|(_, m)| match m {
+            ToClient::Drop { drop } => Some(*drop),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(drops.len(), 2, "both players are told: {sent:?}");
+    let d = drops[0];
+    assert_eq!((d.item, d.count), (Item::Block(Material::Stone), 2));
+    assert_eq!(
+        d.position,
+        pbd_core::drops::scattered(glam::DVec3::new(1.5, 4800.25, -3.0), d.id)
+    );
+    assert_eq!(st.drop(d.id), Some(d));
+    assert_eq!(
+        s.player(players[1]).unwrap().slots.get(4).map(|s| s.count),
+        Some(4)
+    );
+    assert!(matches!(sent.last(), Some((_, ToClient::Slots { .. }))));
+    // More than the slot holds is refused and changes nothing.
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Request {
+            id: 6,
+            request: Request::Toss {
+                slot: 4,
+                count: 9,
+                at_mm: [0, 4_800_000, 0],
+            },
+        },
+    );
+    assert!(
+        s.drain()
+            .iter()
+            .any(|(_, m)| matches!(m, ToClient::Refused { id: 6, .. }))
+    );
+    assert_eq!(st.drops.len(), 1);
 }

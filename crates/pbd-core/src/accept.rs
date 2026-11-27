@@ -142,6 +142,30 @@ pub enum PackMove {
     Trash { index: usize, count: u16 },
 }
 
+/// Toss `count` of what `slot` holds (`multiplayer` design 25): the slots
+/// after, and the stack taken. Refused for an empty slot or more than it
+/// holds.
+pub fn toss(
+    slots: &Slots,
+    slot: usize,
+    count: u16,
+) -> Result<(Slots, crate::inventory::Stack), Refused> {
+    let Some(stack) = slots.get(slot).filter(|s| count > 0 && s.count >= count) else {
+        return Err(Refused::EmptySlot);
+    };
+    let mut after = slots.clone();
+    if after.take(slot, count) != count {
+        return Err(Refused::EmptySlot);
+    }
+    Ok((
+        after,
+        crate::inventory::Stack {
+            item: stack.item,
+            count,
+        },
+    ))
+}
+
 /// Accept or refuse a move in the pack: the slots after it. Refused, as
 /// [`Refused::EmptySlot`], when the slot it takes from is empty or holds
 /// fewer than it would take, or the move names a slot past the player's.
@@ -374,5 +398,22 @@ mod tests {
                 floats: None
             }
         );
+    }
+
+    /// `multiplayer` design 25: a toss takes the count from the slot, and
+    /// is refused for an empty slot, a zero count, or more than it holds.
+    #[test]
+    fn a_toss_takes_what_the_slot_holds_and_no_more() {
+        use crate::inventory::{Item, Slots};
+        use crate::terrain::Material;
+        let mut slots = Slots::new();
+        slots.give(Item::Block(Material::Stone), 5);
+        let (after, stack) = toss(&slots, 0, 3).expect("taken");
+        assert_eq!(stack.count, 3);
+        assert_eq!(stack.item, Item::Block(Material::Stone));
+        assert_eq!(after.get(0).map(|s| s.count), Some(2));
+        assert_eq!(toss(&slots, 0, 6), Err(Refused::EmptySlot));
+        assert_eq!(toss(&slots, 0, 0), Err(Refused::EmptySlot));
+        assert_eq!(toss(&slots, 1, 1), Err(Refused::EmptySlot));
     }
 }

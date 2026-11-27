@@ -455,6 +455,26 @@ impl pbd_server::Store for SaveStore<'_> {
     fn commit_record(&mut self, author: &Author, record: StoredRecord) -> bool {
         self.save.store(author, vec![record]).is_some()
     }
+    fn commit_toss(
+        &mut self,
+        author: &Author,
+        stack: pbd_core::inventory::Stack,
+        at: bevy::math::DVec3,
+        made_s: f64,
+        carried: &Slots,
+    ) -> Option<ItemDrop> {
+        let id = self.save.next_drop_id();
+        // Pushed aside by its id, as `Drops::make` always placed a toss.
+        let drop = ItemDrop {
+            id,
+            item: stack.item,
+            count: stack.count,
+            position: pbd_core::drops::scattered(at, id),
+            made_s,
+        };
+        let own = self.own(author, carried);
+        self.save.record_toss(&drop, &own).then_some(drop)
+    }
 }
 
 impl Default for WorldSave {
@@ -689,6 +709,22 @@ impl WorldSave {
     ) -> Result<(Slots, u16), pbd_core::net::protocol::Refusal> {
         self.with_server(carried, None, |server, store| {
             server.pick(store, 0, 0, id, carried.clone())
+        })
+    }
+
+    /// Decide this game's own toss through the server (`multiplayer` design
+    /// 25): `count` of slot `slot`, to land at `at`, made at `made_s` (the
+    /// app's clock, so the line is the one `record_toss` always wrote).
+    pub fn decide_toss(
+        &mut self,
+        slot: usize,
+        count: u16,
+        at: bevy::math::DVec3,
+        made_s: f64,
+        carried: &Slots,
+    ) -> Result<(Slots, ItemDrop), pbd_core::net::protocol::Refusal> {
+        self.with_server(carried, None, |server, store| {
+            server.toss(store, 0, 0, (slot, count), at, made_s, carried.clone())
         })
     }
 
@@ -1539,6 +1575,47 @@ mod tests {
         }
         let log = |slot: &Slot| std::fs::read(root.join(&slot.id).join(LOG)).unwrap();
         assert!(!log(&a).is_empty());
+        assert_eq!(log(&a), log(&b), "byte for byte");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// `multiplayer` design 25: the host's toss through the server writes the
+    /// line `record_toss` always wrote, byte for byte.
+    #[test]
+    fn a_toss_through_the_server_writes_the_same_line() {
+        let root = temporary("toss-same");
+        let (a, b) = (
+            create(&root, "Through the server", 11).unwrap(),
+            create(&root, "Straight", 11).unwrap(),
+        );
+        let mut carried = Slots::new();
+        carried.give(Item::Block(Material::Stone), 5);
+        let centre = bevy::math::DVec3::new(3.0, 4801.5, -2.0);
+        {
+            let mut through = WorldSave::open(root.clone(), a.clone());
+            let mut straight = WorldSave::open(root.clone(), b.clone());
+            let (after, drop) = through
+                .decide_toss(0, 2, centre, 77.5, &carried)
+                .expect("a toss of what the slot holds is taken");
+            assert_eq!(after.get(0).map(|s| s.count), Some(3));
+            let mut by_hand = ItemDrop {
+                id: straight.next_drop_id(),
+                item: Item::Block(Material::Stone),
+                count: 2,
+                position: pbd_core::drops::scattered(centre, straight.next_drop_id()),
+                made_s: 77.5,
+            };
+            by_hand.count = 2;
+            assert_eq!(drop, by_hand);
+            assert!(straight.record_toss(&by_hand, &after));
+            assert_eq!(
+                through.decide_toss(0, 9, centre, 78.0, &after),
+                Err(pbd_core::net::protocol::Refusal::EmptySlot)
+            );
+            through.drain();
+            straight.drain();
+        }
+        let log = |slot: &Slot| std::fs::read(root.join(&slot.id).join(LOG)).unwrap();
         assert_eq!(log(&a), log(&b), "byte for byte");
         let _ = std::fs::remove_dir_all(&root);
     }

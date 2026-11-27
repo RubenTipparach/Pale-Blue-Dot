@@ -77,6 +77,17 @@ pub trait Store {
     /// Journal a pickup: `left` remain on drop `id` (none: it is gone), the
     /// rest went into `carried`. `false` refuses it.
     fn commit_pick(&mut self, author: &Author, id: u64, left: u16, carried: &Slots) -> bool;
+    /// Journal a toss (design 25): a drop of `stack` at `at` (the body's
+    /// frame), made at `made_s`, named by the store's next id, and the
+    /// author's slots after it. `None` refuses it.
+    fn commit_toss(
+        &mut self,
+        author: &Author,
+        stack: pbd_core::inventory::Stack,
+        at: glam::DVec3,
+        made_s: f64,
+        carried: &Slots,
+    ) -> Option<ItemDrop>;
     /// Journal a world record `author`'s deed changed: the crew's progress
     /// (`coop-missions` design 1). `false` refuses it.
     fn commit_record(&mut self, author: &Author, record: Record) -> bool;
@@ -187,6 +198,29 @@ impl Store for MemoryStore {
         }
         self.records.put(record);
         true
+    }
+    fn commit_toss(
+        &mut self,
+        author: &Author,
+        stack: pbd_core::inventory::Stack,
+        at: glam::DVec3,
+        made_s: f64,
+        carried: &Slots,
+    ) -> Option<ItemDrop> {
+        if self.failed {
+            return None;
+        }
+        let id = self.drops.keys().next_back().map_or(0, |id| id + 1);
+        let drop = ItemDrop {
+            id,
+            item: stack.item,
+            count: stack.count,
+            position: pbd_core::drops::scattered(at, id),
+            made_s,
+        };
+        self.drops.insert(id, drop);
+        self.hands.push((author.clone(), None, carried.clone()));
+        Some(drop)
     }
 }
 
@@ -545,6 +579,35 @@ impl Server {
                         floats: None,
                     });
             }
+            Request::Toss { slot, count, at_mm } => {
+                let slots = self.players[&player].slots.clone();
+                let at =
+                    glam::DVec3::new(at_mm[0] as f64, at_mm[1] as f64, at_mm[2] as f64) / 1000.0;
+                let made_s = self.clock_s;
+                return self
+                    .toss(
+                        store,
+                        player,
+                        id,
+                        (usize::from(slot), count),
+                        at,
+                        made_s,
+                        slots,
+                    )
+                    .map(|(slots, _)| Decided {
+                        sequenced: Sequenced {
+                            region: pbd_core::net::ledger::NO_REGION,
+                            seq: 0,
+                            edit: Edit {
+                                cell: 0,
+                                layer: 0,
+                                material: Material::Air,
+                            },
+                        },
+                        slots,
+                        floats: None,
+                    });
+            }
             Request::Pick { drop } => {
                 let slots = self.players[&player].slots.clone();
                 return self
@@ -750,6 +813,43 @@ impl Server {
         // Everyone's copy of the drop follows (design 23).
         self.broadcast(ToClient::DropLeft { id: drop_id, left });
         Ok((taken, left))
+    }
+
+    /// Decide a toss by `player` from `slots` (design 25): `count` of what
+    /// slot `what.0` holds, to land at `at` (the body's frame), made at
+    /// `made_s`. The store writes the toss line; everyone is told of the drop.
+    #[allow(clippy::too_many_arguments)]
+    pub fn toss(
+        &mut self,
+        store: &mut impl Store,
+        player: u32,
+        id: u32,
+        what: (usize, u16),
+        at: glam::DVec3,
+        made_s: f64,
+        slots: Slots,
+    ) -> Result<(Slots, ItemDrop), Refusal> {
+        if !self.players.contains_key(&player) || !at.is_finite() {
+            return Err(Refusal::Cheat);
+        }
+        let Ok((after, stack)) = accept::toss(&slots, what.0, what.1) else {
+            return Err(self.refuse_hands(player, id, Refusal::EmptySlot));
+        };
+        let Some(drop) = store.commit_toss(&Author::Player(player), stack, at, made_s, &after)
+        else {
+            return Err(self.refuse_hands(player, id, Refusal::NotSaved));
+        };
+        self.players.get_mut(&player).expect("checked").slots = after.clone();
+        self.send(
+            To::Player(player),
+            ToClient::Accepted {
+                id,
+                region: 0,
+                seq: 0,
+            },
+        );
+        self.broadcast(ToClient::Drop { drop });
+        Ok((after, drop))
     }
 
     /// Refuse a request about the hands. The slots go back with the

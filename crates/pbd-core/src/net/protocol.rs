@@ -72,6 +72,13 @@ pub enum Request {
     Pack(crate::accept::PackMove),
     /// Pick up a drop the client's magnet brought in (design 19).
     Pick { drop: u64 },
+    /// Toss `count` of what `slot` holds, to land at `at_mm`, whole
+    /// millimetres in the body's frame (design 25).
+    Toss {
+        slot: u8,
+        count: u16,
+        at_mm: [i64; 3],
+    },
 }
 
 /// Why a request was refused. No undo rides with it: the server re-sends
@@ -570,6 +577,14 @@ impl ToServer {
                         w.u8(4);
                         w.u64(drop);
                     }
+                    Request::Toss { slot, count, at_mm } => {
+                        w.u8(5);
+                        w.u8(slot);
+                        w.u16(count);
+                        for v in at_mm {
+                            w.u64(v as u64);
+                        }
+                    }
                 }
             }
             Self::Reach { reach_m, dropped } => {
@@ -657,6 +672,11 @@ impl ToServer {
                         other => return Err(Decode::Unknown(other)),
                     }),
                     4 => Request::Pick { drop: r.u64()? },
+                    5 => Request::Toss {
+                        slot: r.u8()?,
+                        count: r.u16()?,
+                        at_mm: [r.u64()? as i64, r.u64()? as i64, r.u64()? as i64],
+                    },
                     other => return Err(Decode::Unknown(other)),
                 };
                 Self::Request { id, request }
@@ -955,6 +975,18 @@ mod tests {
                     cell: 5,
                     layer: 201,
                     slot: 3,
+                },
+            },
+            ToServer::Request {
+                id: 11,
+                request: Request::Pick { drop: 9 },
+            },
+            ToServer::Request {
+                id: 12,
+                request: Request::Toss {
+                    slot: 39,
+                    count: 7,
+                    at_mm: [-4_800_123, 17, 2_000_000_000_000],
                 },
             },
             ToServer::Reach {

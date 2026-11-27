@@ -919,6 +919,39 @@ join sends none).
   world point;
 - a visitor is not in `everyone()`, and has no `Talker`.
 
+### 25. A toss through the server (task 2.2, the toss; 2026-11-27)
+
+Design 23 left the toss out: Q (or a stack dragged off the pack) took the
+stack from the slots and wrote the toss line in the app alone, so a joined
+player's toss did nothing on the host and a host's toss was never seen.
+
+- **The rule** is `pbd_core::accept::toss(slots, slot, count)`: refused
+  for an empty slot or more than it holds, otherwise the slots with
+  `count` taken and the stack that was taken.
+- **The request** is `Request::Toss { slot, count, at_mm }`. `at_mm` is
+  where it lands, the app's point ahead of the chest, in whole millimetres
+  in the body's frame. Millimetres keep `Request` `Eq`, which the joined
+  game's queue needs, and are finer than anything a drop draws. Reach is
+  checked with the rest of 8.7.
+- **The server** decides it (`Server::toss`), and the store writes the
+  toss line it always wrote (`Store::commit_toss`), naming the drop by its
+  next id and pushed aside by it (`drops::scattered`), as `Drops::make`
+  always placed a toss. A guest's toss carries the host's own slots, as in
+  design 22.
+  Everyone is told with `Drop`, and the player gets `Slots`.
+- **The made time:** the host's own toss uses the app's clock, so single
+  player's lines stay byte for byte what they were. A remote toss uses the
+  server's clock.
+- **A log thrown over water** stays the app's (`logs::throw_in`) until
+  floating logs are shared.
+
+**Checks:**
+- the rule refuses an empty slot and too many;
+- a guest's toss makes a drop everyone is told of and the guest's slots
+  lose the stack;
+- the host's toss through the server writes the line `record_toss`
+  always wrote.
+
 ## Risks / Trade-offs
 
 - **Every stateful rule moves to the server path.** This is most of the work,

@@ -137,24 +137,25 @@ pub fn toss(
     {
         return;
     }
-    let mut drop = Drops::make(
-        &save,
-        stack.item,
-        chest + level * TOSS_AHEAD_M,
-        sun.clock.seconds,
-    );
-    drop.count = count;
-    let mut slots = hotbar.0.clone();
-    if slots.take(slot, count) != count {
+    let at = chest + level * TOSS_AHEAD_M;
+    // A joined game asks the host and changes nothing: the drop and the
+    // slots come back from it (`multiplayer` design 25).
+    if save.joined() {
+        let at_mm = [at.x, at.y, at.z].map(|v| (v * 1000.0).round() as i64);
+        save.send_request(pbd_core::net::protocol::Request::Toss {
+            slot: slot as u8,
+            count,
+            at_mm,
+        });
         return;
     }
-    if !save.record_toss(&drop, &slots) {
-        error!(
-            "toss BLOCKED: the save did not accept the drop of {count} {:?}",
-            drop.item
-        );
-        return;
-    }
+    let (slots, drop) = match save.decide_toss(slot, count, at, sun.clock.seconds, &hotbar.0) {
+        Ok(decided) => decided,
+        Err(refusal) => {
+            error!("toss BLOCKED: {count} {:?}: {refusal:?}", stack.item);
+            return;
+        }
+    };
     info!("TOSS {count} {:?} as drop {}", drop.item, drop.id);
     hotbar.0 = slots;
     drops.live.push(drop);
