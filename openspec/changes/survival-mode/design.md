@@ -1262,6 +1262,118 @@ Tasks 2.1 (its UI half), 4.1, 4.2, 4.6, 4.9 and parts of 4.8, 6.3 and 6.6.
   the spears, the bow, the tanning rack, the still, the bedroll and the stew,
   and an Explorer world does not.
 
+## The rest of the non-combat pieces: the plan (2026-11-27)
+
+Tasks 4.2 (the bag's marker and look), 4.6 (the pack's stats), 4.8 (the
+repair buttons and the break sound), 6.3 (the bedroll) and 6.6 (the still,
+the bucket, the cactus, the river mouth and the spawn), and the `drink`
+mission's help line. Written before the code, on the owner's "continue
+building all of survival phase 4". Every choice not quoted from the owner is
+a recommendation taken (ask only with screenshots); the captures go with the
+commits.
+
+- **The pack's stats (G7).** A third panel in the pack's row, left of the
+  pack, on the kit's stone frame, Survival only: the four bars with their
+  numbers (heart, stamina, food, water; the HUD's icons and colours, the
+  mockup's `.prow`), the thermometer with its reading, trend and cause, and
+  the two worn slots (hat, cloak) as slot wells with the worn good's icon.
+  Every bar shows whatever its height: this is where a hidden stat is read.
+  Explorer's pack has no panel. Its words are the locale's `pack.stats`.
+- **Repair at the workbench.** While the workbench is open in a Survival
+  world and the tool in hand is worn, a small Repair panel over the screen's
+  top: the tool in hand's icon at its tier,
+  its uses left as the slot's bar, and the price, `repair_inputs` of the
+  recipe that made that tool at that tier (half its head, rounded up), drawn
+  as the recipe rows' icons with their counts. The plaque is greyed while
+  the tool is full or the pack lacks the price; pressing it takes the price
+  and restores every use in one saved line (`survival::repair_tool`). A
+  tool no recipe makes (none today) shows no price and cannot be repaired.
+- **Repair in a town.** On the talk panel of a town's trader or smith, in a
+  Survival world, while the tool in hand is worn: a REPAIR plaque with its
+  price in coins (`repair_coins` of `values.ron`'s `tool:<code>` and the
+  share worn). Pressing it spends the coins (the purse's `Bought`: a repair
+  is bought) and restores the tool; the wear and the purse go in one line
+  (`survival::places::repair_for_coins`; the two records are stored in one
+  call, two journal lines back to back). Short of coins, the talk says the
+  trade refusal's own "Not enough coins". The panel stands over the screen's
+  top beside the talk, so the talk panel itself is unchanged.
+- **The break sound.** A short dry crack, cut from a CC0 recording by the
+  `sound-effects` skill (`tools/audio/cc0_cues.json`, its source named in
+  `assets/audio/sfx/SOURCES.md` and `AUDIO_SOURCES.md`), played once at the
+  player when a tool breaks, as the hotbar's other one-shot sounds are.
+- **The still** (decision 18). Its record is `still`, keyed by the cell and
+  layer as a station's (`station::record_id`), holding the core's `Still`. F
+  on it (the interact table's new `UseStill` row, the survival reader's): a
+  bucket of sea water in hand is poured in (4 sips of salt), and with an
+  empty hand a fresh sip is drunk as from a river (counted `drink still`).
+  Nothing to drink says "Empty"; salt in it with no fire says "Needs a fire".
+  Every still on the fine tier is stepped once a second of play by the
+  core's `Still::step`: lit when a campfire stands within
+  `still.fire_reach_cells` cells (a placed campfire burns until the
+  wildfire change's douse, which this reads when it lands), raining when the
+  weather rains on it under open sky. A step that changed what it holds is
+  written at once; the boil's seconds are kept in memory between, so a
+  reload loses at most part of one sip's boil. A still off the fine tier
+  does not boil: world time passes only where the world is played.
+- **A bucket's sip.** A bucket filled at the sea is a good of its own,
+  `sea-bucket` (appended: a bucket of sea water; every `water-bucket` an old
+  save holds stays fresh). The empty bucket takes the sea's water as a
+  `sea-bucket` and any other water as a `water-bucket`; either pours as
+  water. F with a full bucket in hand and nothing else to do drinks a sip:
+  four sips empty a fresh bucket (`drinks.bucket.sips`), counted in a
+  `bucket` record of sips taken, and the fourth hands back the empty bucket
+  in the same line; a sea bucket gives nothing and "Salt water". Its icon is
+  the water bucket's drawn by `tools/gen_item_icons.py` with the sea's
+  grey-green water. Known gap: sea water poured into a hole above the sea
+  reads fresh, as gathered water does (the generator does not know an
+  edit's water's salt); a salt mark on poured cells is a follow-up.
+- **The cactus and the straw.** With a straw in hand, F on a standing
+  desert cactus within 3 m (the cell whose record `tree_kit::grows_cactus`
+  says, its trunk the eye ray passes within 0.6 m of) drinks a cactus sip
+  through `CactusDrunk::drink`; the `cactus` record, keyed by the cell, is
+  written with it. A dry cactus says "Dry". The straw wears one use a sip
+  (`wear.straw_uses`, under `straw` in the `wear` record); when it breaks it
+  is used up (one straw leaves the stack, the next is new), since a straw is
+  a stack of goods and not a slot's single tool.
+- **The river mouth, measured along the flow.** Brackish water is river
+  water within 6 cells (6 x 2.833 m) of the sea along the river's own flow,
+  as the design says: from the sip's point, step one cell downstream
+  (`rivers::at`'s `upstream`, reversed) at a time; if the sea (water the
+  generator did not make fresh, under the sea's level) is met within six
+  steps, the water is brackish. This replaces the stand-in "a river level
+  with the sea". It reads the generator and writes nothing, so no
+  generator version moves.
+- **The spawn near fresh water.** Only a NEW Survival world's first
+  arrival (`walking::arrive_new`, a world nobody has played): after the
+  usual start, if no fresh water (`fresh_water_at`) lies within 150 m, the
+  search walks rings out to 3 km for the nearest fresh water, then takes
+  the usual level start nearest that water, or the nearest dry land to it,
+  if that is within 150 m of it; otherwise the usual start stands. An
+  Explorer world, a world already played (its saved pose) and a world
+  reopened never call it, so no spawn a world has ever had moves; a test
+  holds both.
+- **The bedroll** (decision 8, task 6.3). The right button with a bedroll in
+  hand, on foot, lays it on the ground the eye is on within reach: the
+  bedroll leaves the hand, and a `bedroll` record (where it lies,
+  body-relative f64, and which way it faces) and the `spawn` record are
+  written in one line with the hands. One bedroll is laid at a time: laying
+  another takes the old one back into the pack in the same line. F on a laid
+  bedroll takes it up (and clears the spawn). It is drawn as one shaped
+  piece: a rolled-out wool and hide pad with a rolled head end, its normals
+  smooth across the roll and the pad's long edges, textured by a 32 px hide
+  and wool texture drawn by `tools/art/bedroll_texture.py` (manifest row),
+  sampled nearest, lit by the field as the ground. Death wakes the player
+  at it.
+- **The dropped bag** (task 4.2). The card at the feet becomes a standing
+  icon: a dropped item lying in the world is an icon (CLAUDE.md), so the bag
+  is the pack's own icon, a pack sack drawn at 16 px by
+  `tools/gen_item_icons.py`, on a card twice a drop's size that stands
+  upright on the ground and turns to the eye, lit by the field. On the map
+  every bag lying in the world has a marker: a pack icon in the player's
+  colour beside the waypoints (`MapMarker::Bag`), the newest two shown.
+- **Help text.** The `drink` mission's help: "Press F at a river or lake.
+  Sea water is salt."
+
 ## Questions for the owner (with screenshots), 2026-11-26: answered
 
 Asked only where there is something to look at (CLAUDE.md, "Ask only with
