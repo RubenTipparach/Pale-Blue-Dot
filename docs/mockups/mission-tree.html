@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mission Tree</title>
-<meta name="description" content="Pale Blue Dot's Missions screen as trees: the starter tree that unlocks the tech, the town tree of phase 3, the starter tree in a Survival world with its paths and path picker after the fire, the early power tree, each with a bot run, the CREW tab of crew missions with each player's share, and the MILLS tab's windmill and water mill.">
+<meta name="description" content="Pale Blue Dot's Missions screen as trees: the starter tree that unlocks the tech, the town tree of phase 3, the starter tree in a Survival world with its paths and path picker after the fire, the infrastructure tree of phase 4a with early power as its Power branch, each with a bot run, the CREW tab of crew missions with each player's share, and the MILLS tab's windmill and water mill.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&display=swap">
 <style>
@@ -215,6 +215,7 @@ nav.trees { display: flex; gap: 2px; padding: 4px 16px 0; background: var(--page
 .mlinks { display: flex; flex-wrap: wrap; gap: 4px 10px; }
 .mlinks button { all: unset; cursor: pointer; color: var(--rune); font: 18px var(--body); text-decoration: underline; }
 .mlinks button:focus-visible { outline: 2px solid var(--rune); }
+.mlinks .xneed { color: var(--text-dim); font: 18px var(--body); }
 .rgroup { font: 600 14px/1 var(--display); color: var(--label-dim); letter-spacing: 1px; margin: 10px 0 4px; }
 .rrow { all: unset; display: flex; gap: 8px; align-items: center; width: 100%; cursor: pointer; padding: 2px 0; font: 18px/1.1 var(--body); color: var(--text); }
 .rrow small { display: block; color: var(--label-dim); font-size: 16px; }
@@ -336,7 +337,7 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
   <a class="ttab" role="tab" href="#town" data-tree="town" aria-selected="false">TOWN</a>
   <a class="ttab" role="tab" href="#survival" data-tree="survival" aria-selected="false">SURVIVAL</a>
   <a class="ttab" role="tab" href="#crew" data-tree="crew" aria-selected="false">CREW</a>
-  <a class="ttab" role="tab" href="#power" data-tree="power" aria-selected="false">POWER</a>
+  <a class="ttab" role="tab" href="#infrastructure" data-tree="infrastructure" aria-selected="false">INFRASTRUCTURE</a>
   <a class="ttab" role="tab" href="#mills" data-tree="mills" aria-selected="false">MILLS</a>
 </nav>
 <div class="bar">
@@ -381,11 +382,25 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
 <dialog class="infomodal" id="info">
   <div class="mhead"><b>The mission tree</b><button id="infoClose" aria-label="Close">✕</button></div>
   <div class="mbody">
-    <p>Six tabs: a tree each on <b>Starter</b> (<code>#starter</code>), <b>Town</b> (<code>#town</code>) and <b>Power</b> (<code>#power</code>), as the game's Missions screen will have them; <b>Survival</b> (<code>#survival</code>), the starter tree as a Survival world shows it, with the path picker after the fire; <b>Crew</b> (<code>#crew</code>), the crew missions of multiplayer; and <b>Mills</b> (<code>#mills</code>), the power tree's windmill and water mill in 3D.</p>
-    <h3>The POWER tab (version 10)</h3>
+    <p>Six tabs: a tree each on <b>Starter</b> (<code>#starter</code>), <b>Town</b> (<code>#town</code>) and <b>Infrastructure</b> (<code>#infrastructure</code>; the old <code>#power</code> link opens it), as the game's Missions screen will have them; <b>Survival</b> (<code>#survival</code>), the starter tree as a Survival world shows it, with the path picker after the fire; <b>Crew</b> (<code>#crew</code>), the crew missions of multiplayer; and <b>Mills</b> (<code>#mills</code>), the power tree's windmill and water mill in 3D.</p>
+    <h3>The INFRASTRUCTURE tab (version 12) <span class="nw">NEW</span></h3>
+    <p>The owner, 2026-11-27: <em>"where are missions for infrastructure and power"</em>, and, on the first draft: <em>"Maybe move roads over to this section"</em>. Phase 4 is two parts worked in parallel, infrastructure and survival (owner, 2026-11-26); this is the infrastructure part's tree. It draws <code>infrastructure-missions</code> design 2. Written up, not built.</p>
+    <ul>
+      <li><b>A third tree</b>, like the town tree: its own file, its own saved record (<code>infrastructure_missions</code>), its own tab. 37 missions, 625 coins.</li>
+      <li><b>It opens when the town tree's "A job from the board" is done</b>: the end of the town tree's trunk, where the roads hung until now, so the moved missions open exactly when they did.</li>
+      <li><b>0 Stoneworks</b>, the trunk, and <b>1 Roads</b>: moved from the town tree as they are in the game (build a grinder, crush stone, build a mixer, mix gravel, mark a road, pave it, join a town), plus <b>Town to town</b>, a paved road between two towns, which unlocks a milestone.</li>
+      <li><b>2 Civil works</b>: a mason's bench (dressed stone, mortar), then a well, a retaining wall, a culvert under a road, a stone bridge (up to 10 cells, against a plank deck's 6) and a ferry where a river is too wide to bridge; and a mill race to a water mill, which waits on "Build a water mill" (a hidden gate). Each work is a blueprint of the building planner's civil kit, set out and built piece by piece as a house is.</li>
+      <li><b>3 Town</b>: lay a plot from a blueprint, raise the building, pave a street to its door, raise what the town asks for on its board, and see the town grow a size. The first three can be built today on the building planner; the last two wait on towns that grow on the grid.</li>
+      <li><b>4 Power</b>: early power's 17 missions, unchanged (below), off "Build a grinder", with the starter tree's "The iron age" as a hidden gate. The grinder and mixer it needs are in this tree now.</li>
+      <li><b>Saves</b>: a world that has done road missions keeps them. On open, the new record is written from the town record with every moved mission done or open as it was; coins already paid are never paid again; the town record is left as it is.</li>
+      <li><b>What waits on unbuilt systems</b>: Civil works (the mason's bench and the civil blueprints), Town's last two (town growth), Power (early power). Stoneworks and three of Roads are in the game.</li>
+      <li>The RECIPES side tab lists every unlock with its station and inputs, the new BLUEPRINTS with their pieces, and what opens with the tree. The tab opens with the bot partway through "Hold the bank"; it plays a mission only once its gates are met.</li>
+      <li><b>Icons</b> for the new goods, stations and blueprints are stand-ins from <code>tools/art/infrastructure_icons.py</code>.</li>
+    </ul>
+    <h3>The POWER tab (version 10; since version 12 the Infrastructure tab's Power branch)</h3>
     <p>The owner, 2026-11-26: <em>"draft up a reasearch tree mockup (addon to current research tree mockups) for power generation: windmills - for processing food; water mills for generating hydro power - this can power some appliances once they are built; power lines to carry electricity, no battery storage for awhile"</em>. The tab draws <code>early-power</code> design 2 and 3, phase 4's infrastructure part. Written up, not built.</p>
     <ul>
-      <li><b>A tree of its own</b>, like the town tree: its own file and saved record. It opens when the starter tree's "The iron age" is done, because the first mission needs an iron axle; opening it unlocks the wooden gear and the axle.</li>
+      <li><b>A tree of its own</b> in version 10, like the town tree: its own file and saved record, opened by the starter tree's "The iron age". Since version 12 it is the Infrastructure tree's Power branch, its first mission after "Build a grinder" and "The iron age".</li>
       <li><b>The trunk, Millwright</b>: cut gears and an axle, dress millstones. Then four branches.</li>
       <li><b>Wind</b>: raise a windmill on a rise, grind grain to flour, bake a loaf, grind feed mash for the herd, and set the town tree's grinder on the mill floor to crush stone by the wind. The windmill is mechanical: it grinds, it makes no electricity. It needs wind at the mill: the sails stand below 3 m/s, run faster up to 8 m/s, and are furled above 20 m/s. A rise is M20's turbine rule: the cell stands 2 layers above every cell within 3.</li>
       <li><b>Water</b>: draw copper wire and wind a dynamo, set a water mill on a flowing river, make 6 kWh. A mill makes up to 6 kW, by the river's flow (full at 1.2 m/s); a frozen river or a shut sluice makes none.</li>
@@ -393,7 +408,7 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
       <li><b>Appliances</b> (proposals): a motor on the grinder (2 kW, twice as fast), bellows on the forge (1.5 kW), a motor on the mixer (2.5 kW). With more on the line than the wheel makes, everything on it slows by the same share and the lamps dim.</li>
       <li><b>Recipes</b>: the RECIPES side tab gives each unlock's station and inputs, all from goods the game has (planks, logs, rope, fibre, stone, iron and copper ingots, wheat, turnip, leather).</li>
       <li><b>It leads into M20</b>: M20's tier II wind turbines (150 kW) and hydro dam (500 kW) come later with heavier wire on the same poles; nothing here changes their numbers.</li>
-      <li>The tab opens with the bot partway through "String a line". The cross-tree needs (the grinder and the mixer from the town tree) are hidden gates, named in the help lines.</li>
+      <li>The grinder and the mixer it needs were the town tree's in version 10; since version 12 they are in the same tree.</li>
       <li><b>Icons</b> for the new goods are stand-ins from <code>tools/art/early_power_icons.py</code>.</li>
     </ul>
     <h3>The MILLS tab (version 10)</h3>
@@ -443,7 +458,7 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
     <ul>
       <li><b>Its own tree</b>: its own file, its own saved record (<code>town_missions</code>), its own tab. No mission of one tree is a parent of a mission of the other.</li>
       <li><b>It opens the first time you reach a town</b>, whatever the starter tree's state: trade, the board and the people need no tools, and a player who walks to a town early should be shown what to do there. Missions that need tools ask for things the starter tree teaches (planks, rope, iron) as craft objectives.</li>
-      <li><b>The trunk, Town</b>: meet the townsfolk, buy and sell, a job from the board. Then five branches: <b>Trade</b> (trade in earnest, carry a parcel, goodwill), <b>Jobs</b> (three jobs, a lost villager, mend a building, light the lamps), <b>Roads</b> (grinder, crushed stone, mixer, gravel, mark a road with survey stakes, pave it, join a town), <b>Carts</b> off "Pave it" (wheels, a hand cart, haul a load, buy a horse, hitch up, 500 m on the road), <b>Houses and logs</b>, and <b>Carpentry</b> (version 6, <code>furniture</code> design 12: a carpenter's bench, a chair, take a seat, a table, a bed, lie in a bed, a chest, furnish a room, look in a town chest; it unlocks the iron-banded chest and the closet).</li>
+      <li><b>The trunk, Town</b>: meet the townsfolk, buy and sell, a job from the board. Then branches: <b>Trade</b> (trade in earnest, carry a parcel, goodwill), <b>Jobs</b> (three jobs, a lost villager, mend a building, light the lamps), <b>Carts</b> off "A job from the board" since version 12 (wheels, a hand cart, haul a load, buy a horse, hitch up, 500 m on the road), <b>Houses and logs</b>, and <b>Carpentry</b> (version 6, <code>furniture</code> design 12: a carpenter's bench, a chair, take a seat, a table, a bed, lie in a bed, a chest, furnish a room, look in a town chest; it unlocks the iron-banded chest and the closet). Its <b>Roads</b> branch (grinder to "Join a town") moved to the Infrastructure tab in version 12.</li>
       <li><b>Every mission pays coins</b>, shown with the coin on each card: 5 to 60, 640 in all (525 before Carpentry's 115), paid in the same saved line as the mission's done mark, so never twice. A horse costs 120 at a stable.</li>
       <li><b>Unlocks</b> are the new recipes and stations: grinder, crushed stone, mixer, gravel, survey stakes, wheel, hand cart, horse cart (<code>townsfolk</code> design 41, <code>land-transport</code> design 10), locked until their mission by the starter tree's own rule.</li>
       <li><b>NEW</b> marks an objective kind the game does not raise yet: talk, job, goodwill, stake, mark, pave, haul, hitch, build, float.</li>
@@ -496,6 +511,7 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
       <li><b>Version 9</b> (2026-11-26): the Survival tab's bot goes to "Drink water" and "Something to eat" right after "Open the pack" (survey G11).</li>
       <li><b>Version 10</b> (2026-11-26): the Power and Mills tabs (<code>early-power</code>); on the Survival tab, fishing and farming under the Survival branch, after "Make a fire".</li>
       <li><b>Version 11</b> (2026-11-27): the Survival tab is the game's starter trunk to "Make a fire", then paths the player picks in the path picker (<code>survival-mode</code> design 18 rewritten); salt water is undrinkable.</li>
+      <li><b>Version 12</b> (2026-11-27): the Power tab becomes the Infrastructure tab (<code>infrastructure-missions</code>): Stoneworks, Roads, Civil works, Town and Power; the Town tab's roads move there (owner: "Maybe move roads over to this section").</li>
     </ul>
     <h3>Art</h3>
     <p>Panels, plaques, slots, checks and bars are the game's own stone-and-carved-wood kit (<code>assets/ui/stone</code>, <code>assets/ui/oak</code>); item icons are the game's (<code>assets/items</code>), kept with their 1 px UI outline. The yard hen is the husbandry mockup's sprite and the map glyph the UI mockup's, since the game has no item icon for either. Where a mission has no icon of its own (a rowboat, a town), it borrows the nearest good. Help lines for missions that exist today are the game's (<code>missions.ron</code>); the others are drafted for this mockup.</p>
