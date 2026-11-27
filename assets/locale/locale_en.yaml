@@ -2389,7 +2389,7 @@ town_mission:
   find:
     help: Open a chest in a town house and take something.
     objective:
-      "0": Take from a town chest
+      "0": Take from a chest in a town house
     title: Look in a town chest
   first-job:
     help: "Take a job from a town's board, do it and hand it in."

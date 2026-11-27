@@ -53,3 +53,13 @@ temperate and cold dry ground, a reef, a town), moved out of the bot into
 - **Stores close at once in towns**: in the bot's run every chest, crate,
   drawer and closet opened and the screen was back to play within 0.4 s. Not
   yet checked with a player's F.
+
+## The owner's answer (2026-11-27)
+
+"buy a horse: in the description is probably fine which towns to go to. the
+player can mark it themselves. everything else is fine, maybe hint loot a
+chest in a town house. everything else is fun and simple and logical for
+players to figure out".
+
+- The place missions stay as they are: no nearest-place line.
+- find's objective line reads "Take from a chest in a town house".
