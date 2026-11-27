@@ -277,6 +277,10 @@ pub struct Seen {
     pub wild: bool,
     pub following: bool,
     pub female: bool,
+    /// A kill lying where it fell (Survival's hunt), and whether it has
+    /// been dressed.
+    pub dead: bool,
+    pub dressed: bool,
 }
 
 impl Farmyard {
@@ -292,6 +296,8 @@ impl Farmyard {
                 wild: matches!(b.who, Who::Wild { .. }),
                 following: b.mode == Mode::Follow,
                 female: b.sex == Sex::F,
+                dead: b.game.dead_s.is_some(),
+                dressed: b.game.dressed,
             })
     }
 

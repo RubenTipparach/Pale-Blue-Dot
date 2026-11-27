@@ -2954,8 +2954,18 @@ fn open_world(launch: &Launch) -> WorldSave {
     let asked = launch.world.clone();
     // A showcase plays a new world, kept in memory unless `--world` names
     // one: the owner's saves are not its to fill.
+    // A Survival showcase's world is a Survival one (`survival-mode` 6.4).
+    let mode = if launch.showcase.as_ref().is_some_and(|(_, f)| f.survival) {
+        pbd_core::survival::WorldMode::Survival
+    } else {
+        pbd_core::survival::WorldMode::Explorer
+    };
     if asked.is_none() && (launch.capture.is_some() || launch.showcase.is_some()) {
-        return WorldSave::memory_only();
+        let mut save = WorldSave::memory_only();
+        if mode.is_survival() {
+            save.identity.mode = Some(mode);
+        }
+        return save;
     }
     let listed = saves::list(&root);
     let slot = match asked.as_deref() {
@@ -2964,7 +2974,7 @@ fn open_world(launch: &Launch) -> WorldSave {
             listed
                 .into_iter()
                 .find(|slot| slot.id == id || slot.file.name == name)
-                .or_else(|| saves::create(&root, name, seed).ok())
+                .or_else(|| saves::create_in(&root, name, seed, mode).ok())
         }
         // No name: the one played most recently, which is what logging back
         // on means. A first run has none, and nothing is made behind the

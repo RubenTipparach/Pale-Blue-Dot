@@ -1424,6 +1424,42 @@ Recommendations taken (ask only with screenshots).
 - **Words.** "Repaired {tool}" names the weapon by its good's name; no new
   locale key.
 
+## The bot run (task 6.4, 2026-11-27)
+
+The bot is the showcase bot (`step-videos`, `desktop/showcase.rs`): it plays
+`assets/showcase/phase-4-survival.ron` through the player's own inputs and
+logs `mission done: <id>` as each mission completes. What it needed, written
+before the code (recommendations taken, ask only with screenshots):
+
+- **A Survival world.** The shot list's `survival: true` makes the
+  showcase's new world a Survival one (`saves::create_in` with
+  `WorldMode::Survival`, or a memory-only world with that mode), so the
+  missions, the recipe book and the bars are Survival's from the start.
+- **The trunk** is the phase-1 trunk's shots to "Make a fire", at the same
+  start (a pasture with the sea near).
+- **`Path(branch)`**: the Missions screen (opened by the fire, or with O),
+  the picker up (from its Paths plaque if not), the path's card pressed as
+  the pointer presses a control, the screen shut. A player's clicks, no
+  state set.
+- **`Empty`** and **`Drink(n)`**: bare hands and an empty hotbar slot by its
+  number key, then F at the water ahead, a sip at a time.
+- **`Hunt(species, until)`**: the weapon in hand, the nearest wild animal of
+  the kinds named walked up to and looked at, the left button held so the
+  swing lands on it; a kill is struck again where it lies to dress it, and
+  its drops are walked over. The bot reads where animals are, and whether a
+  kill lies dressed, from the yard as a player sees them (`husbandry::Seen`
+  gains `dead` and `dressed`).
+- **The order** is design 18's: the trunk, Eat and drink (the drink, the
+  straw), Hunting (the spear, the hunt, cooked meat), Shelter and weather
+  (the first night, the clock sped and captioned), In the water (the long
+  swim). The rest of the order (the still, the cactus, the bow, the long
+  shot, fishing, farming, the smelt, the torch's relight) is left for later
+  runs.
+- **In the cloud** the run renders on lavapipe (no GPU) at a reduced window
+  (`PBD_WINDOW=960x600`, `--render-scale 50`) about one frame a second; the
+  bot's clock steps at most 0.1 s a frame, so a run takes many times its
+  game time. Its stills say so.
+
 ## Questions for the owner (with screenshots), 2026-11-26: answered
 
 Asked only where there is something to look at (CLAUDE.md, "Ask only with

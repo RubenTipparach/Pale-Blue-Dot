@@ -128,6 +128,10 @@ enum Click {
     Talk(super::talk::TalkAction),
     /// The open container's coins.
     Coins,
+    /// A path picker's card, by its branch (`survival-mode` 6.5).
+    Path(String),
+    /// The Missions screen's Paths plaque, which opens the picker.
+    Paths,
 }
 
 /// One frame's inputs.
@@ -573,6 +577,8 @@ struct Sight<'a> {
     jobs: Vec<(u64, pbd_core::economy::jobs::JobKind, u32, bool)>,
     /// Aboard a craft.
     aboard: bool,
+    /// The path picker is up, and the path chosen (`survival-mode` 6.5).
+    path_picker: bool,
 }
 
 fn tangent(v: Vec3, up: Vec3) -> Vec3 {
@@ -3007,6 +3013,8 @@ pub struct World<'w, 's> {
             &'static bevy::ui::UiGlobalTransform,
         ),
     >,
+    /// The path picker (the `Path` act).
+    path_picker: Option<Res<'w, super::path_picker::Picker>>,
     /// The mission tree's cards, where they are drawn (the `Focus` act
     /// clicks one).
     cards: Query<
@@ -3213,6 +3221,7 @@ pub fn drive(
                 .collect()
         }),
         aboard: w.aboard.as_deref().is_some_and(|a| a.0.is_some()),
+        path_picker: w.path_picker.as_deref().is_some_and(|p| p.shown),
         cards: {
             let scale = hands.pointer.single().map_or(1.0, |w| w.scale_factor());
             w.cards
@@ -3703,14 +3712,29 @@ pub fn press_controls(
         Option<&super::map_screen::MapButton>,
         Option<&super::talk::TalkAction>,
         Option<&super::furniture::StoreCoins>,
+        Option<&super::path_picker::PathOf>,
+        Option<&super::path_picker::PathsButton>,
     )>,
 ) {
     let Some(click) = pending.0.take() else {
         return;
     };
     let mut hit = false;
-    for (mut interaction, row, button, well, cook, cell, smelt, card, legend, talk, coins) in
-        &mut controls
+    for (
+        mut interaction,
+        row,
+        button,
+        well,
+        cook,
+        cell,
+        smelt,
+        card,
+        legend,
+        talk,
+        coins,
+        path_of,
+        paths,
+    ) in &mut controls
     {
         let this = match &click {
             Click::Recipe(k) => row.is_some_and(|r| r.0 == *k),
@@ -3734,6 +3758,10 @@ pub fn press_controls(
             }
             Click::Talk(action) => talk.is_some_and(|t| t == action),
             Click::Coins => coins.is_some(),
+            Click::Path(branch) => path_of
+                .and_then(|p| p.0.as_ref())
+                .is_some_and(|(b, open)| b == branch && *open),
+            Click::Paths => paths.is_some(),
         };
         if this {
             *interaction = Interaction::Pressed;
@@ -4039,6 +4067,25 @@ fn run(
         Act::Lead(species) => lead(bot, species, s, out),
         Act::Collect(species) => collect(bot, species, s, out),
         Act::Eat(name) => eat(bot, name, s, out),
+        Act::Path(branch) => path(bot, branch, s, out),
+        Act::Empty => empty_hand(bot, s, out),
+        Act::Hunt(species, until) => hunt(bot, species, until, s, out),
+        Act::Drink(n) => {
+            let gap = 1.5;
+            let taps = (bot.act_s / gap).floor() as u32;
+            let before = ((bot.act_s - s.dt) / gap).floor() as u32;
+            if taps != before && taps >= 1 && taps <= *n {
+                out.taps.push(KeyCode::KeyF);
+                if taps == 1 && bot.stilled.insert("drink") {
+                    bot.want_still = true;
+                }
+            }
+            if bot.act_s > gap * (*n as f32 + 1.0) {
+                Status::Done
+            } else {
+                Status::Running
+            }
+        }
         Act::Missions(secs) => match bot.phase {
             0 => {
                 if s.screen != Screen::Missions {
@@ -4744,6 +4791,172 @@ fn mine(bot: &mut Bot, until: &Until, depth: u32, s: &Sight, out: &mut Intent) -
 /// `Focus`: pick the mission to be on, as a player does: open the mission
 /// tree (O), fit it to the screen (F), click the mission's card, shut it.
 /// Nothing to do when it is already the one on the HUD.
+/// Pick `branch` on the path picker (`survival-mode` 6.5), as a player
+/// does: the Missions screen opened with O, the picker up (from the Paths
+/// plaque if it did not come up with the screen), the path's card pressed,
+/// and the screen shut.
+fn path(bot: &mut Bot, branch: &str, s: &Sight, out: &mut Intent) -> Status {
+    let chosen = s.missions.progress.path.as_deref() == Some(branch);
+    match bot.phase {
+        0 => {
+            if chosen && s.screen != Screen::Missions {
+                return Status::Done;
+            }
+            if s.screen != Screen::Missions {
+                out.taps.push(KeyCode::KeyO);
+            }
+            bot.next_phase();
+        }
+        1 if bot.phase_s > 1.2 => {
+            if s.path_picker {
+                bot.next_phase();
+            } else if s.screen == Screen::Missions && (bot.phase_s % 1.5) < s.dt * 1.5 {
+                out.click = Some(Click::Paths);
+            } else if s.screen != Screen::Missions && (bot.phase_s % 1.5) < s.dt * 1.5 {
+                out.taps.push(KeyCode::KeyO);
+            }
+        }
+        2 if bot.phase_s > 1.5 => {
+            if bot.stilled.insert("path") {
+                bot.want_still = true;
+            }
+            out.click = Some(Click::Path(branch.to_string()));
+            bot.next_phase();
+        }
+        3 if bot.phase_s > 1.5 => {
+            if !chosen {
+                if bot.tries >= 2 {
+                    return Status::Fail(format!("the path {branch} could not be picked"));
+                }
+                bot.tries += 1;
+                bot.phase = 1;
+                bot.phase_s = 0.0;
+                return Status::Running;
+            }
+            info!("showcase: path {branch} chosen");
+            if s.screen == Screen::Missions {
+                out.taps.push(KeyCode::KeyO);
+            }
+            bot.next_phase();
+        }
+        4 if bot.phase_s > 0.5 => {
+            if s.screen == Screen::Missions {
+                if (bot.phase_s % 1.0) < s.dt * 1.5 {
+                    out.taps.push(KeyCode::Escape);
+                }
+            } else {
+                return Status::Done;
+            }
+        }
+        _ => {}
+    }
+    if bot.act_s > 30.0 {
+        return Status::Fail(format!("could not pick the path {branch}"));
+    }
+    Status::Running
+}
+
+/// Hunt with the weapon in hand (`survival-mode` 6.4): the nearest wild
+/// animal of `species` (roster ids, `|` between them) not yet dressed,
+/// walked up to, looked at, and struck with the left button held; a kill is
+/// struck again where it lies to dress it, and its drops are picked up by
+/// walking over them, until.
+fn hunt(bot: &mut Bot, species: &str, until: &Until, s: &Sight, out: &mut Intent) -> Status {
+    if bot.until_met(s, until) {
+        return Status::Done;
+    }
+    let wanted: Vec<&str> = species.split('|').collect();
+    let target = s
+        .yard
+        .into_iter()
+        .flat_map(|y| y.seen(s.origin))
+        .filter(|a| {
+            a.wild
+                && !a.dressed
+                && s
+                    .land
+                    .get(a.species as usize)
+                    .is_some_and(|sp| wanted.contains(&sp.id.as_str()))
+        })
+        .min_by(|a, b| a.pos.distance(s.feet).total_cmp(&b.pos.distance(s.feet)));
+    if bot.act_s > 600.0 {
+        return Status::Fail(format!("no {species} hunted in ten minutes"));
+    }
+    let Some(animal) = target else {
+        // None in sight: head for the nearest herd of the first kind, as
+        // the tame does.
+        if bot.herd_goal.is_none() {
+            for kind in &wanted {
+                bot.herd_goal = nearest_herd(s, kind);
+                if bot.herd_goal.is_some() {
+                    break;
+                }
+            }
+            if bot.herd_goal.is_none() {
+                return Status::Fail(format!("no {species} within 1.2 km"));
+            }
+        }
+        if let Some(at) = bot.herd_goal
+            && bot.walk_to(s, out, at, 20.0) == Walked::There
+        {
+            bot.herd_goal = None;
+            out.held.insert(KeyCode::KeyW);
+        }
+        return Status::Running;
+    };
+    bot.herd_goal = None;
+    let dist = tangent(animal.pos - s.feet, s.up).length();
+    if (bot.act_s % 5.0) < s.dt {
+        info!(
+            "showcase: hunting at {dist:.1} m (dead {}), {:?} in hand",
+            animal.dead,
+            s.slots.held().map(|st| st.item)
+        );
+    }
+    let centre = animal.pos + animal.pos.normalize() * if animal.dead { 0.15 } else { 0.3 };
+    if dist > 1.8 {
+        bot.walk_to(s, out, animal.pos, 1.6);
+        if dist < 3.0 {
+            out.lmb = true;
+        }
+    } else {
+        bot.aim_at(s, out, centre);
+        out.lmb = true;
+        if bot.stilled.insert(if animal.dead { "dress" } else { "hunt" }) {
+            bot.want_still = true;
+        }
+    }
+    Status::Running
+}
+
+/// An empty hand: bare hands in the tool slot, then an empty hotbar slot by
+/// its number key (the drink, the rain).
+fn empty_hand(bot: &mut Bot, s: &Sight, out: &mut Intent) -> Status {
+    if s.tools.held().is_some() {
+        return hand(bot, "hand", s, out);
+    }
+    let selected_empty = s.slots.get(s.slots.selected()).is_none();
+    if selected_empty && s.screen == Screen::Playing {
+        return Status::Done;
+    }
+    if s.screen != Screen::Playing {
+        if (bot.act_s % 0.6) < s.dt * 1.5 {
+            out.taps.push(KeyCode::Escape);
+        }
+        return Status::Running;
+    }
+    let Some(k) = (0..SLOTS).find(|&k| s.slots.get(k).is_none()) else {
+        return Status::Fail("no empty hotbar slot".into());
+    };
+    if (bot.act_s % 0.5) < s.dt * 1.5 {
+        out.taps.push(DIGITS[k]);
+    }
+    if bot.act_s > 10.0 {
+        return Status::Fail("could not empty the hand".into());
+    }
+    Status::Running
+}
+
 fn focus(bot: &mut Bot, id: &str, s: &Sight, out: &mut Intent) -> Status {
     let on = |s: &Sight| {
         s.missions
