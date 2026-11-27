@@ -1171,7 +1171,7 @@ two-machine check).
     an arrow loosed a use of the bow; at zero it breaks with the
     `tool_break` crack and "{tool} broke", a broken weapon hits as bare
     hands and a broken bow does not loose. A tool's landed hit spends a use
-    of the tool. Repairing a weapon waits on the repair panels.
+    of the tool. A weapon is repaired as a tool is ("Weapon repair" below).
   - A thrown spear or a loosed arrow still in the air when the game closes
     is lost: the slot it left is saved at the throw, its drop at the
     landing.
@@ -1396,6 +1396,33 @@ commits.
   a bag at the feet is not hidden under the arrow (round 2).
 - **Help text.** The `drink` mission's help: "Press F at a river or lake.
   Sea water is salt."
+
+## Weapon repair (2026-11-27)
+
+Weapons wear as tools do (design 11, "Combat as built"), and design 11's
+repair covers them the same way; this is the plan, written before the code.
+Recommendations taken (ask only with screenshots).
+
+- **What is repaired.** The thing in hand: a weapon in the hotbar's
+  selected slot (`held::weapon::weapon_of`) before the tool slot's tool, as
+  the swing reads them. Both repair panels (the workbench's REPAIR beside
+  the workbench, the talk panel's REPAIR at a town's trader or smith) show
+  a worn weapon exactly as they show a worn tool: its icon, its wear bar,
+  its price.
+- **At the workbench**: half the head of the recipe that makes the weapon
+  (its `outputs` name the good), rounded up, as for a tool. A recipe whose
+  every input is a handle good (the bow: planks and rope) has no head; its
+  price is then half of every input, rounded up, so no repair is free
+  (`wear::repair_inputs`, which applies the same fallback to any tool, none
+  of which has such a recipe today).
+- **In a town**: the weapon's row in `values.ron` (its good code) times the
+  share worn, rounded up, paid from the purse; the `weapon_wear` record and
+  the purse stored together.
+- **Saving.** The `weapon_wear` record (schema 1, unchanged) takes the
+  weapon's full count, in the same line as the hands at the workbench and
+  as the purse in town. A save without the record reads full, as before.
+- **Words.** "Repaired {tool}" names the weapon by its good's name; no new
+  locale key.
 
 ## Questions for the owner (with screenshots), 2026-11-26: answered
 

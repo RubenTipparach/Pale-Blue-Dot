@@ -1148,6 +1148,7 @@ pub fn paint(
     ) {
         (Some(with), Some(save), Some(tools)) => super::survival_panels::town_repair_price(
             save,
+            &p.hotbar,
             tools,
             &p.cfg,
             with.trader,

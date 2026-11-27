@@ -13,11 +13,11 @@ use super::slots::{self, Hotbar, ItemIcons};
 use super::survival_play::SurvivalIcons;
 use bevy::prelude::*;
 use pbd_app::saves::WorldSave;
+use pbd_app::survival::places::Mend;
 use pbd_app::survival::{self as play, Survival};
 use pbd_app::ui_kit::{self, KitText, Localized, Plaque, Set, UiKit, tr};
-use pbd_core::inventory::{Item, Stack, Tool};
+use pbd_core::inventory::{Item, Stack};
 use pbd_core::locale::tr_with;
-use pbd_core::survival::wear::Wearer;
 
 /// A stat bar's width in the pack, native px (the mockup's 86 at 2x is 43;
 /// wider here, the pack is roomy).
@@ -464,10 +464,11 @@ pub fn spawn_bench_repair(layer: &mut ChildSpawnerCommands, kit: &UiKit, atlas: 
         });
 }
 
-/// What a town's trader or smith asks to repair the tool in hand, in coins,
-/// when the talk is with one in a Survival world and the tool is worn.
+/// What a town's trader or smith asks to repair the weapon or tool in hand,
+/// in coins, when the talk is with one in a Survival world and it is worn.
 pub fn town_repair_price(
     save: &WorldSave,
+    hotbar: &Hotbar,
     tools: &pbd_app::fish::ToolSlot,
     cfg: &pbd_app::economy::EconomyConfig,
     trader: bool,
@@ -476,9 +477,9 @@ pub fn town_repair_price(
     if !(trader || role == "smith") {
         return None;
     }
-    let (tool, tier, _) = worn_in_hand(save, tools)?;
-    let value = cfg.values.get(&format!("tool:{}", tool.code()))?.coins;
-    Some(play::places::repair_coins_for(save, tool, tier, value))
+    let (mend, _) = worn_in_hand(save, hotbar, tools)?;
+    let value = cfg.values.get(&mend.value_key())?.coins;
+    Some(play::places::mend_coins_for(save, mend, value))
 }
 
 /// The town's REPAIR among the talk panel's buttons (painted by the talk
@@ -514,33 +515,39 @@ pub fn spawn_town_repair(
     });
 }
 
-/// The tool in hand and its tier, if it is worn (below full) in a Survival
-/// world.
+/// The weapon or tool in hand, if it is worn (below full) in a Survival
+/// world, with its share of uses left.
 fn worn_in_hand(
     save: &WorldSave,
+    hotbar: &Hotbar,
     tools: &pbd_app::fish::ToolSlot,
-) -> Option<(Tool, pbd_core::inventory::Tier, f32)> {
-    if !save.mode().is_survival() {
-        return None;
-    }
-    let tool = tools.0.held()?;
-    let tier = tools.0.tier(tool)?;
-    let wear = play::WearBook::of(save).wear(tool, tier);
-    let share = wear.share(play::rules(), &Wearer::Tool(tool, tier));
-    (share < 1.0).then_some((tool, tier, share))
+) -> Option<(Mend, f32)> {
+    let tool = tools
+        .0
+        .held()
+        .and_then(|tool| tools.0.tier(tool).map(|tier| (tool, tier)));
+    play::places::worn_in_hand(save, hotbar.0.held().map(|s| s.item), tool)
 }
 
-/// Show the tool in hand and its wear on a repair panel.
+/// Show the weapon or tool in hand and its wear on a repair panel.
 fn paint_tool(
     items: &ItemIcons,
-    tool: Tool,
-    tier: pbd_core::inventory::Tier,
+    images: &Assets<Image>,
+    mend: Mend,
     share: f32,
     icon: &mut Query<&mut ImageNode, (With<RepairToolIcon>, Without<PriceIcon>)>,
     fill: &mut Query<(&mut Node, &mut BackgroundColor), With<RepairWearFill>>,
 ) {
     for mut image in icon.iter_mut() {
-        image.image = items.tool_at(tool, tier);
+        match mend {
+            Mend::Tool(tool, tier) => {
+                image.image = items.tool_at(tool, tier);
+                image.rect = None;
+            }
+            Mend::Weapon(_) => {
+                slots::paint_icon(&mut image, Some(Stack::new(mend.item(), 1)), items, images)
+            }
+        }
         image.color = if share <= 0.0 {
             Color::srgb(0.45, 0.45, 0.45)
         } else {
@@ -598,10 +605,9 @@ fn bench_repair(
     let at_bench =
         at.0.and_then(|(cell, layer)| super::craft::station_row_at(&save, cell, layer))
             .is_some_and(|row| row.code == "workbench");
-    let worn = worn_in_hand(&save, &tools).filter(|_| at_bench);
-    let price = worn.and_then(|(tool, tier, _)| {
-        play::places::repair_price(&recipes.0, play::rules(), tool, tier)
-    });
+    let worn = worn_in_hand(&save, &hotbar, &tools).filter(|_| at_bench);
+    let price =
+        worn.and_then(|(mend, _)| play::places::mend_price(&recipes.0, play::rules(), mend));
     let show = worn.is_some() && price.is_some();
     for mut node in &mut panel {
         let want = if show { Display::Flex } else { Display::None };
@@ -609,10 +615,10 @@ fn bench_repair(
             node.display = want;
         }
     }
-    let (Some((tool, tier, share)), Some(price), Some(items)) = (worn, price, items) else {
+    let (Some((mend, share)), Some(price), Some(items)) = (worn, price, items) else {
         return;
     };
-    paint_tool(&items, tool, tier, share, &mut tool_icon, &mut fill);
+    paint_tool(&items, &images, mend, share, &mut tool_icon, &mut fill);
     for (k, mut node, mut image) in &mut prices {
         match price.get(k.0) {
             Some(&(item, n)) => {
@@ -640,13 +646,10 @@ fn bench_repair(
         }
         if *interaction == Interaction::Pressed
             && !short
-            && play::places::repair_at_bench(&mut save, &mut hotbar.0, tool, tier, &price)
+            && play::places::mend_at_bench(&mut save, &mut hotbar.0, mend, &price)
         {
-            info!("SURVIVAL repaired the {tool:?} at the workbench");
-            survival.say(tr_with(
-                "survival.repaired",
-                &[("tool", &pbd_core::inventory::tool_title(tool, tier))],
-            ));
+            info!("SURVIVAL repaired the {mend:?} at the workbench");
+            survival.say(tr_with("survival.repaired", &[("tool", &mend.title())]));
         }
     }
 }
@@ -658,6 +661,7 @@ fn town_repair(
     screen: Res<Screen>,
     mut talking: ResMut<super::talk::Talking>,
     mut save: ResMut<WorldSave>,
+    hotbar: Res<Hotbar>,
     tools: Res<pbd_app::fish::ToolSlot>,
     cfg: Option<Res<pbd_app::economy::EconomyConfig>>,
     mut eco: Option<ResMut<pbd_app::economy::Economy>>,
@@ -672,10 +676,12 @@ fn town_repair(
     let Some(with) = talking.with.as_ref() else {
         return;
     };
-    let Some(coins) = town_repair_price(&save, &tools, cfg, with.trader, &with.talker.role) else {
+    let Some(coins) =
+        town_repair_price(&save, &hotbar, &tools, cfg, with.trader, &with.talker.role)
+    else {
         return;
     };
-    let Some((tool, tier, _)) = worn_in_hand(&save, &tools) else {
+    let Some((mend, _)) = worn_in_hand(&save, &hotbar, &tools) else {
         return;
     };
     let short = !eco.purse.covers(u64::from(coins));
@@ -687,13 +693,10 @@ fn town_repair(
             continue;
         }
         talking.said = Some(
-            match play::places::repair_for_coins(&mut save, &mut eco.purse, tool, tier, coins) {
+            match play::places::mend_for_coins(&mut save, &mut eco.purse, mend, coins) {
                 Ok(()) => {
-                    info!("SURVIVAL repaired the {tool:?} in town for {coins} coins");
-                    tr_with(
-                        "survival.repaired",
-                        &[("tool", &pbd_core::inventory::tool_title(tool, tier))],
-                    )
+                    info!("SURVIVAL repaired the {mend:?} in town for {coins} coins");
+                    tr_with("survival.repaired", &[("tool", &mend.title())])
                 }
                 Err(_) => tr("trade.short"),
             },

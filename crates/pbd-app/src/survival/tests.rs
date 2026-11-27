@@ -725,6 +725,111 @@ fn a_workbench_repair_takes_half_the_head_of_the_tools_recipe() {
     assert!(!WearBook::of(&save).broken(Tool::Pickaxe, Tier::Stone));
 }
 
+/// Wear `code` down to broken by landed hits.
+fn break_weapon(save: &mut WorldSave, code: &str) {
+    for _ in 0..10_000 {
+        if crate::combat::spend_weapon_wear(save, code, pbd_core::survival::wear::Action::HitLanded)
+            == pbd_core::survival::wear::Spend::Broke
+        {
+            return;
+        }
+    }
+    panic!("{code} never broke");
+}
+
+#[test]
+fn a_broken_weapon_is_repaired_at_the_workbench_for_half_its_head() {
+    use places::Mend;
+    let file: pbd_core::station::RecipeFile =
+        ron::from_str(include_str!("../../../../assets/config/recipes.ron")).unwrap();
+    let book = file.resolve().unwrap().for_mode(true);
+    let sword = pbd_core::goods::Good::by_code("bronze-sword").unwrap();
+    let mut save = survival_memory();
+    break_weapon(&mut save, "bronze-sword");
+    assert!(crate::combat::WeaponWearBook::of(&save).broken("bronze-sword"));
+    // The sword in hand is what is mended, before any tool in the slot.
+    let (mend, share) = places::worn_in_hand(
+        &save,
+        Some(Item::Good(sword)),
+        Some((Tool::Pickaxe, Tier::Stone)),
+    )
+    .unwrap();
+    assert_eq!(mend, Mend::Weapon(sword));
+    assert_eq!(share, 0.0);
+    // Half the head: two of the sword's three bronze ingots, no handle.
+    let price = places::mend_price(&book, rules(), mend).unwrap();
+    assert_eq!(
+        price,
+        vec![(
+            Item::Good(pbd_core::goods::Good::by_code("bronze-ingot").unwrap()),
+            2
+        )]
+    );
+    let mut short = Slots::new();
+    assert!(!places::mend_at_bench(&mut save, &mut short, mend, &price));
+    assert!(crate::combat::WeaponWearBook::of(&save).broken("bronze-sword"));
+    let mut carried = Slots::new();
+    for &(item, n) in &price {
+        carried.give(item, n);
+    }
+    assert!(places::mend_at_bench(&mut save, &mut carried, mend, &price));
+    assert_eq!(carried, Slots::new(), "the price left the hands");
+    let wear = crate::combat::WeaponWearBook::of(&save).wear("bronze-sword");
+    assert_eq!(
+        wear.uses_left,
+        pbd_core::survival::wear::Wearer::Weapon("bronze-sword".into()).max_uses(rules())
+    );
+    // Full now: nothing to mend.
+    assert!(places::worn_in_hand(&save, Some(Item::Good(sword)), None).is_none());
+    // The bow's recipe is all handle: half of everything, never free.
+    let bow = places::mend_price(&book, rules(), Mend::Weapon(pbd_core::goods::Good::BOW)).unwrap();
+    assert!(!bow.is_empty(), "a bow's repair is never free");
+}
+
+#[test]
+fn a_town_repairs_a_weapon_for_coins_and_the_repair_survives_a_reload() {
+    use places::Mend;
+    let (dir, slot) = survival_world("weapon-repair");
+    let spear = pbd_core::goods::Good::by_code("stone-spear").unwrap();
+    let mend = Mend::Weapon(spear);
+    let mut purse = pbd_core::economy::coins::Purse::new(50);
+    {
+        let mut save = WorldSave::open(dir.clone(), slot);
+        for _ in 0..30 {
+            crate::combat::spend_weapon_wear(
+                &mut save,
+                "stone-spear",
+                pbd_core::survival::wear::Action::HitLanded,
+            );
+        }
+        let coins = places::mend_coins_for(&save, mend, 10);
+        assert!(coins > 0 && coins <= 10, "{coins}");
+        let mut poor = pbd_core::economy::coins::Purse::new(u64::from(coins) - 1);
+        assert!(places::mend_for_coins(&mut save, &mut poor, mend, coins).is_err());
+        assert!(mend.share(&save) < 1.0, "a short purse mends nothing");
+        places::mend_for_coins(&mut save, &mut purse, mend, coins).unwrap();
+        assert_eq!(purse.coins, 50 - u64::from(coins));
+        assert_eq!(mend.share(&save), 1.0);
+        assert_eq!(places::mend_coins_for(&save, mend, 10), 0);
+    }
+    let save = reopen(&dir);
+    assert_eq!(mend.share(&save), 1.0, "the repair survives a reload");
+    let saved: pbd_core::economy::coins::Purse = save
+        .records
+        .get(pbd_core::economy::coins::PURSE_KIND, 0)
+        .and_then(|r| r.read())
+        .unwrap();
+    assert_eq!(saved, purse, "the purse is saved with the repair");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_explorer_weapon_is_never_offered_a_repair() {
+    let save = WorldSave::memory_only();
+    let sword = pbd_core::goods::Good::by_code("iron-sword").unwrap();
+    assert!(places::worn_in_hand(&save, Some(Item::Good(sword)), None).is_none());
+}
+
 #[test]
 fn sea_water_poured_above_the_sea_stays_salt() {
     let cfg = crate::planet::terrain_config();

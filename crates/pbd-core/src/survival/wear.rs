@@ -165,14 +165,24 @@ impl Wear {
 
 /// What a workbench repair takes (design 11): half the head materials of the
 /// tool's recipe, rounded up. The head is every input that is not a handle
-/// good (`wear.handle_goods`).
+/// good (`wear.handle_goods`). A recipe with no head (the bow's planks and
+/// rope) asks half of every input, so no repair is free ("Weapon repair").
 pub fn repair_inputs(cfg: &SurvivalConfig, recipe_inputs: &[(String, u16)]) -> Vec<(String, u16)> {
-    recipe_inputs
-        .iter()
-        .filter(|(good, _)| !cfg.wear.handle_goods.contains(good))
-        .map(|(good, n)| (good.clone(), n.div_ceil(2)))
-        .filter(|(_, n)| *n > 0)
-        .collect()
+    let half = |list: &mut dyn Iterator<Item = &(String, u16)>| -> Vec<(String, u16)> {
+        list.map(|(good, n)| (good.clone(), n.div_ceil(2)))
+            .filter(|(_, n)| *n > 0)
+            .collect()
+    };
+    let head = half(
+        &mut recipe_inputs
+            .iter()
+            .filter(|(good, _)| !cfg.wear.handle_goods.contains(good)),
+    );
+    if head.is_empty() {
+        half(&mut recipe_inputs.iter())
+    } else {
+        head
+    }
 }
 
 /// What a town's smith or trader asks (design 11): the tool's value in
@@ -260,6 +270,25 @@ mod tests {
         w.repair(&cfg, &PICK);
         assert_eq!(w.uses_left, 60);
         assert_eq!(w.bar(&cfg, &PICK), None);
+    }
+
+    #[test]
+    fn a_recipe_with_no_head_asks_half_of_everything() {
+        let cfg = SurvivalConfig::shipped();
+        let bow = [("planks".to_string(), 2), ("rope".to_string(), 2)];
+        assert_eq!(
+            repair_inputs(&cfg, &bow),
+            vec![("planks".to_string(), 1), ("rope".to_string(), 1)]
+        );
+        let sword = [
+            ("bronze-ingot".to_string(), 3),
+            ("planks".to_string(), 1),
+            ("leather".to_string(), 1),
+        ];
+        assert_eq!(
+            repair_inputs(&cfg, &sword),
+            vec![("bronze-ingot".to_string(), 2)]
+        );
     }
 
     #[test]

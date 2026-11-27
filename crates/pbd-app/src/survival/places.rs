@@ -494,16 +494,19 @@ pub fn repair_price(
     let recipe = book
         .offered()
         .find(|r| r.tools.iter().any(|&(t, k)| t == tool && k == tier))?;
-    let named: Vec<(String, u16)> = recipe
-        .inputs
+    Some(price_of(cfg, &recipe.inputs))
+}
+
+/// Half the head of a recipe's `inputs`, as items (`wear::repair_inputs`).
+fn price_of(cfg: &SurvivalConfig, inputs: &[(Item, u16)]) -> Vec<(Item, u16)> {
+    let named: Vec<(String, u16)> = inputs
         .iter()
         .map(|&(item, n)| (item_code(item), n))
         .collect();
-    let price = pbd_core::survival::wear::repair_inputs(cfg, &named)
+    pbd_core::survival::wear::repair_inputs(cfg, &named)
         .into_iter()
         .filter_map(|(code, n)| Some((pbd_core::station::item_named(&code)?, n)))
-        .collect();
-    Some(price)
+        .collect()
 }
 
 /// An item as `recipes.ron` names it.
@@ -525,27 +528,14 @@ pub fn repair_at_bench(
     tier: Tier,
     price: &[(Item, u16)],
 ) -> bool {
-    let mut after = carried.clone();
-    for &(item, n) in price {
-        if !after.take_item(item, n) {
-            return false;
-        }
-    }
-    if !super::repair_tool(save, tool, tier, &after) {
-        return false;
-    }
-    *carried = after;
-    true
+    mend_at_bench(save, carried, Mend::Tool(tool, tier), price)
 }
 
 /// What a town's smith or trader asks to repair `tool` at `tier` now, in
 /// coins; nothing for a tool at full uses. `value_coins` is its row in
 /// `values.ron` (`tool:<code>`).
 pub fn repair_coins_for(save: &WorldSave, tool: Tool, tier: Tier, value_coins: u32) -> u32 {
-    let cfg = rules();
-    let wearer = Wearer::Tool(tool, tier);
-    let wear = WearBook::of(save).wear(tool, tier);
-    pbd_core::survival::wear::repair_coins(cfg, value_coins, wear, &wearer)
+    mend_coins_for(save, Mend::Tool(tool, tier), value_coins)
 }
 
 /// A town repair (design 11): `coins` leave `purse` and `tool` gets every
@@ -558,16 +548,179 @@ pub fn repair_for_coins(
     tier: Tier,
     coins: u32,
 ) -> Result<(), pbd_core::economy::coins::Refused> {
+    mend_for_coins(save, purse, Mend::Tool(tool, tier), coins)
+}
+
+// ------------------------------------------------------- weapon repair
+
+/// What a repair mends: a tool at its tier, or a weapon by its good
+/// ("Weapon repair"). Weapons wear in the `weapon_wear` record, tools in
+/// `wear`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mend {
+    Tool(Tool, Tier),
+    Weapon(Good),
+}
+
+impl Mend {
+    pub fn wearer(self) -> Wearer {
+        match self {
+            Mend::Tool(tool, tier) => Wearer::Tool(tool, tier),
+            Mend::Weapon(good) => crate::combat::wearer_of(good.code()),
+        }
+    }
+
+    /// Its wear now.
+    pub fn wear(self, save: &WorldSave) -> Wear {
+        match self {
+            Mend::Tool(tool, tier) => WearBook::of(save).wear(tool, tier),
+            Mend::Weapon(good) => crate::combat::WeaponWearBook::of(save).wear(good.code()),
+        }
+    }
+
+    /// The share of its uses left, 0..1.
+    pub fn share(self, save: &WorldSave) -> f32 {
+        self.wear(save).share(rules(), &self.wearer())
+    }
+
+    /// Its name, as "Repaired {tool}" says it.
+    pub fn title(self) -> pbd_core::locale::Localized {
+        match self {
+            Mend::Tool(tool, tier) => pbd_core::inventory::tool_title(tool, tier),
+            Mend::Weapon(good) => good.name(),
+        }
+    }
+
+    /// Its row in `values.ron`.
+    pub fn value_key(self) -> String {
+        match self {
+            Mend::Tool(tool, _) => format!("tool:{}", tool.code()),
+            Mend::Weapon(good) => good.code().to_string(),
+        }
+    }
+
+    /// The item a panel draws for it.
+    pub fn item(self) -> Item {
+        match self {
+            Mend::Tool(tool, _) => Item::Tool(tool),
+            Mend::Weapon(good) => Item::Good(good),
+        }
+    }
+
+    /// Its record with every use back: the one line a repair writes.
+    fn mended(self, save: &WorldSave) -> (StoredRecord, &'static str, u32) {
+        let cfg = rules();
+        let wearer = self.wearer();
+        let mut wear = self.wear(save);
+        wear.repair(cfg, &wearer);
+        match self {
+            Mend::Tool(tool, _) => {
+                let mut book = WearBook::of(save);
+                book.tools.insert(tool.code().to_string(), wear);
+                (
+                    StoredRecord::of(WEAR_KIND, 0, WEAR_SCHEMA, &book),
+                    WEAR_KIND,
+                    WEAR_SCHEMA,
+                )
+            }
+            Mend::Weapon(good) => {
+                let mut book = crate::combat::WeaponWearBook::of(save);
+                book.weapons.insert(good.code().to_string(), wear);
+                (
+                    StoredRecord::of(
+                        crate::combat::WEAPON_WEAR_KIND,
+                        0,
+                        crate::combat::WEAPON_WEAR_SCHEMA,
+                        &book,
+                    ),
+                    crate::combat::WEAPON_WEAR_KIND,
+                    crate::combat::WEAPON_WEAR_SCHEMA,
+                )
+            }
+        }
+    }
+}
+
+/// What is in hand to mend, if it is worn, in a Survival world: the weapon
+/// in the selected slot before the tool slot's tool, as the swing reads them.
+pub fn worn_in_hand(
+    save: &WorldSave,
+    held_item: Option<Item>,
+    tool: Option<(Tool, Tier)>,
+) -> Option<(Mend, f32)> {
+    if !save.mode().is_survival() {
+        return None;
+    }
+    let mend = match held_item.and_then(crate::held::weapon::weapon_of) {
+        Some(good) => Mend::Weapon(good),
+        None => {
+            let (tool, tier) = tool?;
+            Mend::Tool(tool, tier)
+        }
+    };
+    let share = mend.share(save);
+    (share < 1.0).then_some((mend, share))
+}
+
+/// What a workbench repair of `mend` takes: half the head of the recipe
+/// that makes it, rounded up. `None` when no recipe makes it.
+pub fn mend_price(
+    book: &pbd_core::station::RecipeBook,
+    cfg: &SurvivalConfig,
+    mend: Mend,
+) -> Option<Vec<(Item, u16)>> {
+    match mend {
+        Mend::Tool(tool, tier) => repair_price(book, cfg, tool, tier),
+        Mend::Weapon(good) => {
+            let recipe = book
+                .offered()
+                .find(|r| r.outputs.iter().any(|&(item, _)| item == Item::Good(good)))?;
+            Some(price_of(cfg, &recipe.inputs))
+        }
+    }
+}
+
+/// Repair `mend` at the workbench: `price` leaves the hands and every use
+/// comes back, in one saved line. `false` when the hands lack the price.
+pub fn mend_at_bench(
+    save: &mut WorldSave,
+    carried: &mut Slots,
+    mend: Mend,
+    price: &[(Item, u16)],
+) -> bool {
+    let mut after = carried.clone();
+    for &(item, n) in price {
+        if !after.take_item(item, n) {
+            return false;
+        }
+    }
+    let (record, _, schema) = mend.mended(save);
+    if !save.store_with_hands(record, schema, &after) {
+        return false;
+    }
+    *carried = after;
+    true
+}
+
+/// What a town's smith or trader asks to repair `mend` now, in coins.
+pub fn mend_coins_for(save: &WorldSave, mend: Mend, value_coins: u32) -> u32 {
+    pbd_core::survival::wear::repair_coins(rules(), value_coins, mend.wear(save), &mend.wearer())
+}
+
+/// A town repair of `mend`: `coins` leave `purse` and every use comes
+/// back, stored together. `Err` with the purse unchanged when it is short,
+/// or when the save refused.
+pub fn mend_for_coins(
+    save: &mut WorldSave,
+    purse: &mut Purse,
+    mend: Mend,
+    coins: u32,
+) -> Result<(), pbd_core::economy::coins::Refused> {
     let mut paid = purse.clone();
     paid.change(Reason::Bought, u64::from(coins))?;
-    let cfg = rules();
-    let wearer = Wearer::Tool(tool, tier);
-    let mut book = WearBook::of(save);
-    let mut wear = book.wear(tool, tier);
-    wear.repair(cfg, &wearer);
-    book.tools.insert(tool.code().to_string(), wear);
+    let (record, kind, schema) = mend.mended(save);
     let lines = vec![
-        StoredRecord::of(WEAR_KIND, 0, WEAR_SCHEMA, &book),
+        record,
         StoredRecord::of(PURSE_KIND, PURSE_ID, PURSE_SCHEMA, &paid),
     ];
     if save.store(&Author::Player(0), lines).is_none() {
@@ -576,7 +729,7 @@ pub fn repair_for_coins(
             need: u64::from(coins),
         });
     }
-    save.note_record_kinds(&[(WEAR_KIND, WEAR_SCHEMA), (PURSE_KIND, PURSE_SCHEMA)]);
+    save.note_record_kinds(&[(kind, schema), (PURSE_KIND, PURSE_SCHEMA)]);
     *purse = paid;
     Ok(())
 }

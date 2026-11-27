@@ -2437,8 +2437,7 @@ pub fn run(args: &[String]) {
             (pbd_app::kitchen::refresh_effects, kitchen::show_effects),
             kitchen::scripted.after(farm::scripted),
             glow_plants::hold_script.run_if(pbd_app::loading::ready),
-            (survival_kit::give_kit, survival_kit::lay_weapons)
-                .run_if(pbd_app::loading::ready),
+            (survival_kit::give_kit, survival_kit::lay_weapons).run_if(pbd_app::loading::ready),
             (farm::show, farm::show_note),
             farm::scripted.after(digging::scripted_dig),
             farm::scripted_gather.after(digging::scripted_dig),
