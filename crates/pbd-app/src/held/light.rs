@@ -638,7 +638,7 @@ pub(super) struct LightLooks {
 /// handle), the origin on the fist, metres to tool units. `up_tool`, the
 /// eye's up in tool units, sets which way the item's own up turns (a
 /// lantern hangs under its bail); `None` for things along the handle.
-fn item_frame(fist_tool: Vec3, scale: f32, up_tool: Option<Vec3>) -> Transform {
+pub(super) fn item_frame(fist_tool: Vec3, scale: f32, up_tool: Option<Vec3>) -> Transform {
     let rotation = match up_tool {
         // A lantern: its x along the bail (the handle), its y the eye's up.
         Some(up) => {
@@ -657,7 +657,7 @@ fn item_frame(fist_tool: Vec3, scale: f32, up_tool: Option<Vec3>) -> Transform {
 
 /// The pickaxe's grip, turned and moved to `hold`: the rest pose of a held
 /// light, and its fist, eye space.
-fn hold_rest(pick: &HeldModel, hold: Hold) -> (Transform, Vec3) {
+pub(super) fn hold_rest(pick: &HeldModel, hold: Hold) -> (Transform, Vec3) {
     let rest = pick.rest();
     let fist = Vec3::from(pick.fist);
     let handle = rest.rotation * Vec3::X;

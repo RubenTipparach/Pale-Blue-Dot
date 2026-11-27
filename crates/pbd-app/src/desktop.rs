@@ -37,6 +37,7 @@ mod sea_gather;
 mod showcase;
 mod slots;
 mod sounds;
+mod survival_kit;
 mod talk;
 mod time_ui;
 mod toasts;
@@ -320,6 +321,12 @@ pub struct Launch {
     /// start, as a player holds it (`glowing-mushrooms` part B): a block as
     /// `block:torch`, a good by its code.
     pub hold: Option<String>,
+    /// `--survival-kit`: one of each survival good and both new stations in
+    /// the pack (`survival-mode` 4.10, a capture instrument).
+    pub survival_kit: bool,
+    /// `--lay-weapons <m>`: each weapon laid as a drop in a row that far
+    /// ahead (`survival-mode` 4.10, a capture instrument).
+    pub lay_weapons: Option<f32>,
     /// `--pitch <degrees>` starts the walker looking that far below (negative)
     /// or above the horizon. A capture that digs along the look needs to look
     /// DOWN to dig a pit the way a player does - a slanted run of cells, each
@@ -651,6 +658,8 @@ impl Launch {
             pick_fruit: None,
             pick_glow: None,
             hold: None,
+            survival_kit: false,
+            lay_weapons: None,
             pitch: None,
             yaw: None,
             turn: 0.0,
@@ -994,6 +1003,17 @@ impl Launch {
                             .cloned()
                             .expect("--hold takes an item: block:torch, glowing-mushroom"),
                     );
+                }
+                "--survival-kit" => result.survival_kit = true,
+                "--lay-weapons" => {
+                    i += 1;
+                    result.lay_weapons = Some(
+                        args.get(i)
+                            .and_then(|m| m.parse().ok())
+                            .filter(|m: &f32| m.is_finite() && *m > 0.0)
+                            .expect("--lay-weapons takes metres ahead"),
+                    );
+                    result.walk = true;
                 }
                 "--pick-trees" => {
                     result.take_trees = true;
@@ -2389,6 +2409,8 @@ pub fn run(args: &[String]) {
             (pbd_app::kitchen::refresh_effects, kitchen::show_effects),
             kitchen::scripted.after(farm::scripted),
             glow_plants::hold_script.run_if(pbd_app::loading::ready),
+            (survival_kit::give_kit, survival_kit::lay_weapons)
+                .run_if(pbd_app::loading::ready),
             (farm::show, farm::show_note),
             farm::scripted.after(digging::scripted_dig),
             farm::scripted_gather.after(digging::scripted_dig),

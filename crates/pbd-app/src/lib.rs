@@ -105,6 +105,8 @@ pub mod vehicles;
 pub mod walking;
 pub mod water_flow;
 #[cfg(feature = "desktop")]
+pub mod weapon_models;
+#[cfg(feature = "desktop")]
 pub mod weather;
 pub mod world_map;
 

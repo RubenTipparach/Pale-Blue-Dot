@@ -190,4 +190,13 @@
             ease_hz: 6.0,
         ),
     ),
+    // A weapon in hand (`survival-mode` design 16): the held items' pose,
+    // the torch's hold a little lower and further out, at rest with a
+    // breath; its swings wait on their mockup (task 1.6).
+    weapon: (
+        hold: (grip: (0.26, -0.3, -0.56), up: (-0.18, 1.0, -0.42)),
+        // A spear leant forward, its head ahead of the eye.
+        spear_up: (-0.22, 0.62, -1.0),
+        breathe_m: 0.003,
+    ),
 )
