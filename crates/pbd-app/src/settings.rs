@@ -45,8 +45,9 @@ use std::time::{Duration, Instant};
 /// had; version 10 added `shadows` (`shadow-quality`), which an older file
 /// reads as the new default, LOW (owner, 2026-11-17: "reduce to 2? 1024");
 /// version 11 added `antialiasing` (`smaa-option`), which an older file
-/// reads as off, the look it had.
-pub const VERSION: u32 = 11;
+/// reads as off, the look it had; version 12 added `time_controls`
+/// (`time-speed`), which an older file reads as off.
+pub const VERSION: u32 = 12;
 
 /// The five sound volumes (`audio-and-ambience` design section 2), each a
 /// whole percent 0..=100 in steps of 10. 0 is silent.
@@ -200,6 +201,10 @@ pub struct PlayerSettings {
     /// water's passes. Off by default (owner, 2026-11-20: "but have it be a
     /// toggle").
     pub antialiasing: bool,
+    /// The DEBUG page's time controls (`time-speed`; owner, 2026-11-26: "a
+    /// debug menu where this is toggled off by default but can be toggled
+    /// on for test"): the speeds, the jumps ahead and the held brackets.
+    pub time_controls: bool,
 }
 
 /// A new player's settings, the owner's choice (2026-11-13, "default to
@@ -219,6 +224,7 @@ impl Default for PlayerSettings {
             reflections: Reflections::High,
             shadows: crate::config::ShadowQuality::Low,
             antialiasing: false,
+            time_controls: false,
         }
     }
 }
@@ -247,6 +253,7 @@ impl PlayerSettings {
         reflections: Reflections::High,
         shadows: crate::config::ShadowQuality::Ultra,
         antialiasing: false,
+        time_controls: false,
     };
 }
 
@@ -268,6 +275,7 @@ struct File {
     reflections: Reflections,
     shadows: crate::config::ShadowQuality,
     antialiasing: bool,
+    time_controls: bool,
     /// Slot name to key name (`controls::KeyBinds::to_names`).
     keys: BTreeMap<String, String>,
 }
@@ -288,6 +296,7 @@ impl Default for File {
             reflections: base.reflections,
             shadows: base.shadows,
             antialiasing: base.antialiasing,
+            time_controls: base.time_controls,
             keys: BTreeMap::new(),
         }
     }
@@ -333,6 +342,7 @@ impl PlayerSettings {
             reflections: file.reflections,
             shadows: file.shadows,
             antialiasing: file.antialiasing,
+            time_controls: file.time_controls,
         };
         let (keys, skipped) = KeyBinds::from_names(&file.keys);
         for rebind in skipped {
@@ -357,6 +367,7 @@ impl PlayerSettings {
                 reflections: self.reflections,
                 shadows: self.shadows,
                 antialiasing: self.antialiasing,
+                time_controls: self.time_controls,
                 keys: keys.to_names(),
             },
             ron::ser::PrettyConfig::default(),
@@ -405,6 +416,7 @@ impl PlayerSettings {
             reflections: overrides.reflections.unwrap_or(self.reflections),
             shadows: overrides.shadows.unwrap_or(self.shadows),
             antialiasing: overrides.antialiasing.unwrap_or(self.antialiasing),
+            time_controls: self.time_controls,
         }
     }
 }
@@ -972,6 +984,7 @@ mod tests {
                 shadows: crate::config::ShadowQuality::Low,
                 // Version 11's: off, the look it had.
                 antialiasing: false,
+                time_controls: false,
             }
         );
         assert!(
@@ -1116,6 +1129,7 @@ mod tests {
             reflections: Reflections::Medium,
             shadows: crate::config::ShadowQuality::Low,
             antialiasing: true,
+            time_controls: false,
         };
         let mut keys = KeyBinds::default();
         let roll = crate::controls::slots()
@@ -1401,6 +1415,7 @@ mod tests {
             reflections: Reflections::High,
             shadows: crate::config::ShadowQuality::Low,
             antialiasing: false,
+            time_controls: false,
         };
         let flags = Overrides {
             render_scale: Some(100),
@@ -1448,6 +1463,7 @@ mod tests {
         let mut app = App::new();
         app.insert_resource(PlayerSettings {
             antialiasing: true,
+            time_controls: false,
             ..PlayerSettings::ISOLATED
         })
         .add_systems(Update, follow_antialiasing);

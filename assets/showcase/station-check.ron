@@ -1,0 +1,80 @@
+// MEASUREMENT (`station-models` 2.1): the trunk played as
+// `phase-1-trunk` plays it, with close-up stills of the workbench and the
+// chest the moment each is set down, then by night.
+(
+    goal: "Goal: set down a workbench and a chest",
+    at: Some((11.5085, -25.0992)),
+    hour: 10.0,
+    shots: [
+        (
+            caption: "Gather by hand: stones and fibre off the ground with F, then soil",
+            until: ["gather"],
+            max_s: 240.0,
+            acts: [Focus("gather"), PickUp(Have("fibre", 8)), PickUp(Have("stone", 9)), Dig(Mission("gather"), 2)],
+        ),
+        (
+            caption: "Open your pack with Tab",
+            until: ["pack"],
+            max_s: 30.0,
+            acts: [Focus("pack"), Pack(3.0)],
+        ),
+        (
+            caption: "Craft an axe: a branch pulled from a tree, then the pack's Craft row",
+            until: ["axe"],
+            max_s: 90.0,
+            acts: [Focus("axe"), Chop(Have("log", 1)), Craft("stone-axe", 1)],
+        ),
+        (
+            caption: "Gather wood: fell trees with the axe",
+            until: ["wood"],
+            max_s: 240.0,
+            acts: [Focus("wood"), Hand("axe"), Chop(Mission("wood"))],
+        ),
+        (
+            caption: "Make planks and rope",
+            until: ["planks-rope"],
+            max_s: 240.0,
+            acts: [Focus("planks-rope"), Craft("planks", 2), Hand("hand"), PickUp(Have("fibre", 6)), Craft("rope", 2)],
+        ),
+        (
+            caption: "Build a crafting bench",
+            until: ["crafting-table"],
+            max_s: 90.0,
+            acts: [Focus("crafting-table"), Craft("workbench", 1), Place("block:workbench")],
+        ),
+        (
+            caption: "The workbench, close up",
+            max_s: 60.0,
+            acts: [Look(0.0, -32.0, 1.0), Wait(2.0), Still, Look(35.0, -24.0, 1.0), Wait(1.0), Still, Look(-35.0, -10.0, 1.0)],
+        ),
+        (
+            caption: "Stone tools at the bench",
+            until: ["stone-tools"],
+            max_s: 300.0,
+            acts: [Focus("stone-tools"), Craft("planks", 1), Dig(Have("stone", 6), 2), Bench("stone-shovel", 1), Bench("stone-pickaxe", 1)],
+        ),
+        (
+            caption: "Make a fire, and set it down by the water",
+            until: ["fire"],
+            max_s: 300.0,
+            acts: [Focus("fire"), Hand("axe"), Chop(Have("log", 2)), Hand("shovel"), Dig(Have("stone", 5), 2), Craft("campfire", 1), Shore, Place("block:campfire")],
+        ),
+        (
+            caption: "A chest: make it at the bench, set it down, store soil in it",
+            until: ["storage"],
+            max_s: 300.0,
+            acts: [Focus("storage"), Hand("axe"), Chop(Have("log", 3)), Craft("planks", 3), Bench("wood-chest", 1), Hand("hand"), Place("block:chest")],
+        ),
+        (
+            caption: "The chest, close up",
+            max_s: 60.0,
+            acts: [Look(0.0, -32.0, 1.0), Wait(2.0), Still, Look(35.0, -24.0, 1.0), Wait(1.0), Still, Look(-35.0, -10.0, 1.0)],
+        ),
+        (
+            caption: "By night",
+            max_s: 200.0,
+            rate: Some(60.0),
+            acts: [Hour(21.5), Wait(2.0), Still, Look(30.0, -25.0, 1.0), Wait(1.0), Still],
+        ),
+    ],
+)

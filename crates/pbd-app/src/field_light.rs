@@ -743,6 +743,11 @@ fn world_bounds(transform: &GlobalTransform, aabb: Option<&Aabb>) -> (Vec3, Vec3
 /// asked again only when the mesh moves, the field only when it changes.
 struct Corners {
     raw: [Vec3; 8],
+    /// Each corner's ground (its radius) and where it was asked: the
+    /// generator is asked again only once the corner has gone `GROUND_REASK_M`
+    /// from there (`memory-leak`, towns at 60 fps: asked every frame for every
+    /// moving townsperson's corners it was most of a town's frame).
+    ground: [(Vec3, f32); 8],
     points: [Vec3; 8],
     key: (usize, u64, bool),
     sky: [Vec4; 2],
@@ -773,6 +778,10 @@ impl Corners {
         )
     }
 }
+
+/// How far a mesh's corner goes before its ground is asked again, m. The
+/// ground stands in whole metres on cells 2.8 m across.
+const GROUND_REASK_M: f32 = 0.25;
 
 /// Sample the field at every field-lit mesh's eight corners, each frame
 /// (`lamps-and-lanterns` decision 2), and write its row. A mesh that has not
@@ -848,6 +857,9 @@ fn light_from_the_field(
     // it rewrote, each frame it passes 2 ms.
     let started = std::time::Instant::now();
     let (mut seen, mut rewritten) = (0usize, 0usize);
+    // MEASUREMENT (`memory-leak`, towns at 60 fps): corners re-read because
+    // the mesh moved, and because the field changed under a still one.
+    let (mut read_moved, mut read_relit) = (0usize, 0usize);
     // MEASUREMENT (`baked-light-ease`): still meshes whose corners a new
     // field moved this frame, and the most any corner moved.
     let mut corners_moved = (0usize, 0.0f32);
@@ -872,6 +884,7 @@ fn light_from_the_field(
         let entry = cache.entry(entity).or_insert_with(|| Corners {
             // NaN is never near, so the first frame reads everything.
             raw: [Vec3::NAN; 8],
+            ground: [(Vec3::NAN, 0.0); 8],
             points: raw,
             key,
             sky: [Vec4::ONE; 2],
@@ -887,7 +900,11 @@ fn light_from_the_field(
             .all(|(a, b)| (*a - *b).abs().max_element() <= 1e-3);
         if !still {
             entry.raw = raw;
+            let mut k = 0;
+            let ground = &mut entry.ground;
             entry.points = raw.map(|mut at| {
+                let corner = k;
+                k += 1;
                 // A town's mesh spans the town, and its box, square to the
                 // render frame's axes, reaches into the ground wherever the
                 // town's up is tilted from them: at Theringford two corners
@@ -896,11 +913,15 @@ fn light_from_the_field(
                 // reads the field just over it instead: the town stands on
                 // the ground, never in it.
                 if like_terrain && let Some(up) = at.try_normalize() {
-                    let ground = PLANET_RADIUS
-                        + pbd_core::column::surface_m(crate::planet::terrain_config(), up)
-                        + GROUND_CLEAR_M;
-                    if at.length() < ground {
-                        at = up * ground;
+                    let (asked_at, radius) = &mut ground[corner];
+                    if !(asked_at.distance(at) <= GROUND_REASK_M) {
+                        *asked_at = at;
+                        *radius = PLANET_RADIUS
+                            + pbd_core::column::surface_m(crate::planet::terrain_config(), up)
+                            + GROUND_CLEAR_M;
+                    }
+                    if at.length() < *radius {
+                        at = up * *radius;
                     }
                 }
                 at
@@ -908,6 +929,11 @@ fn light_from_the_field(
         }
         if !still || entry.key != key {
             let relit = still && entry.key != key;
+            if relit {
+                read_relit += 1;
+            } else {
+                read_moved += 1;
+            }
             // What is on screen now, which a new field under a still mesh
             // blends from (`baked-light-ease` 7.6).
             let was = entry.shown(now_s);
@@ -987,7 +1013,9 @@ fn light_from_the_field(
         );
     }
     crate::planet::lod::spent(
-        &format!("field corners: {seen} meshes, {rewritten} rows rewritten"),
+        &format!(
+            "field corners: {seen} meshes, {rewritten} rows rewritten, read {read_moved} moved {read_relit} relit"
+        ),
         started,
     );
 }
@@ -1160,10 +1188,19 @@ pub struct BakedField {
     bounds: Option<(Vec3, f32)>,
     /// A bake being made a slice a frame, swapped in whole when done.
     pending: Option<PendingBake>,
+    /// The ground under each vertex's bake point (its radius), asked of the
+    /// generator once: a town's outside does not move, and it is baked again
+    /// on every set that lands (`memory-leak`, towns at 60 fps).
+    ground: Vec<f32>,
     /// When the bake it carries was swapped in, seconds of the app's clock:
     /// it blends from the one before it (its vertex colour) from then
     /// (`baked-light-ease` 7.4). None before its first.
     swapped_s: Option<f32>,
+    /// Where its bake read the field, and a digest of what the field held
+    /// there (`memory-leak` cut 9): a set that lands with the same digest
+    /// leaves the bake as it is.
+    probes: Vec<(Vec3, u16)>,
+    digest: Option<u64>,
 }
 
 impl BakedField {
@@ -1189,6 +1226,26 @@ pub enum BakeSource {
 struct PendingBake {
     source: BakeSource,
     done: Vec<[f32; 2]>,
+    /// Each finest cell and lower layer the bake has read, by the cell's
+    /// key: one direction into it.
+    probes: std::collections::HashMap<(u32, u16), Vec3>,
+}
+
+/// The lower of the two layers `light::sample` reads between at `point`.
+fn probe_layer(point: Vec3) -> u16 {
+    let layer = point.length() - PLANET_RADIUS - pbd_core::column::BASE_M as f32;
+    (layer - 0.5)
+        .floor()
+        .clamp(0.0, (pbd_core::column::LAYERS - 1) as f32) as u16
+}
+
+/// The digest of what the field holds at a town's probes under this set.
+fn probes_digest(fine: &PlanetFine, contact: &PlanetContact, probes: &[(Vec3, u16)]) -> u64 {
+    let at: Vec<(Option<usize>, u16)> = probes
+        .iter()
+        .map(|&(dir, lo)| (contact.finest_cell(dir), lo))
+        .collect();
+    fine.set.columns.light_digest(&at)
 }
 
 /// What a town's outside reads before it is baked: the shader takes the
@@ -1312,23 +1369,9 @@ fn bake_town_outsides(
         fine.set.columns.light_version(),
     );
     let config = crate::planet::terrain_config();
-    let field = |at: Vec3| {
-        let Some(up) = at.try_normalize() else {
-            return (1.0, 0.0);
-        };
-        let ground = PLANET_RADIUS + pbd_core::column::surface_m(config, up) + GROUND_CLEAR_M;
-        field_at(
-            &fine,
-            &contact,
-            if at.length() < ground {
-                up * ground
-            } else {
-                at
-            },
-        )
-    };
     let started = std::time::Instant::now();
     let mut baked_vertices = 0usize;
+    let mut kept = 0usize;
     for (mesh, mut state) in &mut outsides {
         let state = &mut *state;
         // What this town's light comes from under this set.
@@ -1360,7 +1403,22 @@ fn bake_town_outsides(
             state.pending = None;
             continue;
         }
-        let Some(m) = meshes.get_mut(&mesh.0) else {
+        // The light where it reads unchanged under this set: the bake it
+        // carries is what a new one would be.
+        if let (BakeSource::Field(..), Some(digest)) = (want, state.digest)
+            && matches!(state.baked, Some(BakeSource::Field(..)))
+            && !state.probes.is_empty()
+            && probes_digest(&fine, &contact, &state.probes) == digest
+        {
+            state.baked = Some(want);
+            state.pending = None;
+            kept += 1;
+            continue;
+        }
+        // Read, not written, until a bake is swapped in (`memory-leak` cut
+        // 7): a mesh taken mutably is a changed mesh, and Bevy uploads the
+        // whole town to the GPU again, every frame a bake was in progress.
+        let Some(m) = meshes.get(&mesh.0) else {
             continue;
         };
         let Some(count) = m.attribute(Mesh::ATTRIBUTE_POSITION).map(|a| a.len()) else {
@@ -1370,7 +1428,9 @@ fn bake_town_outsides(
             // Open sky everywhere: no field to read, nothing to slice.
             let open = vec![[1.0f32, 0.0]; count];
             log_bake_change(frame, true, uv_1(m), &open);
-            swap_bake(m, state, open, now_s);
+            if let Some(m) = meshes.get_mut(&mesh.0) {
+                swap_bake(m, state, open, now_s);
+            }
             state.baked = Some(BakeSource::Open);
             state.pending = None;
             continue;
@@ -1390,31 +1450,76 @@ fn bake_town_outsides(
             state.pending = Some(PendingBake {
                 source: want,
                 done: Vec::with_capacity(count),
+                probes: Default::default(),
             });
         }
         let Some(pending) = state.pending.as_mut() else {
             continue;
         };
+        if state.ground.len() != count {
+            state.ground = vec![f32::NAN; count];
+        }
+        let ground = &mut state.ground;
         while pending.done.len() < count && started.elapsed() < BAKE_BUDGET {
             let from = pending.done.len();
             let to = (from + BAKE_SLICE).min(count);
-            pending.done.extend(bake_vertices(
-                &positions[from..to],
-                &normals[from..to],
-                field,
-            ));
+            for i in from..to {
+                let at = Vec3::from(positions[i]) + Vec3::from(normals[i]) * BAKE_FRONT_M;
+                let Some(up) = at.try_normalize() else {
+                    pending.done.push([1.0, 0.0]);
+                    continue;
+                };
+                if ground[i].is_nan() {
+                    ground[i] =
+                        PLANET_RADIUS + pbd_core::column::surface_m(config, up) + GROUND_CLEAR_M;
+                }
+                let at = if at.length() < ground[i] {
+                    up * ground[i]
+                } else {
+                    at
+                };
+                let (sky, block) = field_at(&fine, &contact, at);
+                pending.done.push([sky, block]);
+                if let Some(dir) = at.try_normalize()
+                    && let Some(record) = contact.finest_cell(dir)
+                    && let Some(cell) = fine.set.finest_records().get(record)
+                {
+                    pending
+                        .probes
+                        .entry((cell.key(), probe_layer(at)))
+                        .or_insert(dir);
+                }
+            }
             baked_vertices += to - from;
         }
         if pending.done.len() == count {
             let done = std::mem::take(&mut pending.done);
+            let mut probes: Vec<(Vec3, u16)> = pending
+                .probes
+                .drain()
+                .map(|((_, lo), dir)| (dir, lo))
+                .collect();
+            // In a fixed order, so the same probes give the same digest.
+            probes.sort_by(|a, b| {
+                (a.1, a.0.x, a.0.y, a.0.z)
+                    .partial_cmp(&(b.1, b.0.x, b.0.y, b.0.z))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            state.digest = Some(probes_digest(&fine, &contact, &probes));
+            state.probes = probes;
             state.pending = None;
             log_bake_change(frame, false, uv_1(m), &done);
-            swap_bake(m, state, done, now_s);
+            if let Some(m) = meshes.get_mut(&mesh.0) {
+                swap_bake(m, state, done, now_s);
+            }
             state.baked = Some(want);
         }
     }
     if baked_vertices > 0 {
         crate::planet::lod::spent(&format!("town bake: {baked_vertices} vertices"), started);
+    }
+    if kept > 0 {
+        crate::planet::lod::spent(&format!("town bake kept: {kept} towns"), started);
     }
 }
 
@@ -1657,6 +1762,7 @@ mod tests {
         let ease = light::BAKE_EASE_S;
         let mut corners = Corners {
             raw: [Vec3::ZERO; 8],
+            ground: [(Vec3::NAN, 0.0); 8],
             points: [Vec3::ZERO; 8],
             key: (0, 0, false),
             sky: [Vec4::ONE; 2],

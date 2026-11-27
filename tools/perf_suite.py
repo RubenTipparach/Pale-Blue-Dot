@@ -81,13 +81,21 @@ SCENARIOS = {
     "cascade": ["--walk", "--at", "23.2255", "-3.012", "--yaw", "0", "--pitch", "-10", "--stand", "45"],
     "cascade-walk": ["--walk", "--at", "23.2255", "-3.012", "--yaw", "0", "--pitch", "-10",
                      "--walk-distance", "250"],
+    # A regular playthrough (`river-hitches`; owner, 2026-11-26: "maybe
+    # introduce regular playthrough with ui and stuff"): from a fresh world
+    # at the owner's river, the starter missions with the tracker up, the
+    # pack, the map, crafting and chopping, then on into a town.
+    "play": ["--showcase", "play-soak"],
+    # The owner's river walked 1 km (`river-hitches`): a landing every ~45 m.
+    "river-walk": ["--walk", "--at", "19.25", "-6.75", "--walk-distance", "1000"],
 }
 DONE = {"clouds": "ROUTE_COMPLETE", "storm": "ROUTE_COMPLETE", "cloud-hop": "ROUTE_COMPLETE", "far-side": "ROUTE_COMPLETE", "walk": "WALK_DONE", "rain-stroll": "STROLL_DONE",
         "town": "WALK_DONE",
+        "play": "SHOWCASE_DONE", "river-walk": "WALK_DONE",
         "pour": "POUR_DONE", "cascade": "STAND_DONE", "cascade-walk": "WALK_DONE"}
 # A scenario whose hard part starts on a line of its own: sampled from that
 # line (no further warm-up) to its DONE line, not from the ready line.
-START = {"pour": "POUR_START"}
+START = {"pour": "POUR_START", "play": "SHOWCASE_START"}
 WANT_MS = 1000 / 120
 FLOOR_MS = 1000 / 60
 ANSI = re.compile(r"\x1b\[[0-9;]*m")

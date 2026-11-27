@@ -1,0 +1,71 @@
+// MEASUREMENT (`memory-leak`): back and forth between two towns that are
+// each other's nearest (owner, 2026-11-25: "route between two towns. Walk
+// back and forth between them"). Start at Holbrook, `--at 29.5703 1.36795`;
+// Linenleigh is 518 m off. Run with `PBD_MEMORY_TRACE` and `--frame-log`.
+(
+    goal: "Goal: walk between two towns, there and back, for half an hour",
+    at: None,
+    hour: 10.0,
+    shots: [
+        (
+            caption: "Walk to the other town and look round it (1 of 12)",
+            max_s: 900.0,
+            acts: [Seek("other-town"), Talk(1)],
+        ),
+        (
+            caption: "Walk to the other town and look round it (2 of 12)",
+            max_s: 900.0,
+            acts: [Seek("other-town"), Talk(1)],
+        ),
+        (
+            caption: "Walk to the other town and look round it (3 of 12)",
+            max_s: 900.0,
+            acts: [Seek("other-town"), Talk(1)],
+        ),
+        (
+            caption: "Walk to the other town and look round it (4 of 12)",
+            max_s: 900.0,
+            acts: [Seek("other-town"), Talk(1)],
+        ),
+        (
+            caption: "Walk to the other town and look round it (5 of 12)",
+            max_s: 900.0,
+            acts: [Seek("other-town"), Talk(1)],
+        ),
+        (
+            caption: "Walk to the other town and look round it (6 of 12)",
+            max_s: 900.0,
+            acts: [Seek("other-town"), Talk(1)],
+        ),
+        (
+            caption: "Walk to the other town and look round it (7 of 12)",
+            max_s: 900.0,
+            acts: [Seek("other-town"), Talk(1)],
+        ),
+        (
+            caption: "Walk to the other town and look round it (8 of 12)",
+            max_s: 900.0,
+            acts: [Seek("other-town"), Talk(1)],
+        ),
+        (
+            caption: "Walk to the other town and look round it (9 of 12)",
+            max_s: 900.0,
+            acts: [Seek("other-town"), Talk(1)],
+        ),
+        (
+            caption: "Walk to the other town and look round it (10 of 12)",
+            max_s: 900.0,
+            acts: [Seek("other-town"), Talk(1)],
+        ),
+        (
+            caption: "Walk to the other town and look round it (11 of 12)",
+            max_s: 900.0,
+            acts: [Seek("other-town"), Talk(1)],
+        ),
+        (
+            caption: "Walk to the other town and look round it (12 of 12)",
+            max_s: 900.0,
+            acts: [Seek("other-town"), Talk(1)],
+        ),
+    ],
+)

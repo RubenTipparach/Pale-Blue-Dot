@@ -1,0 +1,30 @@
+// MEASUREMENT (`memory-leak`, towns at 60 fps): stand in Holbrook and turn
+// a full circle, 30 degrees at a time, four seconds a heading, to find what
+// the GPU's terrain pass costs by where the camera looks.
+(
+    goal: "Goal: turn a full circle in town",
+    at: None,
+    hour: 10.0,
+    shots: [
+        (
+            caption: "Turn a full circle",
+            max_s: 200.0,
+            acts: [
+                Wait(30.0),
+                Look(30.0, 0.0, 1.0), Wait(4.0),
+                Look(30.0, 0.0, 1.0), Wait(4.0),
+                Look(30.0, 0.0, 1.0), Wait(4.0),
+                Look(30.0, 0.0, 1.0), Wait(4.0),
+                Look(30.0, 0.0, 1.0), Wait(4.0),
+                Look(30.0, 0.0, 1.0), Wait(4.0),
+                Look(30.0, 0.0, 1.0), Wait(4.0),
+                Look(30.0, 0.0, 1.0), Wait(4.0),
+                Look(30.0, 0.0, 1.0), Wait(4.0),
+                Look(30.0, 0.0, 1.0), Wait(4.0),
+                Look(30.0, 0.0, 1.0), Wait(4.0),
+                Look(30.0, 0.0, 1.0), Wait(4.0),
+                Wait(30.0),
+            ],
+        ),
+    ],
+)

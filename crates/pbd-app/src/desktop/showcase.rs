@@ -437,6 +437,17 @@ struct Bot {
     /// Live control (`bot-control`): paused, presses nothing; acts queued
     /// by `do`, run before the shot's own.
     paused: bool,
+    /// The player has the controls (`bot-control` design 4, Ctrl+Shift+F):
+    /// the bot reads nothing and presses nothing, not even key-ups, until
+    /// the same keys give it back, when it starts its act over from where
+    /// the player left it.
+    taken: bool,
+    /// The player's own Ctrl and Shift, read from the keyboard's events: the
+    /// bot presses and releases Left Shift in the game's input every frame
+    /// (it sprints), which wiped out a player's held Shift, so Ctrl+Shift+F
+    /// never reached it.
+    real_ctrl: bool,
+    real_shift: bool,
     injected: std::collections::VecDeque<file::Act>,
     /// The shot file's last change seen, and when it was last looked at:
     /// an edit is played at once (`bot-control` hot reload).
@@ -2924,6 +2935,8 @@ pub fn tally(
 #[derive(bevy::ecs::system::SystemParam)]
 pub struct Hands<'w, 's> {
     keys: ResMut<'w, ButtonInput<KeyCode>>,
+    /// The keyboard's own events, which the bot never writes.
+    real: MessageReader<'w, 's, bevy::input::keyboard::KeyboardInput>,
     mouse: ResMut<'w, ButtonInput<MouseButton>>,
     motion: ResMut<'w, AccumulatedMouseMotion>,
     wheel: MessageWriter<'w, MouseWheel>,
@@ -3021,6 +3034,19 @@ pub struct World<'w, 's> {
 
 /// The bot's frame: look, decide, press.
 #[allow(clippy::too_many_arguments)]
+/// The bot's time this frame, ms, as f64 bits: read by the frame log.
+pub static BOT_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+struct BotTimer(std::time::Instant);
+impl Drop for BotTimer {
+    fn drop(&mut self) {
+        BOT_MS.store(
+            (self.0.elapsed().as_secs_f64() * 1e3).to_bits(),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+    }
+}
+
 pub fn drive(
     mut commands: Commands,
     mut player: ResMut<Player>,
@@ -3031,6 +3057,10 @@ pub fn drive(
     mut exit: MessageWriter<AppExit>,
     control: Option<Res<control::Control>>,
 ) {
+    // MEASUREMENT (`memory-leak`): the bot's own time on the main thread,
+    // into the frame log's `bot_ms`, so a run's frames can be read with the
+    // measuring instrument's cost taken out.
+    let _bot_timer = BotTimer(std::time::Instant::now());
     let live = control.is_some();
     let player = &mut *player;
     let bot = &mut player.bot;
@@ -3361,6 +3391,33 @@ pub fn drive(
         }
     }
     let bot = &mut player.bot;
+    // Ctrl+Shift+F: the player takes the controls, or gives them back.
+    let mut toggle = false;
+    for event in hands.real.read() {
+        let down = event.state == bevy::input::ButtonState::Pressed;
+        match event.key_code {
+            KeyCode::ControlLeft | KeyCode::ControlRight => bot.real_ctrl = down,
+            KeyCode::ShiftLeft | KeyCode::ShiftRight => bot.real_shift = down,
+            KeyCode::KeyF if down && !event.repeat && bot.real_ctrl && bot.real_shift => {
+                toggle = true;
+            }
+            _ => {}
+        }
+    }
+    if toggle {
+        hands.keys.clear_just_pressed(KeyCode::KeyF);
+        bot.taken = !bot.taken;
+        if bot.taken {
+            info!("BOT_CONTROL taken by the player");
+            apply(bot, &mut hands, &w, &mut pending, Intent::default());
+        } else {
+            info!("BOT_CONTROL given back to the bot");
+            bot.reset_act(&sight);
+        }
+    }
+    if bot.taken {
+        return;
+    }
     // Paused: nothing pressed, every held key up, the clocks stopped.
     if bot.paused {
         apply(bot, &mut hands, &w, &mut pending, Intent::default());
@@ -5847,6 +5904,10 @@ fn key_named(name: &str) -> Option<KeyCode> {
         "E" => KeyCode::KeyE,
         "Q" => KeyCode::KeyQ,
         "Space" => KeyCode::Space,
+        "O" => KeyCode::KeyO,
+        "M" => KeyCode::KeyM,
+        "Tab" => KeyCode::Tab,
+        "Escape" => KeyCode::Escape,
         _ => return None,
     })
 }
@@ -5857,6 +5918,18 @@ fn key_named(name: &str) -> Option<KeyCode> {
 /// dry ground of the climate asked.
 fn seek_target(kind: &str, s: &Sight) -> Option<Vec3> {
     use pbd_core::farming::Climate;
+    // The nearest town but the one the bot is in: walked twice, there and
+    // back between a pair that are each other's nearest (`memory-leak`,
+    // the town route; owner, 2026-11-25: "route between two towns").
+    if kind == "other-town" {
+        let near = super::missions::TOWN_NEAR_M / PLANET_RADIUS;
+        return s
+            .towns
+            .iter()
+            .copied()
+            .filter(|t| t.distance(s.up) > near)
+            .min_by(|a, b| a.distance(s.up).total_cmp(&b.distance(s.up)));
+    }
     if kind == "town" {
         return s
             .towns
@@ -6423,7 +6496,7 @@ fn leg_toward(s: &Sight, d: Vec3, max_m: f32) -> Vec3 {
 fn seek(bot: &mut Bot, kind: &str, s: &Sight, out: &mut Intent) -> Status {
     if !matches!(
         kind,
-        "hot" | "desert" | "temperate" | "cold" | "reef" | "town"
+        "hot" | "desert" | "temperate" | "cold" | "reef" | "town" | "other-town"
     ) {
         return Status::Fail(format!("no place kind {kind}"));
     }
@@ -6446,7 +6519,7 @@ fn seek(bot: &mut Bot, kind: &str, s: &Sight, out: &mut Intent) -> Status {
     let d = at.normalize_or(s.up);
     let off = d.distance(s.up) * PLANET_RADIUS;
     match kind {
-        "town" => {
+        "town" | "other-town" => {
             let leg = leg_toward(s, d, 120.0);
             if off < super::missions::TOWN_NEAR_M * 0.5
                 || (bot.walk_to(s, out, leg, super::missions::TOWN_NEAR_M * 0.5) == Walked::There

@@ -1,0 +1,25 @@
+// MEASUREMENT (`station-models` 2.1): from a world whose trunk is played to
+// the storage mission, the chest made at the workbench, set down and looked
+// at close up, then by night.
+(
+    goal: "Goal: set down a chest",
+    hour: 11.0,
+    shots: [
+        (
+            caption: "A chest made at the bench and set down",
+            max_s: 400.0,
+            acts: [Hand("axe"), Chop(Have("log", 4)), Hand("hand"), Craft("planks", 4), Craft("workbench", 1), Wait(5.0), Look(120.0, -20.0, 1.0), Place("block:workbench"), Bench("wood-chest", 1), Hand("hand"), Look(-60.0, -20.0, 1.0), Place("block:chest")],
+        ),
+        (
+            caption: "The chest, close up",
+            max_s: 60.0,
+            acts: [Look(0.0, -35.0, 1.0), Wait(2.0), Still, Look(-30.0, -28.0, 1.0), Wait(1.0), Still],
+        ),
+        (
+            caption: "By night",
+            max_s: 200.0,
+            rate: Some(60.0),
+            acts: [Look(30.0, -30.0, 1.0), Hour(21.5), Wait(2.0), Still],
+        ),
+    ],
+)

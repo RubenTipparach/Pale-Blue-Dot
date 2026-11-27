@@ -1,0 +1,15 @@
+// MEASUREMENT (ocean-environments B26): from a world with a rod and bait, a
+// line cast over the water at night, for stills taken through the control
+// port.
+(
+    goal: "Goal: fish at night",
+    hour: 12.0,
+    shots: [
+        (
+            caption: "Night fishing",
+            max_s: 300.0,
+            rate: Some(60.0),
+            acts: [Shore, Hour(22.5), Hand("rod"), Fish(Times(3))],
+        ),
+    ],
+)

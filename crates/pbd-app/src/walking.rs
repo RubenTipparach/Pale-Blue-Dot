@@ -104,6 +104,10 @@ pub(crate) struct Meets<'a> {
     /// towns' pieces.
     pub people: Option<&'a crate::townsfolk::TownsfolkSolids>,
     pub origin: SimOrigin,
+    /// The pieces near the body, picked once a step: asked in place of
+    /// every town's, build's and road's (`memory-leak`, towns at 60 fps:
+    /// every probe of every sweep walked them all).
+    pub near: Option<&'a [(Piece, &'a BuildingSolids)]>,
 }
 
 impl Default for Meets<'_> {
@@ -114,6 +118,7 @@ impl Default for Meets<'_> {
             roads: None,
             people: None,
             origin: crate::sim_origin::SimFrame::default().0,
+            near: None,
         }
     }
 }
@@ -126,13 +131,46 @@ impl<'a> Meets<'a> {
             roads: world.get_resource::<crate::roads::RoadPieces>(),
             people: world.get_resource::<crate::townsfolk::TownsfolkSolids>(),
             origin: crate::sim_origin::origin_of(world),
+            near: None,
         }
+    }
+
+    /// Every piece whose plan reaches within `margin_m` of the planet point
+    /// `point`.
+    fn near_to(&self, point: DVec3, margin_m: f64) -> Vec<(Piece, &'a BuildingSolids)> {
+        self.all_pieces()
+            .filter(|(_, b, frame, local)| {
+                // Its own quick miss's measure: across its plan, whatever the
+                // height (`BuildingSolids::stand_in`).
+                let p = self.in_frame(frame, *local, point);
+                f64::from(Vec2::new(p.x, p.z).length()) <= f64::from(b.reach_m) + margin_m
+            })
+            .map(|(n, b, _, _)| (n, b))
+            .collect()
     }
 
     /// Each piece, the frame it is asked in, and whether that frame is a
     /// local one (none is, since the decks went: kept for a piece that
     /// moves again).
     fn pieces(&self) -> impl Iterator<Item = (Piece, &'a BuildingSolids, Frame, bool)> + use<'a> {
+        let near = self
+            .near
+            .into_iter()
+            .flatten()
+            .map(|&(n, b)| (n, b, b.frame, false));
+        let all = self
+            .near
+            .is_none()
+            .then(|| self.all_pieces())
+            .into_iter()
+            .flatten();
+        near.chain(all)
+    }
+
+    /// Every piece standing, wherever it is.
+    fn all_pieces(
+        &self,
+    ) -> impl Iterator<Item = (Piece, &'a BuildingSolids, Frame, bool)> + use<'a> {
         let towns = self.towns.into_iter().flat_map(move |s| {
             s.0.iter()
                 .enumerate()
@@ -193,7 +231,11 @@ impl<'a> Meets<'a> {
     /// The way out of the solid that holds a body at `centre`, along the
     /// ground: the face a refused move slides along.
     fn push_normal(&self, centre: DVec3) -> Option<Vec3> {
-        self.pieces()
+        // Every piece, in their order, never the near ones: it is asked only
+        // when a move is refused, and the first piece that answers is the
+        // face slid along (with the near pieces alone the bot's walk out of
+        // Holbrook stalled, `memory-leak`).
+        self.all_pieces()
             .find_map(|(_, b, frame, local)| {
                 b.push_normal_in(
                     self.in_frame(&frame, local, centre),
@@ -1900,6 +1942,16 @@ fn sweep(
     }
 }
 
+/// How far round the body a step's pieces are picked from, m: more than a
+/// step, its slides, the turned tries and the probes round the body reach.
+const NEAR_PIECES_M: f64 = 12.0;
+
+/// `PBD_NEAR_OFF` set: the ground check asks every piece (a measurement).
+fn near_off() -> bool {
+    static OFF: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *OFF.get_or_init(|| std::env::var_os("PBD_NEAR_OFF").is_some())
+}
+
 /// Swept support with a small capsule footprint, the towns' floors and
 /// stairs in it. A refused move slides: the part of it along the face is
 /// swept again, twice at most, for a corner (`tenebris-towns` section 4).
@@ -1937,14 +1989,29 @@ fn resolve_ground(
         }
         lift.0 = 0.0;
     }
-    let meets = Meets {
+    let every = Meets {
         towns: structures.as_deref(),
         builds: builds.as_deref(),
         roads: roads.as_deref(),
         people: people.as_deref(),
         origin: *o,
+        near: None,
     };
     for (mut position, mut velocity, mut ground) in &mut walkers {
+        // The pieces a step can meet: within `NEAR_PIECES_M` of where the
+        // body was and where it would go (a step is a few centimetres; the
+        // slides and the turned tries stay within a body's length of it).
+        let here = world_point(o, ground.previous);
+        let near = every.near_to(
+            here,
+            NEAR_PIECES_M + f64::from(ground.previous.distance(position.0)),
+        );
+        // MEASUREMENT (`memory-leak`): `PBD_NEAR_OFF` asks every piece, for
+        // an A/B of the near pieces in one exe.
+        let meets = Meets {
+            near: (!near_off()).then_some(&near[..]),
+            ..every
+        };
         if let Some(mut climb) = state.climb {
             climb.t = (climb.t + time.delta_secs() / config.water_climb_secs.max(1e-3)).min(1.0);
             position.0 = climb.at(o, climb.t);

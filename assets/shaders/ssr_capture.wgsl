@@ -20,10 +20,17 @@ struct SsrCapture {
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    let colour = textureSampleLevel(scene, scene_sampler, in.uv, 0.0).rgb;
     let size = vec2<f32>(textureDimensions(scene_depth));
     let coord = clamp(vec2<i32>(in.uv*size), vec2<i32>(0), vec2<i32>(size) - 1);
     let depth = textureLoad(scene_depth, coord, 0);
+    // Colour from the same whole pixel as the distance (`ocean-environments`
+    // B26): filtered, a texel took a thin bright thing's colour (a fishing
+    // line at night) with the distance of what lay behind it, and every
+    // reflected ray that met that distance came back the line's colour, a
+    // scatter of glints in the water round it.
+    let csize = vec2<f32>(textureDimensions(scene));
+    let ccoord = clamp(vec2<i32>(in.uv*csize), vec2<i32>(0), vec2<i32>(csize) - 1);
+    let colour = textureLoad(scene, ccoord, 0).rgb;
     // Reverse Z: nothing drawn (the sky) is zero, and stands for "too far to
     // hit", never a surface.
     if depth <= 1e-7 {

@@ -753,7 +753,9 @@ fn column_gap(neighbor: u32, g: u32) -> vec2<f32> {
 }
 
 struct VertexOut {
-    @builtin(position) clip: vec4<f32>,
+    // Invariant (`memory-leak` cut 6): the depth pass and the colour pass
+    // must put a pixel at the very same depth.
+    @builtin(position) @invariant clip: vec4<f32>,
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
@@ -3058,6 +3060,7 @@ fn tree_albedo_bare(input: VertexOut) -> vec3<f32> {
 fn tree_dropped(input: VertexOut) -> bool {
     let code = input.material & 0xffu;
     if code == IMPOSTOR_CODE && (impostor_pixel(input) >> 24u) < 128u { return true; }
+#ifndef SHADOW_NO_LEAF
     if code == TREE_LEAF_CODE {
         let sh = min((input.material >> SPECIES_SHIFT) & 0xfu, 8u)*KIT_SPECIES_WORDS;
         if !leaf_mask(input.uv, select(kit[sh + 2u], VINE_MASK, input.split.z > 0.5)) { return true; }
@@ -3066,6 +3069,7 @@ fn tree_dropped(input: VertexOut) -> bool {
             return true;
         }
     }
+#endif
     if (code >= TREE_BARK_CODE && code <= IMPOSTOR_CODE) || code == FRUIT_CODE {
         let f = input.height;
         let th = bayer4(input.clip.xy + vec2(1.0, 2.0)*input.split.x);
@@ -3112,6 +3116,9 @@ fn dropped(input: VertexOut) -> bool {
     // partition where its mask is under the dissolve's progress and the old
     // one elsewhere. Its own mask, interleaved gradient noise, so it does not
     // run in step with the distance cross-fade's.
+#ifdef SHADOW_NO_PART
+    return false;
+#endif
     let dissolve = fract(52.9829189*fract(dot(input.clip.xy, vec2<f32>(0.06711056, 0.00583715))));
     // The old half is drawn from the old set's own records, kept for the
     // dissolve (`two-set-dissolve`), so it is always there: no pixel has to
@@ -3704,7 +3711,9 @@ fn finish(lit: vec3<f32>, radial: vec3<f32>, toward_camera: vec3<f32>,
 
 @fragment
 fn shadow_fragment(input: VertexOut) {
+#ifndef SHADOW_FLAT
     if dropped(input) { discard; }
+#endif
 }
 
 @fragment

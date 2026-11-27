@@ -297,6 +297,15 @@ impl ViewNode for PlanetTerrainNode {
         world: &'w World,
     ) -> Result<(), NodeRunError> {
         let cache = world.resource::<PipelineCache>();
+        // With the depth pass on, the colour pass writes no depth: drawn
+        // without it, it would leave the terrain out of the depth buffer.
+        let depth_pipeline = match draw.depth {
+            None => None,
+            Some(id) => match cache.get_render_pipeline(id) {
+                Some(p) => Some(p),
+                None => return Ok(()),
+            },
+        };
         let (Some(pipeline), Some(maps), Some(shadows)) = (
             cache.get_render_pipeline(draw.pipeline),
             world.get_resource::<weather_maps::WeatherMapGpu>(),
@@ -340,6 +349,10 @@ impl ViewNode for PlanetTerrainNode {
                 occlusion_query_set: None,
             });
             let span = diagnostics.pass_span(&mut pass, "planet_terrain");
+            if let Some(depth_pipeline) = depth_pipeline {
+                pass.set_render_pipeline(depth_pipeline);
+                super::draw_terrain(&mut pass, view, maps, receiver);
+            }
             pass.set_render_pipeline(pipeline);
             super::draw_terrain(&mut pass, view, maps, receiver);
             span.end(&mut pass);

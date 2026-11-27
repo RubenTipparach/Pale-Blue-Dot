@@ -891,6 +891,7 @@ fn rebuild_shower(
     frame: Res<PlanetRenderFrame>,
     contact: Option<Res<PlanetContact>>,
     eye_water: Option<Res<crate::planet::EyeWaterState>>,
+    water_settings: Option<Res<crate::config::WaterSettings>>,
     mut meshes: ResMut<Assets<Mesh>>,
     cameras: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
     mut showers: Query<(Entity, &mut Transform, &Mesh3d, &mut Visibility), With<Shower>>,
@@ -921,11 +922,11 @@ fn rebuild_shower(
     // `Weather` so the lens and the shower cannot disagree about it.
     // Under a river or a pool too: the column's water at the eye
     // (`ocean-environments` B17).
-    let in_inland_water = eye_water
-        .as_deref()
-        .and_then(|e| crate::planet::inland_surface(e.0))
-        .is_some_and(|surface| radius < surface);
-    let submerged = (surface_height(up) < 0.0 && radius < PLANET_RADIUS) || in_inland_water;
+    let submerged = crate::planet::eye_under_water(
+        eye,
+        eye_water.as_deref(),
+        PLANET_RADIUS - water_settings.as_ref().map_or(0.5, |s| s.depth_offset_m),
+    );
     let drawn = radius >= 1.0
         && !submerged
         && !*SHOWER_OFF

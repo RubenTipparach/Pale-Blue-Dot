@@ -361,6 +361,22 @@ pub enum EyeWater {
 #[derive(Resource, Clone, Copy, Default, ExtractResource)]
 pub struct EyeWaterState(pub EyeWater);
 
+/// Whether the eye is under water: the column's water at the eye (a river,
+/// a pool, a lake) where the tier has a column there, else under the sea's
+/// sheet at `sheet_radius` over ground below sea level. The one rule the
+/// listener, the near shower and the rain's splashes ask
+/// (`rain-under-water` design 6).
+pub fn eye_under_water(eye: Vec3, water: Option<&EyeWaterState>, sheet_radius: f32) -> bool {
+    match water.map(|w| w.0) {
+        Some(EyeWater::Water { surface_radius }) => eye.length() < surface_radius,
+        Some(EyeWater::Air) => false,
+        _ => {
+            crate::planet::surface_height(eye.normalize_or(Vec3::Y)) < 0.0
+                && eye.length() < sheet_radius
+        }
+    }
+}
+
 /// Which side of the surface the camera is on, from its body-local position:
 /// 0 dry, 0.5 straddling the surface band, 1 fully under. The band is wide
 /// enough to hold the swell so the wave function is never evaluated a second

@@ -250,6 +250,7 @@ controls:
     build_turn: "turn a stair or blueprint; with shift, the next blueprint"
     build_view: "architecture mode: a camera over the plot, panned with the move keys and turned with a right drag; double-click to walk there"
     build_zoom: "with ctrl, zoom the architecture camera"
+    bot_takeover: "in a bot run, take the controls or give them back"
     camera: change the camera
     cruise: cruise
     dampeners: dampeners
@@ -266,6 +267,8 @@ controls:
     missions: the starter missions
     move: move
     noon_midnight: noon or midnight
+    time_back: time back (held)
+    time_forward: time forward (held)
     pack: "the pack: thirty more slots"
     paddle: paddle forward or back
     paddle_steer: steer with the paddle
@@ -292,6 +295,7 @@ controls:
     wind_in: wind the line in
   group:
     building: BUILDING
+    debug: DEBUG
     fishing_afloat: FISHING AFLOAT
     flying: FLYING
     hands: HANDS
@@ -311,6 +315,8 @@ controls:
     arrow_right: "→"
     arrow_up: "↑"
     backspace: BACK
+    bracket_left: "["
+    bracket_right: "]"
     caps_lock: CAPS
     comma: ","
     control_left: CTRL
@@ -396,6 +402,7 @@ controls:
     tab: TAB
     wheel: WHEEL
   tab:
+    debug: DEBUG
     flying: FLYING
     hands: HANDS
     menus: MENUS
@@ -1171,12 +1178,14 @@ menu:
     menus: Menus
     music: Music
   tab:
+    debug: DEBUG
     input: INPUT
     movement: MOVEMENT
     picture: PICTURE
     sound: SOUND
     weather: WEATHER
     world: WORLD
+  time_controls: Time controls
   that_world_open_load_another: "that world is open; load another first"
   world_name: "World {number}"
   world_open: "{world} (open)"
@@ -1406,9 +1415,9 @@ mission:
       "1": Dig coal
     title: Find ore
   pack:
-    help: Press Tab to open your pack and craft with what you gathered.
+    help: "Press I or Tab to open your pack and craft with what you gathered."
     objective:
-      "0": Open the pack
+      "0": "Open the pack (I)"
     title: Open your pack
   pen:
     help: Set fences on the cell edges round a yard, close it with a gate, and lead your animal in.
@@ -2284,8 +2293,13 @@ tier:
     name: Stone
 time:
   day: DAY
+  day_on: "+1 DAY"
+  fast: "TIME {rate}x"
+  hour_on: "+1 HOUR"
   line: "TIME  {hours}:{minutes}"
   night: NIGHT
+  rate: "{rate}x"
+  speed: SPEED
   title: TIME
 toasts:
   town_missions: Town missions unlocked
