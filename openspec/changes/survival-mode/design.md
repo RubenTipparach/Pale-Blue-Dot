@@ -421,7 +421,8 @@ The owner: "When in hot weather the body will need to consume more water",
   (0.0333 a second); sprinting and swimming hard add 0.02 a second.
 - **Heat raises it**: x (1 + (`feel` - 26) / 10) above 26 C, so x 2.7 at a
   desert noon (full to empty in 18 minutes); x 0.8 below 10 C.
-- **Empty**: health - 1 every 6 s, and the body heats at the dry rate
+- **Empty**: health - 1 every 12 s (halved from 6 s so the stroke comes
+  first: "As built"), and the body heats at the dry rate
   (design 13). The bar is shown the whole way down.
 - **Drinking.**
 
@@ -941,12 +942,18 @@ that makes the game do it.
 
 ### Where it differs from the plan, and why (recommendations taken)
 
-- **An empty water bar kills before the stroke.** At design 15's
-  1 pt every 6 s and design 14's 0.2 a second, a body whose water is EMPTY in
-  the desert sun dies at about 7.3 minutes, before it reaches 40 C at 7.8.
-  The stroke happens as designed while water is low but not empty (below
-  `dry_below`). The test pins that case; the numbers are the owner's to
-  move (a slower thirst drain, or the dry rate from a higher bar).
+- **An empty water bar's damage is halved, so the stroke comes first.**
+  At design 15's 1 pt every 6 s and design 14's 0.2 a second, a body whose
+  water was EMPTY in the desert sun died at about 7.3 minutes, before it
+  reached heat stroke's 40 C at 7.8, so the stroke design 14 draws could
+  never happen to a player out of water in the sun. Recommendation taken
+  (ask only with screenshots): an empty water bar takes 1 pt every 12 s
+  (`water.empty_drain_s_per_pt`, 6 to 12), and nothing else in the tuning
+  moves. The empty bar is still shown the whole way down and still kills,
+  in about 20 minutes on its own; in the desert sun the player passes out
+  at about 7.8 minutes, still alive. Tests
+  `health::tests::an_empty_bar_drains_a_point_every_ten_and_twelve_seconds`
+  and `body::tests::an_empty_water_bar_in_the_desert_sun_has_the_stroke_before_it_kills`.
 - **The day example runs from a full food bar**, as the mockup's day case
   does: starting at 80 fp, food reaches 0 while the bar still refills, and
   design 12's starving rule (free refill to half), which the planning model

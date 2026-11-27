@@ -462,9 +462,7 @@ mod tests {
     #[test]
     fn a_dry_water_bar_in_the_desert_sun_passes_out() {
         // Water below `dry_below` heats the body at the dry rate. It is held
-        // just above empty here: an EMPTY bar's thirst drain (1 pt every
-        // 6 s) with the exhaustion's kills before the stroke at these
-        // numbers (reported in design.md "As built").
+        // just above empty here; the empty bar is the next test.
         let cfg = cfg();
         let mut v = Vitals::new(&cfg);
         let mut events = Vec::new();
@@ -485,6 +483,25 @@ mod tests {
         assert!(later.contains(&Event::Woke(Wake::Time)));
         assert!(matches!(v.consciousness, Consciousness::Dazed { .. }));
         assert!(v.body_c < 40.0);
+    }
+
+    #[test]
+    fn an_empty_water_bar_in_the_desert_sun_has_the_stroke_before_it_kills() {
+        // design "As built": the empty bar's drain is halved (1 pt every
+        // 12 s), so the stroke comes first (about 7.8 min) and the player
+        // is still alive when it does.
+        let cfg = cfg();
+        let mut v = Vitals::new(&cfg);
+        let mut events = Vec::new();
+        let mut t = 0.0;
+        while !events.contains(&Event::PassedOut) && !v.is_dead() && t < 900.0 {
+            v.water = 0.0;
+            events.extend(v.tick(&cfg, &desert_noon(), 0.1).events);
+            t += 0.1;
+        }
+        assert!(events.contains(&Event::PassedOut), "died first at {t} s");
+        assert!(!v.is_dead(), "{}", v.health);
+        assert!((t / 60.0 - 7.8_f32).abs() < 0.3, "{t} s");
     }
 
     #[test]

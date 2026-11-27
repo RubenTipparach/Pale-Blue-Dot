@@ -79,10 +79,10 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_bar_drains_a_point_every_ten_and_six_seconds() {
+    fn an_empty_bar_drains_a_point_every_ten_and_twelve_seconds() {
         let cfg = SurvivalConfig::shipped();
         let [starve, thirst] = empty_bar_drain(&cfg, 0.0, 0.0);
-        assert!((starve.1 - 0.1).abs() < 1e-6 && (thirst.1 - 1.0 / 6.0).abs() < 1e-6);
+        assert!((starve.1 - 0.1).abs() < 1e-6 && (thirst.1 - 1.0 / 12.0).abs() < 1e-6);
         let [starve, thirst] = empty_bar_drain(&cfg, 1.0, 1.0);
         assert_eq!((starve.1, thirst.1), (0.0, 0.0));
     }

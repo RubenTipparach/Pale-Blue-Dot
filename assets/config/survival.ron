@@ -83,8 +83,10 @@
     // minutes of play; sprinting or swimming hard add `exertion_per_s`.
     // Above `heat_above_c` of feel the drain is x (1 + (feel - heat_above_c)
     // * heat_per_c_above); below `cold_below_c` it is x `cold_mult`. Empty,
-    // health drains 1 pt every `empty_drain_s_per_pt`. Below `dry_below`
-    // the body heats at the dry rate (design 13).
+    // health drains 1 pt every `empty_drain_s_per_pt` (12 s, half design
+    // 15's 1 pt every 6 s, so in the desert sun the heat stroke comes
+    // before an empty bar kills: design "As built"). Below `dry_below` the
+    // body heats at the dry rate (design 13).
     water: (
         max: 100.0,
         start: 100.0,
@@ -95,7 +97,7 @@
         heat_per_c_above: 0.1,
         cold_below_c: 10.0,
         cold_mult: 0.8,
-        empty_drain_s_per_pt: 6.0,
+        empty_drain_s_per_pt: 12.0,
         dry_below: 15.0,
         // "Thirsty" once as the bar falls through each (design 18).
         thirsty_at: 50.0,
