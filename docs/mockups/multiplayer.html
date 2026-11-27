@@ -138,6 +138,39 @@ dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
 dialog.infomodal table { border-collapse: collapse; font-size: 17px; }
 dialog.infomodal td, dialog.infomodal th { border-bottom: 1px solid var(--page-line); padding: 3px 8px; text-align: left; vertical-align: top; }
 
+/* ---- the Options menu's CHARACTER tab: the screen beside one 3D view ---- */
+.cwrap { display: grid; grid-template-columns: minmax(0, calc(372px * var(--s))) minmax(0, 1fr); gap: 12px; max-width: 1568px; margin: 0 auto; align-items: stretch; }
+.cpanel { display: flex; justify-content: center; align-items: flex-start; padding: calc(16px * var(--s)) 0 calc(6px * var(--s)); min-width: 0; background: var(--page-2) url(multiplayer/game/day-meadow.jpg) center / cover; position: relative; }
+.cpanel::before { content: ""; position: absolute; inset: 0; background: rgba(1, 14, 26, .6); }
+.cpanel > .k-frame { position: relative; }
+.cview { aspect-ratio: auto; max-height: none; height: max(560px, calc(100vh - 186px)); min-height: 0; }
+.k-otabs { display: flex; flex-wrap: wrap; gap: calc(1px * var(--s)); margin-bottom: calc(2px * var(--s)); }
+.k-otabs .k-btn { height: calc(18px * var(--s)); border-width: calc(6px * var(--s)); min-width: 0; padding: 0 calc(1px * var(--s)); }
+.k-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: calc(8px * var(--s)); align-items: start; }
+.k-rows { display: grid; gap: calc(3px * var(--s)); align-content: start; }
+.cpanel .k-row { grid-template-columns: calc(60px * var(--s)) minmax(0, 1fr) auto; }
+.cpanel .k-row.sw { grid-template-columns: calc(60px * var(--s)) minmax(0, 1fr); align-items: start; }
+.k-row.sw > .pt { margin-top: calc(2px * var(--s)); }
+.k-row.off { opacity: .4; }
+.k-sws { display: flex; flex-wrap: wrap; gap: calc(1px * var(--s)); }
+.k-sw { width: calc(9px * var(--s)); height: calc(9px * var(--s)); border: calc(1px * var(--s)) solid var(--ink); padding: 0; cursor: pointer; box-shadow: inset 0 calc(-1px * var(--s)) 0 rgba(1, 0, 0, .3); }
+.k-sw:disabled { cursor: default; }
+.k-sw[aria-checked="true"] { outline: calc(1px * var(--s)) solid var(--title); outline-offset: calc(1px * var(--s)); }
+.k-sw:focus-visible { outline: 2px solid var(--rune); }
+.k-step { display: inline-flex; gap: calc(1px * var(--s)); }
+.k-step .k-btn { min-width: calc(16px * var(--s)); height: calc(20px * var(--s)); border-width: calc(6px * var(--s)); }
+.k-item .sub.k-when { color: var(--text-dim); }
+@media (max-width: 1180px) {
+  .cwrap { grid-template-columns: minmax(0, 1fr); }
+  .cview { order: -1; min-height: 340px; height: 62vh; }
+}
+@media (max-width: 760px) { .k-cols { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  .cpanel .k-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .cpanel .k-row.sw > .k-sws { grid-column: 1 / -1; }
+  .cpanel { padding-left: 0; padding-right: 0; }
+}
+
 @media (max-width: 640px) {
   .k-toast { bottom: 6px; }
   .scene { padding-bottom: 40px; }
@@ -162,6 +195,7 @@ dialog.infomodal td, dialog.infomodal th { border-bottom: 1px solid var(--page-l
   <a class="ttab" role="tab" href="#host" data-tab="host" aria-selected="true">HOST</a>
   <a class="ttab" role="tab" href="#join" data-tab="join" aria-selected="false">JOIN</a>
   <a class="ttab" role="tab" href="#player" data-tab="player" aria-selected="false">PLAYER</a>
+  <a class="ttab" role="tab" href="#character" data-tab="character" aria-selected="false">CHARACTER</a>
 </nav>
 
 <section class="tab" id="tab-host" aria-label="Host from the pause menu">
@@ -203,10 +237,33 @@ dialog.infomodal td, dialog.infomodal th { border-bottom: 1px solid var(--page-l
   <main><div class="view3d" id="view3d"><div class="cross" id="cross"></div><div class="nametag off" id="nametag"></div></div></main>
 </section>
 
+<section class="tab" id="tab-character" aria-label="The character screen in the Options menu">
+  <div class="bar">
+    <div class="grp"><span class="lab">Time</span><button class="seg" data-time="day" aria-pressed="true">Day</button><button class="seg" data-time="night" aria-pressed="false">Night</button></div>
+    <div class="grp"><label class="lab" for="cSeen">Seen in</label>
+      <select class="sel" id="cSeen">
+        <option value="stand">Standing</option>
+        <option value="boat">Rowing boat</option>
+        <option value="cart">Hand cart</option>
+        <option value="horse">Horse</option>
+        <option value="car">Car</option>
+        <option value="plane">Plane</option>
+      </select></div>
+  </div>
+  <main><div class="cwrap"><div class="cpanel" id="charPanel"></div><div class="view3d cview" id="cview"></div></div></main>
+</section>
+
 <dialog class="infomodal" id="info" aria-labelledby="infoTitle">
-  <div class="mhead"><b id="infoTitle">Multiplayer: host, join, another player</b><button id="infoClose" aria-label="Close">✕</button></div>
+  <div class="mhead"><b id="infoTitle">Multiplayer: host, join, another player, your character</b><button id="infoClose" aria-label="Close">✕</button></div>
   <div class="mbody">
-    <p>The two mockups of <code>openspec/changes/multiplayer</code> tasks 5.1 and 5.2, for the owner's approval before any game UI or body is built. Version 1, 2026-11-27. Three tabs, each a bare link: <b>Host</b> (<code>#host</code>), <b>Join</b> (<code>#join</code>) and <b>Player</b> (<code>#player</code>). Only the Player tab draws 3D, and its view is made when the tab first opens.</p>
+    <p>The mockups of <code>openspec/changes/multiplayer</code> tasks 5.1 and 5.2 and of <code>openspec/changes/player-character</code> task 1.1, for the owner's approval before any game UI or body is built. Four tabs, each a bare link: <b>Host</b> (<code>#host</code>), <b>Join</b> (<code>#join</code>), <b>Player</b> (<code>#player</code>) and <b>Character</b> (<code>#character</code>). Player and Character draw 3D, one view each; a view is made when its tab first opens and stops drawing when its tab is closed.</p>
+
+    <h3>Versions</h3>
+    <ul>
+      <li><b>1</b> (2026-11-27): Host, Join and Player.</li>
+      <li><b>2</b> (2026-11-27): the other player is M5's townsperson, the game's NPC figure (owner: "humans should be consistent with the NPCs in the game").</li>
+      <li><b>3</b> (2026-11-27): the <b>Character</b> tab (<code>player-character</code> 1.1): the character screen as a tab of the Options menu, and the same figure in a rowing boat, a hand cart, on a horse, in a car and in a plane. The title menu becomes CONTINUE, NEW WORLD, MULTIPLAYER, OPTIONS, QUIT, with Continue's list of worlds and a Servers list on the Join panel.</li>
+    </ul>
 
     <h3>Host (task 5.1, design 14.3)</h3>
     <ul>
@@ -219,8 +276,10 @@ dialog.infomodal td, dialog.infomodal th { border-bottom: 1px solid var(--page-l
 
     <h3>Join (task 5.1, design 9)</h3>
     <ul>
-      <li>The title menu (<code>menu.rs</code>: CONTINUE, NEW WORLD, LOAD WORLD, SETTINGS, QUIT) gains <b>JOIN</b>. Joining leaves no world of yours open, so it is on the title, not the pause menu.</li>
-      <li>The Join panel: your NAME (sent in the <code>Hello</code>), an ADDRESS with its port, and <b>ON LAN</b>, the games hosts on this network show. A game with a password shows a lock and asks for it; a full one shows FULL and cannot be pressed.</li>
+      <li><b>The title menu</b> (version 3, the owner): five entries, <b>CONTINUE</b>, <b>NEW WORLD</b>, <b>MULTIPLAYER</b>, <b>OPTIONS</b>, <b>QUIT</b>. Today's (<code>menu.rs</code>) is CONTINUE, NEW WORLD, LOAD WORLD, SETTINGS, QUIT: LOAD WORLD folds into CONTINUE, SETTINGS is renamed OPTIONS, and MULTIPLAYER is new. Joining leaves no world of yours open, so it is on the title, not the pause menu; hosting stays on the pause menu.</li>
+      <li><b>Continue</b> opens the list of saved worlds, latest first, with <b>LOAD LATEST</b> at the top; LOAD on a row loads that one. Either goes to the loading screen.</li>
+      <li><b>Multiplayer</b> opens the Join panel: your NAME (sent in the <code>Hello</code>), an ADDRESS with its port, <b>SERVERS</b> (a server someone keeps running, a hosted game that is always up, kept once joined; its address may be a name rather than a LAN address) and <b>ON LAN</b>, the games hosts on this network show. A game with a password shows a lock and asks for it; a full one shows FULL and cannot be pressed.</li>
+      <li><b>Options</b> opens the settings screen, now with a CHARACTER tab: the Character tab of this page.</li>
       <li><b>The host answers</b> in the bar picks what the host says to the next JOIN, so every message can be seen. The messages are short and plain, one line each:</li>
     </ul>
     <table>
@@ -247,6 +306,33 @@ dialog.infomodal td, dialog.infomodal th { border-bottom: 1px solid var(--page-l
       <li><b>Eyes</b> is your own view (drag to look, arrow keys too). <b>Orbit Wren</b> turns about the body to see it close (drag, wheel or pinch to zoom).</li>
     </ul>
 
+    <h3>Character (<code>player-character</code> task 1.1)</h3>
+    <ul>
+      <li><b>Why.</b> The owner, 2026-11-27: "Would be nice to be able to customize character for single player too. This would allow me to have an in game model dude for third person vehicle views like the boat rowing, car driving plane flying stuff and horse riding", and "humans should be consistent with the NPCs in the game". Today the player has no body: first person shows only the hands, the rower in the boat's chase view is a stand-in, and the cart, horse, car and plane show nobody at the controls.</li>
+      <li><b>Where it is made:</b> a <b>CHARACTER</b> tab of the Options menu (the settings screen's PICTURE, SOUND, INPUT, MOVEMENT, WEATHER and WORLD tabs, with this one added), so the look can be changed at any time, from the title or the pause menu (owner, 2026-11-27: fully customizable from Options at any time). A new world opens it once before it loads.</li>
+      <li><b>One figure, one art</b> (design 1): the body is M5's townsperson, the figure the game draws for its NPCs (<code>pbd_core::townsfolk::look::Look</code> and <code>figure</code>; here <code>multiplayer/figure-kit.js</code>). No other body is made, and a choice the townsfolk's parts cannot draw is not offered.</li>
+      <li><b>The choices</b>, every one on screen at once: <b>Build</b> (round, pear, tall, stout), <b>Height</b> (within the build's range, as the townsfolk roll it), <b>Skin</b>, <b>Hair</b> (short, bun, braid, bald) and its <b>colour</b>, <b>Beard</b> (none, goatee, full), <b>Face</b> (the resting face: happy, calm, thinking, sleepy, the four a townsperson rests in), <b>Shirt</b>, <b>Trousers</b>, <b>Shoes</b>, and <b>Hat</b> (none, a brim hat, a cap, a hood, a wrap, a helmet or a headset) with its colour. Under a hat the hair shows at the back only, as on the townsfolk; a hood or a headset covers the ears.</li>
+      <li><b>Swatches, not a colour picker</b> (design 3): skin, hair and cloth come from the peoples' palettes (<code>look::People</code>; here <code>multiplayer/peoples.js</code>, copied from <code>npcs.html</code>), across every people, so a character always sits in the game's palette. Shoes are the townsfolk's three; a hat's colours are the cloth and the role hats' own (straw, helmet iron, headset grey).</li>
+      <li><b>Random</b> rolls a look as <code>look::generate</code> rolls a townsperson: a people at random, its palette, and a hat from that people's hats.</li>
+      <li><b>Seen in</b> (design 4 and 5): the same figure, from outside, in the chase view of each craft. Each craft names a seat and where the hands go; the arms are aimed there from the shoulders and the controls meet the hands, whatever the build and height:
+        <ul>
+          <li><b>Rowing boat</b>: seated on the thwart facing the stern, the hands on the oar handles, the oars through the oarlocks;</li>
+          <li><b>Hand cart</b>: standing between the shafts, a hand on each;</li>
+          <li><b>Horse</b>: astride the saddle, the hands on the reins;</li>
+          <li><b>Car</b>: seated at the wheel, the hands on its rim;</li>
+          <li><b>Plane</b>: seated in the open cockpit, the hands on the stick.</li>
+        </ul>
+        First person stays hands only. Drag (or the arrow keys) turns the view about the figure; the wheel or a pinch zooms. Nothing turns on its own.</li>
+      <li><b>Lit as the ground is:</b> the terrain's sun with its shadows by day; at night the moon is held at 0.035 and every lamp lights what is near it, per pixel, with the towns mockup's falloff: the lamp posts by the path and the field, the boat's stern lantern, the car's headlamps and the plane's panel lamp. In the game that is <code>LitByField</code> and <code>LitLikeTerrain</code> on the figure's root.</li>
+      <li><b>Where it is kept</b> (design 2): one look per install, <code>saves/character.ron</code> beside <code>install.key</code>, so every world and every host sees the same person; until one is made, a look is rolled from the install's key. Nothing in a save changes. In multiplayer <code>Hello</code> carries the look and other players are drawn with it (design 6, a protocol version).</li>
+      <li><b>Open, recommendations taken</b> (ask only with screenshots):
+        <ul>
+          <li>Where the screen opens on a new world: <b>before the world loads</b> (recommended), or on first spawn.</li>
+          <li>Whether a hat is worn in a vehicle: <b>yes</b>, unless it is a helmet a closed cockpit would clip (recommended). The craft here are all open, so every hat stays on.</li>
+        </ul></li>
+      <li><b>The craft</b> are built for this mockup as lofted, smooth-shaded forms, textured with the game's own settlement set (<code>plank</code>, <code>boards</code>, <code>timber</code>, <code>iron</code>, <code>hide</code>, <code>linen</code>, <code>still_water</code>) and the herd's horse hide (<code>herd_hide</code>, row 0). The car's paint and the tyres' rubber are 32 px textures painted in the page, in the same palette; a game version would draw them with a script in <code>tools/art/</code>. They stand in for the craft's own models (M38, M23, M24), which are not changed here.</li>
+    </ul>
+
     <h3>Which art is whose</h3>
     <ul>
       <li><b>The game's:</b> the UI kit's oak frame, plaques, tabs and stone lintel, slot well, check, bar and tooltip (<code>assets/ui/</code>, the smooth renders, sampled linear as the game samples the kit); the kit font (<code>assets/fonts/kit-font.json</code>) and VT323 for body lines; the terrain atlas (<code>assets/tilesets/atlas.png</code>); the timber and iron of the lamp posts (<code>assets/textures/settlement/</code>). The backdrops are game captures (<code>docs/mockups/ui/game/</code>). Provenance: <code>docs/mockups/multiplayer/README.md</code>.</li>
@@ -256,6 +342,7 @@ dialog.infomodal td, dialog.infomodal th { border-bottom: 1px solid var(--page-l
     <h3>Open, for the owner</h3>
     <ul>
       <li>Approve the host and join screens (5.1) and the other player (5.2) on the tracker. Until then nothing of this goes in the game; hosting stays on the command line.</li>
+      <li>Approve the Character tab (<code>player-character</code> 1.1) for build. Until then no game code changes.</li>
     </ul>
   </div>
 </dialog>
@@ -315,7 +402,9 @@ function setNight(n) {
   PAGE.night = n;
   document.querySelectorAll("[data-time]").forEach(b => b.setAttribute("aria-pressed", String((b.dataset.time === "night") === n)));
   for (const [k, pair] of Object.entries(BACKDROP)) { const el = $(k + "Scene"); el.style.backgroundImage = `url(${pair[n ? 1 : 0]})`; el.classList.toggle("night", n); }
+  $("charPanel").style.backgroundImage = `url(${BACKDROP.host[n ? 1 : 0]})`;
   if (window.PLAYER3D) window.PLAYER3D.setNight(n);
+  if (window.CHAR3D) window.CHAR3D.setNight(n);
 }
 document.querySelectorAll("[data-time]").forEach(b => b.addEventListener("click", () => setNight(b.dataset.time === "night")));
 
@@ -398,23 +487,39 @@ const REFUSE = {
   GameVersion: "Game version differs", WorldVersion: "World version differs", DifferentWorld: "Different world",
   Full: "Game is full", Banned: "Banned from this game", WrongPassword: "Wrong password", none: "No game at that address",
 };
-const JOIN = { screen: "title", name: "Mara", addr: "192.168.1.24:47123", target: null, pw: "", msg: "", timer: 0, prog: 0 };
+// a server someone keeps running (a hosted, always-on game), kept on the Join panel once joined
+const SERVERS = [{ world: "Long Reach", host: "Server", n: 4, pw: true, addr: "longreach.example:47123" }];
+// the saved worlds CONTINUE lists, the latest first
+const WORLDS = [
+  { name: "Fern Hollow", when: "12 min ago" }, { name: "World 3", when: "2 hours ago" },
+  { name: "Saltmarsh", when: "3 days ago" }, { name: "World 1", when: "9 days ago" },
+];
+const JOIN = { screen: "title", name: "Mara", addr: "192.168.1.24:47123", target: null, pw: "", msg: "", timer: 0, prog: 0, loading: "" };
 function joinRender() {
   const S = JOIN, scene = $("joinScene");
   let panel;
   if (S.screen === "title") {
     panel = h("div", { class: "stack" }, h("img", { class: "logo", src: "multiplayer/game/logo.png", alt: "Pale Blue Dot" }),
-      frame(120, btn("Continue", null, { cls: "focus wide" }), btn("New world", null, { cls: "wide" }), btn("Load world", null, { cls: "wide" }),
-        btn("Join", () => { S.screen = "join"; joinRender(); }, { cls: "wide" }), btn("Settings", null, { cls: "wide" }), btn("Quit", null, { cls: "wide" })));
+      frame(120, btn("Continue", () => { S.screen = "continue"; joinRender(); }, { cls: "focus wide" }), btn("New world", null, { cls: "wide" }),
+        btn("Multiplayer", () => { S.screen = "join"; joinRender(); }, { cls: "wide" }), btn("Options", () => { location.hash = "#character"; }, { cls: "wide" }), btn("Quit", null, { cls: "wide" })));
+  } else if (S.screen === "continue") {
+    const rows = WORLDS.map(w => h("div", { class: "k-item" }, h("div", { class: "who" }, h("span", { class: "name" }, P(w.name)), h("span", { class: "sub k-when" }, w.when)), h("span"),
+      btn("Load", () => loadWorld(w.name))));
+    panel = frame(200, ...lintel("Continue", back),
+      btn("Load latest", () => loadWorld(WORLDS[0].name), { cls: "focus wide" }),
+      h("div", { class: "k-sec" }, P("Worlds")), h("div", { class: "k-list" }, ...rows),
+      h("div", { class: "k-foot" }, btn("Back", back), h("span")));
   } else if (S.screen === "join") {
     const name = h("input", { class: "k-field", value: S.name, "aria-label": "Name", maxlength: "16" }); name.addEventListener("input", () => { S.name = name.value; });
     const addr = h("input", { class: "k-field", value: S.addr, "aria-label": "Address", maxlength: "64" }); addr.addEventListener("input", () => { S.addr = addr.value; });
     const games = LAN.map(g => h("div", { class: "k-item" },
       h("div", { class: "who" }, h("span", { class: "name" }, P(g.world), g.pw ? lock() : null), h("span", { class: "sub" }, `${g.host} · ${g.n}/8`)),
       h("span"), g.n >= 8 ? btn("Full", null, { disabled: true }) : btn("Join", () => pick(g))));
-    panel = frame(230, ...lintel("Join", back),
+    panel = frame(230, ...lintel("Multiplayer", back),
       h("div", { class: "k-row" }, P("Name"), name, h("span")),
       h("div", { class: "k-row" }, P("Address"), addr, btn("Join", () => go({ world: null, addr: S.addr, pw: false }), { cls: "focus" })),
+      h("div", { class: "k-sec" }, P("Servers")), h("div", { class: "k-list" }, ...SERVERS.map(g => h("div", { class: "k-item" },
+        h("div", { class: "who" }, h("span", { class: "name" }, P(g.world), g.pw ? lock() : null), h("span", { class: "sub" }, `${g.addr} · ${g.n}/8`)), h("span"), btn("Join", () => pick(g))))),
       h("div", { class: "k-sec" }, P("On LAN")), h("div", { class: "k-list" }, ...games),
       h("div", { class: "k-foot" }, btn("Back", back), h("span")));
   } else if (S.screen === "password") {
@@ -430,32 +535,41 @@ function joinRender() {
   } else if (S.screen === "refused") {
     panel = frame(150, ...lintel("Not joined", () => { S.screen = "join"; joinRender(); }), h("div", { class: "k-center" }, line(S.msg, "k-warn"), h("div", { class: "k-dim k-line" }, S.target.world || S.target.addr), btn("Back", () => { S.screen = "join"; joinRender(); }, { cls: "focus" })));
   } else if (S.screen === "loading") {
-    panel = frame(170, ...lintel("Loading"), h("div", { class: "k-center", style: "align-items:stretch" }, line("Joining " + (S.target.world || "Fern Hollow"), ""), h("div", { class: "k-bar" }, h("i", { style: `width:${Math.round(S.prog * 100)}%` })),
+    panel = frame(170, ...lintel("Loading"), h("div", { class: "k-center", style: "align-items:stretch" }, line(S.loading || ("Joining " + (S.target.world || "Fern Hollow")), ""), h("div", { class: "k-bar" }, h("i", { style: `width:${Math.round(S.prog * 100)}%` })),
       h("div", { class: "k-line k-dim", style: "text-align:center" }, S.prog < 1 ? "Getting the world" : "Ready")));
   }
   scene.replaceChildren(panel);
 }
 function back() { JOIN.screen = "title"; JOIN.msg = ""; joinRender(); }
+function startLoading(text) {
+  JOIN.screen = "loading"; JOIN.loading = text; JOIN.prog = 0; joinRender();
+  const t0 = performance.now(); const step = () => { JOIN.prog = Math.min(1, (performance.now() - t0) / 2200); if (JOIN.screen !== "loading") return; joinRender(); if (JOIN.prog < 1) requestAnimationFrame(step); }; requestAnimationFrame(step);
+}
+function loadWorld(name) { JOIN.target = { world: name }; startLoading(name); }
 function pick(g) { JOIN.target = g; JOIN.pw = ""; JOIN.msg = ""; if (g.pw) { JOIN.screen = "password"; joinRender(); } else go(g); }
 function go(target, withPw) {
   JOIN.target = target; JOIN.screen = "joining"; joinRender();
   const ans = $("jAnswer").value;
   JOIN.timer = setTimeout(() => {
-    if (ans === "ok") { JOIN.screen = "loading"; JOIN.prog = 0; joinRender(); const t0 = performance.now(); const step = () => { JOIN.prog = Math.min(1, (performance.now() - t0) / 2200); if (JOIN.screen !== "loading") return; joinRender(); if (JOIN.prog < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); return; }
+    if (ans === "ok") { startLoading(""); return; }
     JOIN.msg = REFUSE[ans];
     if (ans === "WrongPassword") { JOIN.screen = "password"; JOIN.pw = ""; } else JOIN.screen = "refused";
     joinRender();
   }, ans === "none" ? 1600 : 700);
 }
-$("jReset").addEventListener("click", () => { clearTimeout(JOIN.timer); Object.assign(JOIN, { screen: "title", target: null, pw: "", msg: "", prog: 0 }); joinRender(); });
+$("jReset").addEventListener("click", () => { clearTimeout(JOIN.timer); Object.assign(JOIN, { screen: "title", target: null, pw: "", msg: "", prog: 0, loading: "" }); joinRender(); });
 
 // ================================================================ tabs (one at a time, a bare #anchor each)
-const TABS = ["host", "join", "player"];
+const TABS = ["host", "join", "player", "character"];
 function openTab(id) {
   if (!TABS.includes(id)) id = "host";
   for (const t of TABS) { $("tab-" + t).classList.toggle("open", t === id); }
   document.querySelectorAll(".ttab").forEach(a => a.setAttribute("aria-selected", String(a.dataset.tab === id)));
-  if (id === "player") { if (window.PLAYER3D) window.PLAYER3D.show(); } else if (window.PLAYER3D) window.PLAYER3D.hide();
+  // one 3D view on the page at a time: the hidden tab's loop stops before the open one starts
+  if (id !== "player" && window.PLAYER3D) window.PLAYER3D.hide();
+  if (id !== "character" && window.CHAR3D) window.CHAR3D.hide();
+  if (id === "player" && window.PLAYER3D) window.PLAYER3D.show();
+  if (id === "character" && window.CHAR3D) { window.CHAR3D.setNight(PAGE.night); window.CHAR3D.show(); }
 }
 window.addEventListener("hashchange", () => openTab(location.hash.slice(1)));
 
@@ -470,7 +584,9 @@ hostRender(); joinRender(); setNight(false);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="multiplayer/scene-kit.js?v=1"></script>
 <script src="multiplayer/figure-kit.js?v=1"></script>
-<script src="multiplayer/player.js?v=2"></script>
+<script src="multiplayer/player.js?v=3"></script>
+<script src="multiplayer/peoples.js?v=1"></script>
+<script src="multiplayer/character.js?v=1"></script>
 <script>openTab(location.hash.slice(1));</script>
 </body>
 </html>

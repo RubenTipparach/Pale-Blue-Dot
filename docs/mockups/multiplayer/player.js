@@ -221,7 +221,8 @@
   tagEl.innerHTML = '<span class="pt">' + window.ptSvg(NAME) + "</span>";
 
   window.PLAYER3D = {
-    show() { if (!renderer) makeRenderer(); if (!running) { running = true; dirty = true; last = shownAt = performance.now(); raf = requestAnimationFrame(frame); } },
+    // the lamp uniforms are the page's (scene-kit.js), shared with the CHARACTER tab: take them back
+    show() { if (!renderer) makeRenderer(); PBD.setLights(LIGHTS); PBD.LU.uLamp.value = ST.night ? 0.85 : 0; if (!running) { running = true; dirty = true; last = shownAt = performance.now(); raf = requestAnimationFrame(frame); } },
     hide() { running = false; cancelAnimationFrame(raf); },
     setNight,
     // for the page's checks: jump Wren to a distance at once, and draw

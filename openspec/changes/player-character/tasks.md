@@ -1,6 +1,7 @@
 ## 1. Mockup
 
 - [ ] 1.1 M40's Character tab: the screen, with every choice from M5's parts and palettes and a Random button; the figure seated in a rowing boat, a hand cart, on a horse, in a car and in a plane, by day and lit at night. Shown as a page of the Options menu. Published, on the tracker, the open questions in the survey with its screenshots (owner, 2026-11-27: "Questions go in the survey for later"). Verify: the owner approves it for build.
+  - Made 2026-11-27 (M40 version 3, `docs/mockups/multiplayer.html#character`, as a tab of the Options menu at the owner's word), with screenshots in `docs/screenshots/player-character/`; not yet published, on the tracker or in the survey. Waits for the owner's approval.
 
 ## 2. The look
 
