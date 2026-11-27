@@ -278,5 +278,19 @@
    "398757.mp3"
   ],
   "note": "Freesound's HQ preview (MP3)"
+ },
+ "freesound/461519": {
+  "pack": "461519",
+  "url": "https://freesound.org/people/15GPanskaBokstefflova_Nicola/sounds/461519/",
+  "licences": [
+   "CC0"
+  ],
+  "licence_url": "http://creativecommons.org/publicdomain/zero/1.0/",
+  "title": "dog_growling 1.wav",
+  "author": "15GPanskaBokstefflova_Nicola",
+  "files": [
+   "461519.mp3"
+  ],
+  "note": "Freesound's HQ preview (MP3)"
  }
 }

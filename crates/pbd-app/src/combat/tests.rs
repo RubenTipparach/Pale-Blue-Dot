@@ -21,7 +21,7 @@ fn survival_save() -> WorldSave {
 
 #[test]
 fn each_weapon_names_its_swing() {
-    let w = |g: Good| in_hand(Some(Item::Good(g)), None, false);
+    let w = |g: Good| in_hand(Some(Item::Good(g)), None, false, false);
     assert_eq!(w(Good::STONE_SPEAR).left, Some(SwingKind::Thrust));
     assert_eq!(w(Good::STONE_SPEAR).right, Some(SwingKind::Throw));
     assert_eq!(w(Good::IRON_HUNTING_AXE).left, Some(SwingKind::Chop));
@@ -32,7 +32,7 @@ fn each_weapon_names_its_swing() {
         w(Good::BRONZE_SWORD).held,
         Held::Weapon("bronze-sword".into())
     );
-    assert_eq!(in_hand(None, None, false).held, Held::Hand);
+    assert_eq!(in_hand(None, None, false, false).held, Held::Hand);
     assert_eq!(
         blade_of(&Held::Weapon("iron-hunting-axe".into())),
         Some(Blade::HuntingAxe)
@@ -239,4 +239,76 @@ fn the_systems_parameters_do_not_conflict() {
     init(&mut world, town_fight);
     init(&mut world, bites);
     init(&mut world, script);
+}
+
+/// Task 4.4: a tool's strike is drawn on the rule's own beat, so the
+/// stroke's impact lands on the frame the rule's hit lands, swing after
+/// swing while held, for every tool and bare hands.
+#[test]
+fn a_tools_drawn_impact_lands_on_the_rules_hit_frame() {
+    use crate::held::stroke::{Gear, StrokeClock, StrokeTool};
+    use pbd_core::inventory::Tier;
+    let cfg = crate::survival::rules();
+    let settings = crate::held::HeldSettings::default();
+    let motion = settings.motion();
+    let dt = 1.0 / 60.0;
+    for (tool, held) in [
+        (StrokeTool::Axe, Held::Tool(Tool::Axe, Tier::Stone)),
+        (StrokeTool::Pickaxe, Held::Tool(Tool::Pickaxe, Tier::Iron)),
+        (StrokeTool::Shovel, Held::Tool(Tool::Shovel, Tier::Bronze)),
+        (StrokeTool::Hands, Held::Hand),
+    ] {
+        let gear = Gear {
+            tool,
+            weight: settings.stroke.weight(tool, 0),
+            fist: Vec3::new(0.25, -0.3, -0.5),
+            tip: Vec3::new(0.25, 0.2, -0.6),
+        };
+        let mut rule = SwingClock::default();
+        let mut drawn = StrokeClock::default();
+        let (mut rule_hits, mut drawn_hits) = (Vec::new(), Vec::new());
+        for frame in 0..120 {
+            // Held for a second, then let go.
+            let pressed = frame < 60;
+            if !rule.step(cfg, &held, pressed, dt).is_empty() {
+                rule_hits.push(frame);
+            }
+            let out = drawn.step(&motion, gear, tool_beat(rule.under()), dt);
+            if !out.impacts.is_empty() {
+                drawn_hits.push(frame);
+            }
+        }
+        assert!(rule_hits.len() >= 2, "{tool:?}: {rule_hits:?}");
+        assert_eq!(drawn_hits, rule_hits, "{tool:?}");
+    }
+}
+
+/// Weapons wear per hit as tools do (design 11): a stone spear's 60 uses,
+/// a use a landed hit, broken at zero and then hitting as bare hands; the
+/// bow a use an arrow; kept across a save's records; never in Explorer.
+#[test]
+fn a_weapon_wears_per_hit_and_breaks() {
+    let mut save = survival_save();
+    let mut last = Spend::None;
+    for _ in 0..60 {
+        last = spend_weapon_wear(&mut save, "stone-spear", Action::HitLanded);
+    }
+    assert_eq!(last, Spend::Broke);
+    let book = WeaponWearBook::of(&save);
+    assert!(book.broken("stone-spear"));
+    assert!(!book.broken("bronze-sword"));
+    assert_eq!(
+        in_hand(Some(Item::Good(Good::STONE_SPEAR)), None, false, true).held,
+        Held::Broken
+    );
+    assert_eq!(
+        spend_weapon_wear(&mut save, "bow", Action::Used),
+        Spend::Spent(1)
+    );
+    let mut explorer = WorldSave::memory_only();
+    assert_eq!(
+        spend_weapon_wear(&mut explorer, "stone-spear", Action::HitLanded),
+        Spend::None
+    );
+    assert!(explorer.records.get(WEAPON_WEAR_KIND, 0).is_none());
 }

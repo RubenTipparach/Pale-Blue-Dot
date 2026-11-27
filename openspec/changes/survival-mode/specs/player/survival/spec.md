@@ -56,30 +56,6 @@ the player SHALL breathe the craft's air.
 - **THEN** the suit's air reserve starts to empty, and refills once they are
   back in the cabin
 
-### Requirement: Predators hunt in Survival
-In Survival, predators SHALL hunt the player. Each SHALL give a visible and
-audible warning before its first attack, SHALL flee when badly hurt, and
-SHALL be bolder at night. In Explorer, predators SHALL keep their earlier
-behaviour and never attack the player.
-
-#### Scenario: A fox at night
-- **WHEN** a Survival player meets a red fox at night
-- **THEN** it stalks, warns, and attacks, and flees once it is badly hurt
-
-#### Scenario: The same fox in Explorer
-- **WHEN** an Explorer player meets a red fox
-- **THEN** it never attacks them
-
-### Requirement: Townsfolk fight back
-In Survival, a struck townsperson SHALL fight back or flee, nearby guards
-SHALL come to fight, and the town SHALL remember the fight in the player's
-standing with it. In Explorer, townsfolk SHALL NOT be harmed.
-
-#### Scenario: Striking a villager
-- **WHEN** a Survival player strikes a villager in a town
-- **THEN** the guards come for the player, and the town's standing with them
-  drops
-
 ### Requirement: Tools wear out in Survival
 In Survival, each owned tool SHALL carry the uses it has left, starting at
 the number its tier sets. A finished action with the tool (a block broken, a
@@ -165,20 +141,6 @@ SHALL hold the body below heat stroke in the hottest weather the planet has.
 #### Scenario: Watered at noon in the desert
 - **WHEN** the same player keeps drinking
 - **THEN** the body stays below 40 C and they never pass out
-
-### Requirement: Weapons are crafted in tiers and hit on the swing
-In Survival, spears, a bow with arrows, hunting axes and swords SHALL be
-crafted from the existing recipe tables (by hand, at the workbench, and from
-the forge's ingots), at stone, bronze and iron tiers, locked behind their
-missions. A weapon's hit SHALL land at the swing's hit moment; a spear SHALL
-also be thrown, and an arrow SHALL fly under the body's own gravity in the
-floating origin. A fired arrow or a thrown spear that survives SHALL lie
-where it stopped until picked up. In Explorer these recipes SHALL NOT exist.
-
-#### Scenario: An arrow drops with distance
-- **WHEN** a Survival player looses an arrow level at full draw
-- **THEN** it falls under the planet's gravity along its flight, and where it
-  lands it can be picked up again or is broken
 
 ### Requirement: Wild game is hunted for meat, hide and bone
 In Survival, wild game SHALL take damage and flee, and a kill SHALL drop its

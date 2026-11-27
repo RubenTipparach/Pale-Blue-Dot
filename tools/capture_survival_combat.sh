@@ -15,10 +15,13 @@ shift || true
 cd "$(dirname "$0")/.."
 EXE=target/fast/pbd-app
 AT="--at -37.5 -84"
-TOWN="--at 29.521185 8.849977 --yaw 87.4"
+# The guard scene stands the player 7 m out from the town's gate guard and
+# looks at it (the instrument moves the walker), so the town spot is only
+# where the world is loaded.
+TOWN="--at 29.122 8.327"
 shot() {
   local name=$1; shift
-  timeout 1500 xvfb-run -a -s "-screen 0 1440x900x24" $EXE "$@" --rain 0 --weather-at 7200 --capture "$D/$name.png" > "$D/$name.log" 2>&1
+  timeout 1500 xvfb-run -a -s "-screen 0 1440x900x24" $EXE "$@" --no-readout --rain 0 --weather-at 7200 --capture "$D/$name.png" > "$D/$name.log" 2>&1
   echo "$name exit $?"
   python3 -c "from PIL import Image; Image.open('$D/$name.png').convert('RGB').save('$D/$name.jpg', quality=88)" && rm -f "$D/$name.png"
 }
@@ -35,6 +38,9 @@ want combat-swing-hit-day && shot combat-swing-hit-day --world cb-6 $AT --combat
 want combat-swing-hit-night && shot combat-swing-hit-night --world cb-7 $AT --combat swing-hit --hold bronze-sword $NIGHT --pitch -35 --frames ${HIT_F:-75}
 want combat-axe-hit-day && shot combat-axe-hit-day --world cb-8 $AT --combat swing-hit --hold iron-hunting-axe $DAY --pitch -35 --frames ${AXE_F:-76}
 want combat-spear-flight-day && shot combat-spear-flight-day --world cb-9 $AT --combat spear-throw --hold stone-spear $DAY --pitch -4 --frames ${FLY_F:-104}
-want combat-spear-flight-night && shot combat-spear-flight-night --world cb-10 $AT --combat spear-throw --hold stone-spear --time 3.8 --lamps 5 -3 --pitch -4 --frames ${FLY_F:-104}
-want combat-guard-day && shot combat-guard-day --world cb-g3 $TOWN --combat guard --time 11 --pitch -6 --frames ${GUARD_F:-220}
-want combat-guard-night && shot combat-guard-night --world cb-g4 $TOWN --combat guard --time 20.6 --pitch -6 --frames ${GUARD_F:-220}
+want combat-spear-flight-night && shot combat-spear-flight-night --world cb-n10 $AT --combat spear-throw --hold stone-spear --time 3.8 --lamps 3 -6 --pitch -4 --frames ${FLY_F:-104}
+want combat-guard-day && shot combat-guard-day --world cb-g5 $TOWN --combat guard --time 11 --pitch -6 --frames ${GUARD_F:-100}
+want combat-guard-night && shot combat-guard-night --world cb-g6 $TOWN --combat guard --time 20.6 --pitch -6 --frames ${GUARD_F:-100}
+want combat-fox-lunge-day && shot combat-fox-lunge-day --world cb-l1 $AT --combat fox-lunge $DAY --pitch -14 --frames ${LUNGE_F:-158}
+want combat-fox-gather-day && shot combat-fox-gather-day --world cb-l2 $AT --combat fox-lunge $DAY --pitch -14 --frames ${GATHER_F:-146}
+want combat-bow-draw-day && shot combat-bow-draw-day --world cb-b1 $AT --combat bow-draw --hold bow $DAY --pitch -4 --frames ${BOW_F:-115}

@@ -480,10 +480,28 @@ pub fn bow() -> Vec<Part> {
         |t| 0.35 + 0.65 * (PI * t).sin().max(0.0).powf(0.6),
         0.55,
     );
-    let a = pts[0] + Vec3::new(0.004, 0.012, 0.0);
-    let b = pts[20] + Vec3::new(0.004, -0.012, 0.0);
+    let (a, b) = bow_string_ends();
     let string = taper_tube("weapon_feather", &[a, b], 4, 0.0022, |_| 1.0, 1.0);
     vec![limb, string]
+}
+
+/// Where the bow's string is tied, its foot and its tip, in the bow's own
+/// frame (the bow runs up +Y, its belly toward -X).
+pub fn bow_string_ends() -> (Vec3, Vec3) {
+    (Vec3::new(0.044, 0.012, 0.0), Vec3::new(0.044, 1.488, 0.0))
+}
+
+/// A metre of the bow's string, up +Y from the origin: drawn twice, from
+/// each tie to the nock, scaled to its length (`held::weapon`).
+pub fn bow_string_unit() -> Part {
+    taper_tube(
+        "weapon_feather",
+        &[Vec3::ZERO, Vec3::Y],
+        4,
+        0.0022,
+        |_| 1.0,
+        1.0,
+    )
 }
 
 /// The mockup's arrow: a lathed shaft 0.71 m, a small flattened head of

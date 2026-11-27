@@ -4,7 +4,8 @@
 What it takes to stay alive in a Survival world, as the game does it today
 (`openspec/changes/survival-mode`, moved requirement by requirement as each
 is built and tested): the world's mode, health and death with the dropped
-pack, and stamina with its winded limits. The rest of the capability is
+pack, stamina with its winded limits, the predators' hunt, townsfolk who
+fight back, and weapons that hit on the swing. The rest of the capability is
 still the change's.
 
 ## Requirements
@@ -89,3 +90,65 @@ Pinned by `pbd_core::survival::stamina::tests::empty_is_winded_until_a_quarter_i
 - **WHEN** a Survival player's stamina runs out while swimming on the surface
 - **THEN** they float with the head above the water, can still swim slowly,
   and the bar refills once they stop swimming
+
+### Requirement: Predators hunt in Survival
+In Survival, predators SHALL hunt the player. Each SHALL give a visible and
+audible warning before its first attack, SHALL flee when badly hurt, and
+SHALL be bolder at night. In Explorer, predators SHALL keep their earlier
+behaviour and never attack the player.
+
+
+Pinned by `pbd_core::survival::predator::tests::{it_notices_within_range_and_further_at_night,
+a_stalk_turns_to_a_warning_close_in,
+the_warning_is_held_at_least_one_and_a_half_seconds_before_the_first_attack,
+a_lunge_that_reaches_bites_for_the_species_damage, a_rewarn_is_short,
+struck_it_fights_back_at_once, below_a_third_of_its_health_it_flees_then_calms,
+out_of_reach_a_while_it_gives_up, a_downed_player_is_left_alone,
+an_explorer_fox_never_attacks}` and `pbd_app::husbandry::hunt::tests::{a_survival_fox_stalks_warns_and_bites_and_an_explorer_fox_never_does,
+the_lunge_gathers_springs_and_lands_and_the_warning_growls}` (the warning is
+the crouch and the `predator_growl` cue).
+
+#### Scenario: A fox at night
+- **WHEN** a Survival player meets a red fox at night
+- **THEN** it stalks, warns, and attacks, and flees once it is badly hurt
+
+#### Scenario: The same fox in Explorer
+- **WHEN** an Explorer player meets a red fox
+- **THEN** it never attacks them
+
+### Requirement: Townsfolk fight back
+In Survival, a struck townsperson SHALL fight back or flee, nearby guards
+SHALL come to fight, and the town SHALL remember the fight in the player's
+standing with it. In Explorer, townsfolk SHALL NOT be harmed.
+
+
+Pinned by `pbd_core::survival::standing::tests::*` and
+`pbd_app::combat::tests::{a_struck_villager_brings_the_guards_and_lowers_the_towns_standing,
+a_swing_at_a_townsperson_in_explorer_does_nothing}`.
+
+#### Scenario: Striking a villager
+- **WHEN** a Survival player strikes a villager in a town
+- **THEN** the guards come for the player, and the town's standing with them
+  drops
+
+### Requirement: Weapons are crafted in tiers and hit on the swing
+In Survival, spears, a bow with arrows, hunting axes and swords SHALL be
+crafted from the existing recipe tables (by hand, at the workbench, and from
+the forge's ingots), at stone, bronze and iron tiers, locked behind their
+missions. A weapon's hit SHALL land at the swing's hit moment; a spear SHALL
+also be thrown, and an arrow SHALL fly under the body's own gravity in the
+floating origin. A fired arrow or a thrown spear that survives SHALL lie
+where it stopped until picked up. In Explorer these recipes SHALL NOT exist.
+
+
+Pinned by `pbd_core::survival::{melee, weapons}::tests::*`,
+`pbd_app::combat::tests::{the_hit_lands_at_the_swings_hit_moment,
+a_tools_drawn_impact_lands_on_the_rules_hit_frame, a_thrown_spear_lands_as_a_drop,
+a_weapon_wears_per_hit_and_breaks}`, `pbd_app::held::weapon_swing::tests::*`,
+and the recipe tests `station::tests::survival_recipes_are_offered_only_in_a_survival_world`
+and `every_survival_unlock_in_the_missions_file_is_a_recipe`.
+
+#### Scenario: An arrow drops with distance
+- **WHEN** a Survival player looses an arrow level at full draw
+- **THEN** it falls under the planet's gravity along its flight, and where it
+  lands it can be picked up again or is broken

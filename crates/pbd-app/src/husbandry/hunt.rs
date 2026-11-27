@@ -39,6 +39,8 @@ pub struct Game {
     pub flinch: f32,
     /// Its herd square and member, for the `hunted` record.
     pub herd: Option<(u64, u32)>,
+    /// It began a warning this frame: the growl to sound (design 6).
+    pub growl: bool,
 }
 
 /// What a strike did, for the combat path to act on.
@@ -344,6 +346,18 @@ impl Farmyard {
         self.beasts.get(index).map(|b| b.species)
     }
 
+    /// Where predators began to warn since the last call (local): their
+    /// growls.
+    pub fn take_growls(&mut self) -> Vec<Vec3> {
+        let mut out = Vec::new();
+        for b in &mut self.beasts {
+            if std::mem::take(&mut b.game.growl) {
+                out.push(b.pos);
+            }
+        }
+        out
+    }
+
     /// The bites landed since the last call, pts each.
     pub fn take_bites(&mut self) -> Vec<f32> {
         std::mem::take(&mut self.bites)
@@ -409,7 +423,15 @@ pub(super) fn drive(
         health_share: b.game.health.unwrap_or(full) / full,
         struck: std::mem::take(&mut b.game.struck),
     };
+    let was = b.game.hunt.phase;
     let bite = b.game.hunt.step(cfg, p, mode, &senses, dt);
+    // A warning out of a stalk growls; a re-warn between lunges does not.
+    if b.game.hunt.phase == Phase::Warn && was == Phase::Stalk {
+        b.game.growl = true;
+    }
+    // The lunge's gather (combat C2): low and still before it springs.
+    let gathering = b.game.hunt.phase == Phase::Attack
+        && b.game.hunt.in_phase_s < cfg.hunt.lunge_s * cfg.hunt.lunge_draw.gather_share;
     let dir = flat.normalize_or(b.facing);
     let crouch_goal = match b.game.hunt.motion(p) {
         Motion::Free => {
@@ -418,6 +440,12 @@ pub(super) fn drive(
                 b.goal = None;
             }
             0.0
+        }
+        Motion::Toward { .. } if gathering => {
+            b.mode = Mode::Hunt;
+            b.goal = None;
+            b.speed = 0.0;
+            cfg.hunt.lunge_draw.gather_crouch
         }
         Motion::Toward { mps, crouch } => {
             b.mode = Mode::Hunt;
@@ -445,7 +473,9 @@ pub(super) fn drive(
             0.0
         }
     };
-    b.game.crouch += (crouch_goal - b.game.crouch).clamp(-dt * 3.0, dt * 3.0);
+    // The gather drops at once; the rest eases.
+    let rate = if gathering { 12.0 } else { 3.0 };
+    b.game.crouch += (crouch_goal - b.game.crouch).clamp(-dt * rate, dt * rate);
     bite
 }
 
@@ -483,7 +513,41 @@ pub(super) fn drawn_down(b: &Beast) -> f32 {
     if b.game.dead_s.is_some() {
         1.0
     } else {
-        b.down.max(b.game.crouch)
+        b.down.max(b.game.crouch).max(lunge_draw(b).2)
+    }
+}
+
+/// The lunge drawn (combat C2, the Hunt tab's draft): how high the body is
+/// lifted on the spring's arc, m, its nose up, rad, and the landing's
+/// squash, 0..1. Zero outside an attack. Drawn only.
+pub(super) fn lunge_draw(b: &Beast) -> (f32, f32, f32) {
+    let h = &crate::survival::rules().hunt;
+    lunge_at(h, b.game.hunt.phase, b.game.hunt.in_phase_s)
+}
+
+/// [`lunge_draw`] for a phase and its seconds.
+pub fn lunge_at(
+    h: &pbd_core::survival::config::HuntConfig,
+    phase: Phase,
+    s: f32,
+) -> (f32, f32, f32) {
+    if phase != Phase::Attack {
+        return (0.0, 0.0, 0.0);
+    }
+    let d = &h.lunge_draw;
+    let u = (s / h.lunge_s.max(1e-3)).clamp(0.0, 1.0);
+    if u < d.gather_share {
+        (0.0, 0.0, 0.0)
+    } else if u < d.land_share {
+        let k = (u - d.gather_share) / (d.land_share - d.gather_share);
+        (
+            d.lift_m * (std::f32::consts::PI * k).sin(),
+            d.pitch_rad * (1.0 - 2.0 * k),
+            0.0,
+        )
+    } else {
+        let k = (u - d.land_share) / (1.0 - d.land_share).max(1e-3);
+        (0.0, 0.0, d.land_squash * (1.0 - k))
     }
 }
 
@@ -666,6 +730,63 @@ mod tests {
         let (_, h) = hunted.unwrap();
         assert_eq!((h.square, h.member, h.day), (0x51, 2, 4.5));
         assert!(drops.iter().any(|(g, _)| g == "raw-meat"));
+    }
+
+    /// The lunge gathers still, springs on an arc nose up, and lands with a
+    /// squash; a warning out of a stalk growls once.
+    #[test]
+    fn the_lunge_gathers_springs_and_lands_and_the_warning_growls() {
+        let cfg = SurvivalConfig::shipped();
+        let h = &cfg.hunt;
+        let at = |u: f32| lunge_at(h, Phase::Attack, u * h.lunge_s);
+        assert_eq!(at(0.1), (0.0, 0.0, 0.0));
+        let (lift, pitch, _) = at(0.5);
+        assert!(lift > 0.1 && pitch.abs() < 0.05, "{lift} {pitch}");
+        assert!(at(0.3).1 > 0.1, "nose up as it leaves");
+        assert!(at(0.85).2 > 0.0, "the landing squashes");
+        assert_eq!(lunge_at(h, Phase::Warn, 0.1), (0.0, 0.0, 0.0));
+        let roster = roster();
+        let sp = roster[index_of(&roster, "red-fox") as usize].clone();
+        let mut yard = Farmyard::default();
+        let i = yard.place_wild(
+            index_of(&roster, "red-fox"),
+            Vec3::Z * 6.0,
+            Vec3::Y,
+            Vec3::X,
+            1,
+        );
+        let b = &mut yard.beasts[i];
+        let mut growls = 0;
+        let mut gathered_still = false;
+        for _ in 0..300 {
+            let at_feet = b.pos - b.pos.normalize_or(Vec3::Z);
+            let feet = if b.game.hunt.phase == Phase::Stalk {
+                Vec3::ZERO
+            } else {
+                at_feet
+            };
+            drive(
+                b,
+                &sp,
+                &cfg,
+                WorldMode::Survival,
+                Some(feet),
+                Vec3::Y,
+                false,
+                false,
+                1.0 / 30.0,
+            );
+            growls += usize::from(std::mem::take(&mut b.game.growl));
+            if b.game.hunt.phase == Phase::Attack && b.game.hunt.in_phase_s < 0.1 {
+                gathered_still |= b.goal.is_none() && b.speed == 0.0;
+            }
+            if let (Mode::Hunt, Some(goal)) = (b.mode, b.goal) {
+                let to = goal - b.pos;
+                b.pos += to.normalize_or_zero() * (b.hunt_mps / 30.0).min(to.length());
+            }
+        }
+        assert_eq!(growls, 1, "one growl as the stalk turns to a warning");
+        assert!(gathered_still, "it gathers before it springs");
     }
 
     /// The yard's systems with the hunt's parameters have no conflicting

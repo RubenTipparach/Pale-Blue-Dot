@@ -50,6 +50,8 @@ pub const NAMED: &[&str] = &[
     // A worn tool breaking (`survival-mode` design 11), played by the
     // desktop's wear.
     "tool_break",
+    // A predator's warning (`survival-mode` design 6), played by the combat.
+    "predator_growl",
     "catch_splash",
     "catch_chime",
     "mission_done",

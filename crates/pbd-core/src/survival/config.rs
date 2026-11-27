@@ -364,6 +364,23 @@ pub struct HuntConfig {
     pub give_up_s: f32,
     /// A lunge is over after this long, s.
     pub lunge_s: f32,
+    /// How the lunge is drawn (drawn only: no rule reads it).
+    pub lunge_draw: LungeDraw,
+}
+
+/// The lunge's drawing (`survival-mode` combat C2, the Hunt tab's draft):
+/// it gathers, low and still, for the first `gather_share` of the lunge,
+/// springs on an arc `lift_m` high with its nose up `pitch_rad` until
+/// `land_share`, and lands with a squash. Drawn only.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LungeDraw {
+    pub gather_share: f32,
+    pub land_share: f32,
+    pub gather_crouch: f32,
+    pub lift_m: f32,
+    pub pitch_rad: f32,
+    pub land_squash: f32,
 }
 
 /// Townsfolk who fight back (combat C3).
@@ -770,6 +787,14 @@ impl SurvivalConfig {
         non_negative("hunt.calm_s", hn.calm_s)?;
         positive("hunt.give_up_s", hn.give_up_s)?;
         positive("hunt.lunge_s", hn.lunge_s)?;
+        let ld = &hn.lunge_draw;
+        if !(0.0 < ld.gather_share && ld.gather_share < ld.land_share && ld.land_share <= 1.0) {
+            return Err("survival.ron hunt.lunge_draw: 0 < gather_share < land_share <= 1".into());
+        }
+        within("hunt.lunge_draw.gather_crouch", ld.gather_crouch, 0.0, 1.0)?;
+        within("hunt.lunge_draw.lift_m", ld.lift_m, 0.0, 1.0)?;
+        within("hunt.lunge_draw.pitch_rad", ld.pitch_rad, 0.0, 1.0)?;
+        within("hunt.lunge_draw.land_squash", ld.land_squash, 0.0, 1.0)?;
         let tf = &self.townsfolk;
         if !(0..=100).contains(&tf.struck_standing) {
             return Err("survival.ron townsfolk.struck_standing must be 0..=100".into());

@@ -42,9 +42,10 @@ use pbd_core::missions::Kind;
 use pbd_core::records::{Author, Record};
 use pbd_core::survival::health::Cause;
 use pbd_core::survival::hunting::Blade;
-use pbd_core::survival::melee::{Draw, Release, SwingClock};
+use pbd_core::survival::melee::{self, Draw, Release, SwingClock};
 use pbd_core::survival::standing::{self, Guard, GuardAct, Standing};
 use pbd_core::survival::weapons::{self, Flight, Held, Missile, Projectile, Struck};
+use pbd_core::survival::wear::{Action, Spend, Wear, Wearer};
 use pbd_core::survival::{SurvivalConfig, WorldMode};
 use pbd_core::townsfolk::PersonId;
 use pbd_core::world_frame::{SimOrigin, WorldPos};
@@ -141,6 +142,7 @@ pub fn in_hand(
     item: Option<Item>,
     tool: Option<(Tool, pbd_core::inventory::Tier)>,
     broken: bool,
+    weapon_broken: bool,
 ) -> InHand {
     let weapon = item.and_then(crate::held::weapon::weapon_of);
     if let Some(good) = weapon {
@@ -158,6 +160,9 @@ pub fn in_hand(
         };
         let held = if left == Some(SwingKind::Bow) || left.is_none() {
             Held::Hand
+        } else if weapon_broken {
+            // A worn-out weapon hits as bare hands (design 11).
+            Held::Broken
         } else {
             Held::Weapon(code.to_string())
         };
@@ -179,6 +184,94 @@ pub fn in_hand(
         left: None,
         right: None,
     }
+}
+
+/// The weapons' wear (design 11, the same model as the tools'): one record
+/// of the player's, the uses each weapon kind has left by its good's code; a
+/// weapon with no entry is full, so an old save reads full.
+pub const WEAPON_WEAR_KIND: &str = "weapon_wear";
+pub const WEAPON_WEAR_SCHEMA: u32 = 1;
+
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct WeaponWearBook {
+    pub weapons: std::collections::BTreeMap<String, Wear>,
+}
+
+/// What wears for a weapon's good code.
+pub fn wearer_of(code: &str) -> Wearer {
+    if code == Good::BOW.code() {
+        Wearer::Bow
+    } else {
+        Wearer::Weapon(code.to_string())
+    }
+}
+
+impl WeaponWearBook {
+    pub fn of(save: &WorldSave) -> Self {
+        save.records
+            .get(WEAPON_WEAR_KIND, 0)
+            .and_then(|r| r.read())
+            .unwrap_or_default()
+    }
+
+    pub fn wear(&self, code: &str) -> Wear {
+        Wear::of_saved(
+            crate::survival::rules(),
+            &wearer_of(code),
+            self.weapons.get(code).copied(),
+        )
+    }
+
+    pub fn broken(&self, code: &str) -> bool {
+        self.wear(code).is_broken()
+    }
+}
+
+/// Spend a weapon's wear for `action`, through the durable path. Nothing in
+/// Explorer.
+pub fn spend_weapon_wear(save: &mut WorldSave, code: &str, action: Action) -> Spend {
+    if !save.mode().is_survival() {
+        return Spend::None;
+    }
+    let mut book = WeaponWearBook::of(save);
+    let mut wear = book.wear(code);
+    let spent = wear.spend(
+        crate::survival::rules(),
+        save.mode(),
+        &wearer_of(code),
+        action,
+    );
+    if spent == Spend::None {
+        return spent;
+    }
+    book.weapons.insert(code.to_string(), wear);
+    let rec = Record::of(WEAPON_WEAR_KIND, 0, WEAPON_WEAR_SCHEMA, &book);
+    if save.store(&Author::Player(0), vec![rec]).is_none() {
+        return Spend::None;
+    }
+    save.note_record_kinds(&[(WEAPON_WEAR_KIND, WEAPON_WEAR_SCHEMA)]);
+    spent
+}
+
+/// A landed hit's wear on what was in hand: a weapon's or a tool's.
+fn wear_hit(save: &mut WorldSave, held: &Held) -> Option<pbd_core::locale::Localized> {
+    let (spent, name) = match held {
+        Held::Weapon(code) => (
+            spend_weapon_wear(save, code, Action::HitLanded),
+            Good::by_code(code).map(|g| g.name()),
+        ),
+        Held::Tool(tool, tier) => (
+            crate::survival::spend_wear(save, *tool, *tier, Action::HitLanded),
+            Some(pbd_core::inventory::tool_title(*tool, *tier)),
+        ),
+        _ => return None,
+    };
+    (spent == Spend::Broke).then(|| broke_line(name))
+}
+
+fn broke_line(name: Option<pbd_core::locale::Localized>) -> pbd_core::locale::Localized {
+    let name = name.map(|n| n.to_string()).unwrap_or_default();
+    pbd_core::locale::tr_with("survival.broke", &[("tool", &name)])
 }
 
 /// The blade a held thing dresses a carcass with, if it can.
@@ -469,7 +562,11 @@ pub fn swing(
         Option<Res<crate::sky::Sun>>,
         Option<ResMut<crate::survival::Survival>>,
     ),
-    (mut landed, mut did): (MessageWriter<Landed>, MessageWriter<crate::missions::Did>),
+    (mut landed, mut did, mut sfx): (
+        MessageWriter<Landed>,
+        MessageWriter<crate::missions::Did>,
+        Option<ResMut<crate::audio::Sfx>>,
+    ),
 ) {
     let cfg = crate::survival::rules();
     let dt = time.delta_secs().clamp(0.0, 0.1);
@@ -487,11 +584,15 @@ pub fn swing(
         t.held()
             .and_then(|tool| t.tier(tool).map(|tier| (tool, tier)))
     });
-    let hand = in_hand(
-        item.as_deref().and_then(|i| i.0),
-        tool,
-        broken.is_some_and(|b| b.0),
-    );
+    let item_now = item.as_deref().and_then(|i| i.0);
+    let weapon_broken = match (
+        item_now.and_then(crate::held::weapon::weapon_of),
+        save.as_deref(),
+    ) {
+        (Some(good), Some(save)) => WeaponWearBook::of(save).broken(good.code()),
+        _ => false,
+    };
+    let hand = in_hand(item_now, tool, broken.is_some_and(|b| b.0), weapon_broken);
     let roster = match (config.as_deref(), body.as_deref()) {
         (Some(c), Some(b)) => roster(c, b),
         _ => Vec::new(),
@@ -524,11 +625,7 @@ pub fn swing(
         && claim.0
         && !weapon
     {
-        let beat = DigBeat {
-            working: melee_pressed || running,
-            meets: Meets::Air,
-            ..DigBeat::default()
-        };
+        let beat = tool_beat(combat.clock.under());
         if sw.0 != beat {
             sw.0 = beat;
         }
@@ -605,6 +702,7 @@ pub fn swing(
     let now_s = sun.as_deref().map_or(0.0, |s| s.clock.seconds);
     let day = now_s / f64::from(pbd_core::daylight::DAY_S);
     let mut say = None;
+    let mut broke = false;
     // Each hit lands now, on what the aim meets now (staging).
     for held in hits {
         let damage = weapons::melee_damage(cfg, &held);
@@ -628,6 +726,12 @@ pub fn swing(
                 let outcome =
                     yard.strike(cfg, &roster, mode, b.index, damage, blade_of(&held), day);
                 info!("COMBAT_HIT {species:?} for {damage} -> {outcome:?}");
+                if !matches!(outcome, Outcome::Nothing | Outcome::Refused(_))
+                    && let Some(line) = wear_hit(save, &held)
+                {
+                    broke = true;
+                    say = Some(line);
+                }
                 act_on(
                     outcome,
                     damage,
@@ -647,6 +751,10 @@ pub fn swing(
             (_, Some((id, _))) => {
                 if let Some(after) = strike_person(cfg, save, mode, id.site) {
                     info!("COMBAT_TOWNSPERSON {id:?} standing {after}");
+                    if let Some(line) = wear_hit(save, &held) {
+                        broke = true;
+                        say = Some(line);
+                    }
                     landed.write(Landed::Townsperson {
                         site: id.site,
                         standing: after,
@@ -684,6 +792,7 @@ pub fn swing(
                     (p, good)
                 })
             }),
+            SwingKind::Bow if weapon_broken => None,
             SwingKind::Bow => [Good::STONE_ARROW, Good::BONE_ARROW, Good::BRONZE_ARROW]
                 .into_iter()
                 .find(|a| hotbar.0.count(Item::Good(*a)) > 0)
@@ -693,6 +802,11 @@ pub fn swing(
                     let p = Projectile::loose_arrow(cfg, arrow.code(), from, dir, drawn_s)?;
                     save.record_pack(&slots).then(|| {
                         hotbar.0 = slots;
+                        // Each arrow loosed is a use of the bow.
+                        if spend_weapon_wear(save, Good::BOW.code(), Action::Used) == Spend::Broke {
+                            broke = true;
+                            say = Some(broke_line(Some(Good::BOW.name())));
+                        }
                         (p, arrow)
                     })
                 }),
@@ -708,8 +822,32 @@ pub fn swing(
             });
         }
     }
+    if broke {
+        info!("COMBAT_WEAPON_BROKE");
+        // The crack, in the hand (design 11).
+        if let Some(sfx) = sfx.as_deref_mut() {
+            sfx.play("tool_break", crate::audio::Where::At(eye + look * 0.6));
+        }
+    }
     if let (Some(text), Some(sv)) = (say, survival.as_deref_mut()) {
         sv.say(text);
+    }
+}
+
+/// The tool stroke's beat for a strike (combat C1): the dig's own beat with
+/// the rule's swing as its block, so the drawn impact lands on the rule's
+/// hit frame. A block of the hit's time and a pause of the rest of the
+/// period make one stroke of the whole period, its impact on the hit.
+pub fn tool_beat(under: Option<melee::Under>) -> DigBeat {
+    match under {
+        Some(u) => DigBeat {
+            working: true,
+            meets: Meets::Breaks,
+            break_s: u.hit_s,
+            between_s: (u.period_s - u.hit_s).max(0.0),
+            local_s: u.t,
+        },
+        None => DigBeat::default(),
     }
 }
 
@@ -1076,11 +1214,20 @@ pub fn bites(
     yard: Option<ResMut<Farmyard>>,
     mut save: Option<ResMut<WorldSave>>,
     mut survival: Option<ResMut<crate::survival::Survival>>,
+    mut sfx: Option<ResMut<crate::audio::Sfx>>,
 ) {
     let Some(mut yard) = yard else {
         return;
     };
     let bites = yard.take_bites();
+    // A predator's warning growls where it crouches (design 6).
+    let growls = yard.take_growls();
+    if let Some(sfx) = sfx.as_deref_mut() {
+        for at in growls {
+            info!("COMBAT_GROWL");
+            sfx.play("predator_growl", crate::audio::Where::At(at));
+        }
+    }
     let (Some(save), Some(sv)) = (save.as_deref_mut(), survival.as_deref_mut()) else {
         return;
     };
@@ -1116,10 +1263,11 @@ impl CombatScript {
 pub fn script(
     script: Option<ResMut<CombatScript>>,
     space: crate::SimSpace,
-    walkers: Query<&Position, With<Walker>>,
+    mut walkers: Query<&mut Position, With<Walker>>,
     cameras: Query<&GlobalTransform, With<WalkingCamera>>,
     frame: Option<Res<crate::planet::PlanetRenderFrame>>,
     mut combat: ResMut<Combat>,
+    mut walking: Option<ResMut<crate::walking::WalkingState>>,
     (mut yard, folk, config, body): (
         Option<ResMut<Farmyard>>,
         Option<Res<Townsfolk>>,
@@ -1133,10 +1281,10 @@ pub fn script(
         return;
     };
     let origin = space.origin();
-    let (Some(walker), Some(frame)) = (walkers.iter().next(), frame.as_deref()) else {
+    let (Some(walker), Some(frame)) = (walkers.iter().next().copied(), frame.as_deref()) else {
         return;
     };
-    let Some((_, look)) = eye_and_look(frame, &cameras) else {
+    let Some((eye, look)) = eye_and_look(frame, &cameras) else {
         return;
     };
     script.frame += 1;
@@ -1206,14 +1354,60 @@ pub fn script(
             "hound-warn" => place(yard, "dust-hound", 6.5, 0.45, false),
             "swing-hit" => place(yard, "red-fox", 1.7, 0.0, true),
             "spear-throw" => place(yard, "red-fox", 9.0, 0.0, true),
+            "fox-lunge" => place(yard, "red-fox", 3.0, 0.0, false),
             _ => {}
         }
     }
     combat.scripted = match scene.as_str() {
         "swing-hit" => Some((n == 60, false)),
         "spear-throw" => Some((false, (60..90).contains(&n))),
+        "bow-draw" => Some(((60..400).contains(&n), false)),
         _ => None,
     };
+    // The guard scene stands the player outside the town, a few metres out
+    // from its gate guard, and looks at the guard.
+    let gate_guard = folk.as_deref().and_then(|f| {
+        let g = f.everyone().find(|p| p.role == "guard")?;
+        Some((g.id, f.placed(g.id)?.feet, town_bounds(f, g.id.site)?.0))
+    });
+    if scene == "guard"
+        && n == 20
+        && let (Some((_, g, centre)), Some(contact)) = (gate_guard, contact.as_deref())
+        && let Some(mut pos) = walkers.iter_mut().next()
+    {
+        let gd = g.normalize();
+        let out = (gd - centre.normalize()) - gd * (gd - centre.normalize()).dot(gd);
+        let r = f64::from(crate::planet::PLANET_RADIUS);
+        let d = (gd + out.normalize_or(DVec3::X) * (7.0 / r)).normalize();
+        let df = d.as_vec3();
+        let surface = crate::planet::PLANET_RADIUS + crate::planet::surface_height(df).max(0.0);
+        let floor = contact.stand(df * (surface + 1.5)).floor_precise;
+        pos.0 = origin.at(d, floor + f64::from(crate::walking::HALF_HEIGHT) + 0.05);
+        info!("COMBAT_SCRIPT stood 7 m out from the gate guard");
+    }
+    if scene == "guard"
+        && (22..40).contains(&n)
+        && let (Some((_, g, _)), Some(walking)) = (gate_guard, walking.as_deref_mut())
+    {
+        let at = origin.to_local(WorldPos::new(origin.frame, g));
+        walking.look_toward(at + origin.up_at(at) * 1.0 - eye);
+    }
+    if scene == "guard"
+        && n == 30
+        && let Some(folk) = folk.as_deref()
+    {
+        // Where each of the town's people stands, for choosing a capture's
+        // spot (the log).
+        for p in folk.everyone() {
+            if let Some(pl) = folk.placed(p.id) {
+                let (lat, lon) = pbd_core::geo::lat_lon(pl.feet.as_vec3().normalize()).degrees();
+                info!(
+                    "COMBAT_SCRIPT person {:?} {} spear {} at {lat:.6} {lon:.6}",
+                    p.id, p.role, p.spear
+                );
+            }
+        }
+    }
     if scene == "guard" && n == 40 {
         let Some(folk) = folk.as_deref() else {
             return;
@@ -1232,7 +1426,7 @@ pub fn script(
             );
         }
     }
-    if n % 10 == 0 {
+    if n % 10 == 0 || (scene == "fox-lunge" && (130..190).contains(&n)) {
         let hunts = yard
             .as_deref()
             .map(|y| y.hunts(&roster))

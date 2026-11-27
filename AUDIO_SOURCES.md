@@ -108,6 +108,7 @@ This file is written by `python3 tools/audio/list_sources.py` (run by `tools/aud
 | [Splashing Footsteps Shallow Water](https://freesound.org/people/ChristopherJngs/sounds/861369/) | Freesound | ChristopherJngs | CC0 | `jump_shallow`, `land_shallow`, `step_shallow` |
 | [Tumbleweed Firestarter Torch Ignite Denoised 02](https://freesound.org/people/loganzsound/sounds/872960/) | Freesound | loganzsound | CC0 | `fire_ignite` |
 | [SPLASH.wav](https://freesound.org/people/petenice/sounds/9508/) | Freesound | petenice | CC0 | `catch_splash` |
+| [dog_growling 1.wav](https://freesound.org/people/15GPanskaBokstefflova_Nicola/sounds/461519/) | Freesound | 15GPanskaBokstefflova_Nicola | CC0 | `predator_growl` |
 | [Impact Sounds · Kenney](https://kenney.nl/assets/impact-sounds) | Kenney | Kenney | CC0 | `break_dirt`, `break_grass`, `break_snow`, `break_stone`, `dig_grass`, `dig_stone`, `float_dry`, `jump_grass`, `jump_snow`, `jump_stone`, `jump_wood`, `land_dirt`, `land_grass`, `land_hard`, `land_shallow`, `land_snow`, `land_stone`, `land_wood`, `place_dirt`, `place_dry`, `place_grass`, `place_lamp`, `place_sand`, `place_snow`, `place_stone`, `place_wood`, `step_grass`, `step_snow`, `step_stone`, `step_wood` |
 | [RPG Audio · Kenney](https://kenney.nl/assets/rpg-audio) | Kenney | Kenney | CC0 | `amb_town_night`, `break_wood`, `jump_dirt`, `jump_dry`, `jump_grass`, `jump_sand`, `jump_shallow`, `jump_snow`, `jump_stone`, `jump_wood`, `land_dirt`, `place_dirt`, `rigging_creak` |
 

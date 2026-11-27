@@ -326,6 +326,9 @@
         calm_s: 30.0,
         give_up_s: 8.0,
         lunge_s: 0.6,
+        // Drawn only, from the Hunt tab's draft (M39): the gather, the
+        // spring's arc and nose, and the landing's squash.
+        lunge_draw: (gather_share: 0.25, land_share: 0.8, gather_crouch: 0.45, lift_m: 0.12, pitch_rad: 0.15, land_squash: 0.3),
     ),
     // Combat C3: a strike on a townsperson in Survival.
     townsfolk: (

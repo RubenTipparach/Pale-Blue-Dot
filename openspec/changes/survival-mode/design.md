@@ -1148,22 +1148,33 @@ two-machine check).
   alone.
 - **Where it differs from the plan** (recommendations taken, ask only with
   screenshots):
-  - A tool's or bare hands' strike at a creature or a townsperson is drawn
-    with today's stroke at the air (`held-swing` decision 11), on its own
-    free beat; its impact lands within a frame or two of the rule's hit, not
-    on it exactly. The weapons' swings land on it exactly.
-  - The predators' growl is not yet a sound (the warning is the crouch and
-    the hold); a growl goes through the `sound-effects` skill.
-  - The attack's gather, spring and landing squash are drawn in the mockup;
-    in the game the predator crouches as it warns and lunges at its pace,
-    and a blow throws its head up. A carcass lies as a resting animal does.
-  - The bow's string is not drawn back in the hand (the bow is raised and
-    held); the mockup draws it.
+  - A tool's or bare hands' strike is drawn with today's tool stroke on the
+    rule's own beat: the dig's beat with the rule's swing as its block (a
+    block of `hit_s`, a pause of the rest of the period), so the drawn
+    impact lands on the rule's hit frame (`combat::tool_beat`; test
+    `a_tools_drawn_impact_lands_on_the_rules_hit_frame`). (Round 2; it was a
+    frame or two off on the free beat before.)
+  - The warning growls (`predator_growl`, a CC0 recording through the
+    `sound-effects` pipeline) once, as a stalk turns to a warning; a re-warn
+    between lunges is silent.
+  - The lunge is drawn as the Hunt tab draws it: the gather (it stops, low,
+    for the first quarter of the lunge), the spring (an arc 0.12 m high,
+    nose up then down) and the landing squash, from `survival.ron`'s
+    `hunt.lunge_draw` (drawn only). The body's own squash and stretch are
+    the mockup's; the game lowers and lifts the whole rig. A carcass lies as
+    a resting animal does.
+  - The bow's string is drawn back 0.42 m at full draw and snaps home on the
+    loose, the bow turned to face its belly ahead while raised; no arrow is
+    drawn on the string in hand yet.
+  - Weapons wear as tools do (design 11): a landed hit spends a use of the
+    weapon (`weapon_wear` record, one per weapon kind, an old save full),
+    an arrow loosed a use of the bow; at zero it breaks with the
+    `tool_break` crack and "{tool} broke", a broken weapon hits as bare
+    hands and a broken bow does not loose. A tool's landed hit spends a use
+    of the tool. Repairing a weapon waits on the repair panels.
   - A thrown spear or a loosed arrow still in the air when the game closes
     is lost: the slot it left is saved at the throw, its drop at the
     landing.
-  - Weapons do not spend wear yet (design 11's uses for weapons wait on the
-    wear book's weapon rows).
   - A projectile falls by the home planet's surface gravity.
   - The bow looses the first arrow it finds in the order stone, bone,
     bronze.

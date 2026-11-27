@@ -69,6 +69,39 @@ impl WeaponHold {
     }
 }
 
+/// The bow's limb in hand: turned to face its belly ahead while drawn.
+#[derive(Component)]
+pub struct BowLimb {
+    grip: f32,
+}
+
+/// One half of the bow's string in hand: 0 from the foot, 1 from the tip.
+#[derive(Component)]
+pub struct BowString {
+    half: u8,
+    grip: f32,
+}
+
+/// How far the string is drawn back at full draw, m, and the turn that
+/// faces the bow's belly ahead while it is drawn, rad (the mockup's).
+pub const BOW_DRAW_M: f32 = 0.42;
+pub const BOW_FACE_RAD: f32 = -std::f32::consts::FRAC_PI_2;
+
+/// A half of the string: from its tie to the nock, drawn `pull` m back
+/// (away from the belly, +X), the bow turned `turn` about its length.
+pub fn bow_string_half(half: u8, pull: f32, turn: f32, grip: f32) -> Transform {
+    let (foot, tip) = crate::weapon_models::bow_string_ends();
+    let nock = (foot + tip) * 0.5 + Vec3::X * pull;
+    let tie = if half == 0 { foot } else { tip };
+    let along = nock - tie;
+    let spin = Quat::from_rotation_y(turn);
+    Transform {
+        translation: spin * (tie - Vec3::Y * grip),
+        rotation: spin * Quat::from_rotation_arc(Vec3::Y, along.normalize_or(Vec3::Y)),
+        scale: Vec3::new(1.0, along.length(), 1.0),
+    }
+}
+
 /// A weapon in hand: its good, its rest pose and its fist.
 #[derive(Component)]
 pub struct HeldWeaponView {
@@ -175,8 +208,38 @@ pub(super) fn spawn_weapons(
         let item = commands
             .spawn((Name::new("item"), frame, Visibility::Inherited))
             .id();
-        for part in parts {
-            let part = part.clone();
+        let bow = good == Good::BOW;
+        for (index, part) in parts.into_iter().enumerate() {
+            // The bow's string is drawn as two halves meeting at the nock,
+            // so it can be drawn back (combat C1).
+            if bow && index == 1 {
+                let material = by_texture
+                    .entry(part.texture)
+                    .or_insert_with(|| {
+                        let texture = assets
+                            .as_deref()
+                            .map(|a| crate::towns::texture(a, part.texture));
+                        let m = materials.add(unlit(texture, true));
+                        lit.push(m.clone());
+                        m
+                    })
+                    .clone();
+                let unit = meshes.add(crate::weapon_models::bow_string_unit().held_mesh());
+                for half in 0..2u8 {
+                    let child = commands
+                        .spawn((
+                            Mesh3d(unit.clone()),
+                            MeshMaterial3d(material.clone()),
+                            bow_string_half(half, 0.0, 0.0, grip),
+                            Visibility::Inherited,
+                            NotShadowCaster,
+                            BowString { half, grip },
+                        ))
+                        .id();
+                    commands.entity(item).add_child(child);
+                }
+                continue;
+            }
             let material = by_texture
                 .entry(part.texture)
                 .or_insert_with(|| {
@@ -205,6 +268,9 @@ pub(super) fn spawn_weapons(
                     NotShadowCaster,
                 ))
                 .id();
+            if bow {
+                commands.entity(child).insert(BowLimb { grip });
+            }
             commands.entity(item).add_child(child);
         }
         commands.entity(holder).add_children(&[item, arm]);
@@ -259,8 +325,19 @@ pub(super) fn hold_weapons(
     time: Res<Time>,
     swing: Res<super::weapon_swing::SwingNow>,
     mut holders: Query<(&HeldWeaponView, &Held, &mut Transform, &mut Visibility)>,
-    mut arms: Query<&mut Transform, Without<HeldWeaponView>>,
+    mut arms: Query<
+        &mut Transform,
+        (
+            Without<HeldWeaponView>,
+            Without<BowString>,
+            Without<BowLimb>,
+        ),
+    >,
+    mut strings: Query<(&BowString, &mut Transform), (Without<HeldWeaponView>, Without<BowLimb>)>,
+    mut limbs: Query<(&BowLimb, &mut Transform), (Without<HeldWeaponView>, Without<BowString>)>,
 ) {
+    // The bow's draw this frame: how far back and how far turned.
+    let mut bow_draw = (0.0f32, 0.0f32);
     let on_foot = walking.is_some_and(|w| w.active)
         || seated_afloat(aboard.as_deref(), view.as_deref(), &vehicles);
     let good = item.0.and_then(weapon_of).filter(|_| on_foot);
@@ -291,7 +368,21 @@ pub(super) fn hold_weapons(
         let mut arm_local = Transform::IDENTITY;
         if let Some((kind, timing)) = swing.0 {
             let sw = &settings.0.weapon_swing;
-            let (key, stage, _) = super::weapon_swing::pose_at(sw.of(kind), sw.exaggerate, timing);
+            let (key, stage, drawn) =
+                super::weapon_swing::pose_at(sw.of(kind), sw.exaggerate, timing);
+            if kind == super::weapon_swing::SwingKind::Bow {
+                use super::weapon_swing::Stage;
+                // The string comes back over the anticipation and snaps
+                // home on the loose; the bow faces ahead while raised.
+                let pull = match stage {
+                    Stage::Anticipation => drawn,
+                    _ => 0.0,
+                };
+                // Turned as the arm rises, so nothing pops.
+                let top = sw.bow.top.phi.max(1e-3);
+                let face = (key.phi / top).clamp(0.0, 1.0);
+                bow_draw = (pull * BOW_DRAW_M, face * BOW_FACE_RAD);
+            }
             if stage != super::weapon_swing::Stage::Rest {
                 let fist = view.fist + Vec3::Y * breath;
                 let shoulder = Vec3::from(settings.0.stroke.shoulder);
@@ -323,6 +414,20 @@ pub(super) fn hold_weapons(
         }
         if *transform != posed {
             *transform = posed;
+        }
+    }
+    let (pull, turn) = bow_draw;
+    for (string, mut t) in &mut strings {
+        let want = bow_string_half(string.half, pull, turn, string.grip);
+        if *t != want {
+            *t = want;
+        }
+    }
+    for (limb, mut t) in &mut limbs {
+        let want = Transform::from_rotation(Quat::from_rotation_y(turn))
+            .with_translation(Vec3::NEG_Y * limb.grip);
+        if *t != want {
+            *t = want;
         }
     }
 }
