@@ -2,14 +2,15 @@
 
 ## ADDED Requirements
 
-### Requirement: The POWER tree opens with the iron age
-The Missions screen SHALL have a POWER tree of its own, saved in its own
-record, that opens when the starter tree's "The iron age" is done, and whose
-missions unlock the mills, lines and appliances as their rewards.
+### Requirement: The Power branch opens with the iron age
+The infrastructure tree SHALL have a Power branch whose first mission hangs
+off "Build a grinder" with a hidden gate on the starter tree's "The iron
+age", saved in the infrastructure tree's record, and whose missions unlock
+the mills, lines and appliances as their rewards.
 
 #### Scenario: A world that already has the iron age
-- **WHEN** a world whose starter tree has "The iron age" done is opened for the first time with this tree
-- **THEN** the POWER tree is open at its root and no mission in it is done
+- **WHEN** a world whose starter tree has "The iron age" done and whose infrastructure tree has "Build a grinder" done is opened for the first time with this branch
+- **THEN** the Power branch's first mission is open and no mission in it is done
 
 ### Requirement: A windmill grinds only with wind and on a rise
 A windmill SHALL be placed only where its cell stands at least 2 layers above

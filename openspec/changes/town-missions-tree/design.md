@@ -407,3 +407,27 @@ tab was left and opened again; it is now spawned shown while the Missions
 tab is open. The two plaques are stone (the header's are oak), in a centred
 row of their own under the header, and the shown tree's tab has an amber
 bar under it.
+
+## 13. The Roads branch moves to the infrastructure tree (owner, 2026-11-27)
+
+The owner, on the first draft of phase 4a's infrastructure tree: "Maybe move
+roads over to this section". Roads are civil works, so the Roads branch
+(`grinder`, `crush`, `mixer`, `gravel`, `mark`, `pave`, `join`) moves to the
+infrastructure tree (`infrastructure-missions` design 3), under the same ids,
+objectives, counts and coins. Written up, not built: `town_missions.ron` keeps
+the branch until `infrastructure-missions` task 2 is asked for.
+
+- **What pointed at roads here now points elsewhere**: `wheels` (the Carts
+  branch's first) hangs off `first-job` instead of `pave`; `first-job`
+  unlocks `wheel` instead of `grinder` (the grinder's recipe opens with the
+  infrastructure tree, which `first-job` opens); `pave` no longer unlocks
+  `wheel`. No other town mission names a road mission.
+- **The tree is then** a trunk and five branches (Trade, Jobs, Carts, Houses
+  and logs, Carpentry), 27 missions, 500 coins.
+- **Saves keep every road mission done**: the infrastructure record is
+  written on open from this record, moved missions done or open with their
+  counts and focus as they were; this record is not rewritten and keeps its
+  entries for the moved ids, unread; coins paid under `town_missions:<id>`
+  are never paid again (`infrastructure-missions` design 5).
+- M33's TOWN tab (version 12) no longer shows the Roads branch; the
+  INFRASTRUCTURE tab does.

@@ -20,7 +20,8 @@ Planning only. Nothing below the mockup starts until the owner asks for it
 - [ ] 1.1 `assets/config/power.ron` with its validation; a test that loads it
       and refuses a bad row.
 - [ ] 1.2 The recipes of design 3 in `recipes.ron`, names in the locale file.
-- [ ] 1.3 `power_missions.ron`: the tree of design 2, its own record.
+- [ ] 1.3 The Power branch of design 2 in `infrastructure_missions.ron`
+      (`infrastructure-missions` task 3.5), not a file or record of its own.
 
 ## 2. Rules (`pbd-core`)
 - [ ] 2.1 The windmill's wind share and rise rule; tests at 2, 5, 9 and 22 m/s.
@@ -34,4 +35,4 @@ Planning only. Nothing below the mockup starts until the owner asks for it
 - [ ] 3.2 Placement messages; the station panels show the wind or the kW.
 
 ## 4. Proof
-- [ ] 4.1 Before-and-after screenshots; the bot plays the POWER tree.
+- [ ] 4.1 Before-and-after screenshots; the bot plays the Power branch.

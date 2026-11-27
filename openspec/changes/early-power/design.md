@@ -34,19 +34,42 @@ past this one; anything that changes an existing world.
 
 ## Decisions
 
-### 1. A tree of its own, opened by the iron age
+### 1. A branch of the infrastructure tree, gated by the iron age
 
-POWER is a third tree in the Missions screen, as the town tree is (its own
-file `power_missions.ron`, its own saved record `power_missions`, its own
-tab). It opens when the starter tree's `iron` ("The iron age") is done,
-because the first mission needs an iron axle. Opening it unlocks the two
-recipes its first mission asks for (`wooden-gear`, `axle`). No mission of one
-tree is a parent of another tree's; a mission that needs another tree's
-station says so in its help line and waits on it with a hidden `after` gate
-across trees (`after: ["town:grinder"]`), the one new rule here
-(recommendation taken).
+**Changed 2026-11-27 (`infrastructure-missions`).** The owner asked "where
+are missions for infrastructure and power", and power is one part of phase
+4a's infrastructure. So these missions are not a tree of their own: they are
+the **Power branch of the infrastructure tree** (`infrastructure-missions`
+design 2), kept whole, every mission, recipe and number below unchanged. What
+changed:
 
-### 2. The tree
+- **No own file, record or tab.** The missions are rows of
+  `infrastructure_missions.ron`, saved in the `infrastructure_missions`
+  record, shown on the INFRASTRUCTURE tab. The planned `power_missions`
+  record is never written (nothing was built, so nothing migrates).
+- **Where it hangs.** `gears` hangs off the infrastructure tree's "Build a
+  grinder", and keeps the iron age as a hidden `after` gate across trees
+  (`after: ["starter:iron"]`), since its axle needs an iron ingot. The
+  infrastructure tree itself opens with the town tree's "A job from the
+  board" (`infrastructure-missions` design 1).
+- **The gates on the town tree's grinder and mixer** become gates inside
+  the infrastructure tree, where the grinder and the mixer now are (the
+  town tree's roads moved there, owner, 2026-11-27): `wind-grinder` and
+  `motor-grinder` need no gate (the grinder is their ancestor),
+  `motor-mixer` is `after: ["mixer"]`.
+- **The two recipes the tree opened with** (`wooden-gear`, `axle`) open
+  when the infrastructure tree opens.
+
+As first drafted (2026-11-26): POWER was a third tree in the Missions screen,
+its own file `power_missions.ron`, its own record `power_missions`, its own
+tab, opened when the starter tree's `iron` ("The iron age") was done, with a
+cross-tree `after` gate (`after: ["town:grinder"]`) for the grinder.
+
+### 2. The tree (the infrastructure tree's Power branch)
+
+The branch's parent is the infrastructure tree's `grinder`; where the table
+says "(tree opens)" read "`grinder` (`starter:iron`)", for `town:grinder` read
+no gate, and for `town:mixer` read `mixer` (decision 1).
 
 A strict tree, as the starter tree's rules have it: one parent each (the
 only line drawn), hidden `after` gates for extra needs, unlocks as rewards.
@@ -217,16 +240,19 @@ wind.").
 
 ### 11. Saves
 
-The tree's ids are a new record, append-only; no world from before has it,
-so it opens at its root when "The iron age" is done in that world, and a world
-that already has iron opens it on load. Mills, poles and appliances are
+The branch's ids are in the infrastructure tree's record, append-only; no
+world from before has them, so `gears` opens when "Build a grinder" and "The
+iron age" are both done in that world, and a world that already has both
+opens it on load (`infrastructure-missions` design 5 has the record). Mills, poles and appliances are
 stored records naming their author. Nothing existing changes.
 
 ### 12. The mockup
 
 M33 version 10:
 
-- **POWER** (`#power`): the tree as the Missions screen shows it, with its
+- **POWER** (`#power`; from version 12 the INFRASTRUCTURE tab,
+  `#infrastructure`, where this tree is the Power branch and `#power`
+  redirects): the tree as the Missions screen shows it, with its
   bot run (Step and Play, off until pressed), opening partway through
   "String a line"; the RECIPES side tab lists each unlock with its inputs.
 - **MILLS** (`#mills`): one 3D view, made when the tab first opens, stopped
