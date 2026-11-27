@@ -77,3 +77,42 @@ the overnight playthroughs (the phase-1 tree and `play-soak`) look for it.
 An earlier A/B reused one world for every run: the save carried the clock
 and the bot's turns between runs, and its later runs (581 frames over 33 ms
 in one) measured the hour and the route, not the change. Discarded.
+
+## 6. Found in play: every block edit costs a 100 ms frame
+
+The overnight phase-1 trunk (release, `--showcase phase-1-trunk`, frame
+log, aligned to the log at the first landing; `dips.py` in the session):
+**every dig the bot made, v3 to v12, is a frame of 100 to 123 ms, nearly all
+of it the main thread** (`cpu_main_ms` 99 to 119, render 10 to 13, GPU
+9 to 12). Nothing else in the run comes close; the walk had no edits, which
+is why it missed them. Digging, chopping, placing, tilling and picking up
+all edit the ground, so a player at work stutters on every action: the
+owner's "slow right away".
+
+The two light bakes logged beside each one (bounce 33 to 52 ms, lamps 15
+to 20 ms) run on the async pool, not the main thread. What runs on the main
+thread is `digging::apply_edit`:
+
+1. `(*fine.set).clone()`: the whole `FineSet`, four levels of `GpuCell`
+   records (about 200 B each; 65 MiB at the spawn, the startup log's
+   "65.0 MiB records") and the column tier, copied for one block;
+2. `set.apply`: the column, its record and its neighbours';
+3. `set.finish_edits()`: the whole tier relit and the sea's sheet re-marked
+   ("the measured six milliseconds", measured when the tier was smaller);
+4. `contact.set_fine(&set)`: the contact tier rebuilt from the new set;
+
+then, after it, the tier image (7 to 9 ms, `SPENT ... tier image`) and the
+field corners.
+
+Its own timing (`edit cost: clone, repack+reconcile, relight, contact`) is
+a `debug!` and is not in the logs. **Next: that split, measured**, on the
+same trunk with the digging module at debug, before any fix is chosen. The
+fix is one that keeps the picture (perf, no permission needed); the
+candidates, by what the split shows:
+
+- **the clone**: the coarse levels never change on an edit, so they become
+  shared (`Arc`) and only what is written is copied; the finest level in
+  shared pages, so an edit copies the pages it touches, not 37 MiB;
+- **the relight**: a bounded pass round the edit (the reference's way)
+  where the whole tier has grown past "six milliseconds";
+- **the contact rebuild**: updated for the changed columns only.

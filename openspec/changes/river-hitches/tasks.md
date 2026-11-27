@@ -6,3 +6,10 @@
 - [ ] 2.2 `perf_suite.py` `play` scenario, and a first run of it.
 - [x] 3.1 The fix, written in design first (design 4: the render origin at 128 m with hysteresis).
 - [ ] 3.2 The walk and `play` before and after, same sitting.
+
+## 4. Every block edit is a 100 ms frame (design 6)
+
+- [x] 4.1 Found on the overnight trunk: every dig 100 to 123 ms, the main thread.
+- [ ] 4.2 The edit's own split (clone, apply, relight, contact, tier image), measured.
+- [ ] 4.3 The fix for what the split names, written here first.
+- [ ] 4.4 The trunk before and after, same sitting: no frame over 33 ms on a dig.
