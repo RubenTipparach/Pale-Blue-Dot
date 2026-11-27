@@ -317,6 +317,7 @@ pub fn play(
     mut others: ResMut<Others>,
     time: Res<Time>,
     mut digest_s: Local<f64>,
+    sun: Option<ResMut<crate::sky::Sun>>,
 ) {
     let mut drops = drops;
     let now = time.elapsed_secs_f64();
@@ -444,6 +445,11 @@ pub fn play(
                     Err(why) => warn!("the host's message could not be read: {why:?}"),
                 }
             }
+            // The host's clock, every 5 s: this game runs it forward between,
+            // and is set to it only when it has drifted (design 15.8).
+            if let (Some(clock_s), Some(mut sun)) = (save.remote_clock(), sun) {
+                follow_clock(&mut sun.clock.seconds, clock_s);
+            }
             if let (Some(slots), Some(mut hotbar)) = (save.remote_slots(), hotbar) {
                 follow(&mut hotbar.0, slots);
             }
@@ -509,7 +515,7 @@ pub fn receive(player: u32, message: ToClient, save: &mut WorldSave, applied: &m
         ToClient::Slots { slots } => save.take_remote_slots(slots),
         news @ (ToClient::Drop { .. } | ToClient::DropLeft { .. }) => save.take_drop_news(news),
         ToClient::Record { record } => save.take_remote_record(record),
-        ToClient::Clock { .. } => {}
+        ToClient::Clock { clock_s } => save.take_remote_clock(clock_s),
         ToClient::Rejected { reason } => warn!("the host closed the game: {reason:?}"),
         other => debug!("player {player}: from the host, not used yet: {other:?}"),
     }
@@ -533,6 +539,18 @@ pub fn apply_drop_news(drops: &mut crate::drops::Drops, news: &ToClient) {
             }
         }
         _ => {}
+    }
+}
+
+/// How far this game's clock may run from the host's before it is set to
+/// it, s: closer than this, the two run on together and the sky never jumps.
+pub const CLOCK_DRIFT_S: f64 = 0.5;
+
+/// A joined game's clock follows the host's (design 15.8): set to it when
+/// they differ by more than [`CLOCK_DRIFT_S`], left to run otherwise.
+pub fn follow_clock(mine: &mut f64, host: f64) {
+    if (*mine - host).abs() > CLOCK_DRIFT_S {
+        *mine = host;
     }
 }
 
@@ -578,6 +596,17 @@ mod follow_tests {
     use super::*;
     use pbd_core::inventory::{Item, Stack};
     use pbd_core::terrain::Material;
+
+    /// Design 15.8: a joined game's clock is set to the host's only when
+    /// it has drifted past half a second.
+    #[test]
+    fn the_clock_follows_the_host_only_when_it_drifts() {
+        let mut mine = 1200.2;
+        follow_clock(&mut mine, 1200.0);
+        assert_eq!(mine, 1200.2, "close enough: runs on");
+        follow_clock(&mut mine, 1210.0);
+        assert_eq!(mine, 1210.0, "drifted: set to the host's");
+    }
 
     /// Design 22: the joined game's hotbar takes the server's slots whole
     /// and keeps the slot its player has selected.

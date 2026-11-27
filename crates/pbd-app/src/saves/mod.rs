@@ -366,6 +366,8 @@ struct Outgoing {
     /// Regions to ask for whole, and those asked for and not yet sent.
     resync: Vec<u32>,
     resync_waiting: std::collections::BTreeSet<u32>,
+    /// The world clock the server last sent, s (design 15.8), not yet taken.
+    clock_s: Option<f64>,
 }
 
 /// The save as the in-process server's store (`multiplayer` design 18):
@@ -993,6 +995,18 @@ impl WorldSave {
         let asked = std::mem::take(&mut out.resync);
         out.resync_waiting.extend(asked.iter().copied());
         asked
+    }
+
+    /// The world clock the server sent (design 15.8).
+    pub fn take_remote_clock(&mut self, clock_s: f64) {
+        if let Some(out) = self.outgoing.as_mut() {
+            out.clock_s = Some(clock_s);
+        }
+    }
+
+    /// The server's clock, once, for the sky to follow.
+    pub fn remote_clock(&mut self) -> Option<f64> {
+        self.outgoing.as_mut().and_then(|out| out.clock_s.take())
     }
 
     /// The host's next digest, to everyone joined (design 29).
