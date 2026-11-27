@@ -4,7 +4,7 @@
 //! [`Environment`]: sound reads the world and writes nothing to it.
 
 use super::{AudioData, Environment, Listener, Sfx, Where};
-use crate::planet::{EyeWater, EyeWaterState, PLANET_RADIUS, PlanetContact, PlanetFine};
+use crate::planet::{EyeWaterState, PLANET_RADIUS, PlanetContact, PlanetFine};
 use crate::walking::{GroundState, HALF_HEIGHT, Walker, WalkingConfig, WalkingState};
 use avian3d::prelude::{LinearVelocity, Position};
 use bevy::prelude::*;
@@ -156,17 +156,9 @@ fn along(up: Vec3, toward: Vec3, metres: f32) -> Vec3 {
     (up * angle.cos() + tangent * angle.sin()).normalize_or(up)
 }
 
-/// Whether the eye is under the water's surface.
-pub fn eye_under_water(eye: Vec3, water: Option<&EyeWaterState>, sheet_radius: f32) -> bool {
-    match water.map(|w| w.0) {
-        Some(EyeWater::Water { surface_radius }) => eye.length() < surface_radius,
-        Some(EyeWater::Air) => false,
-        _ => {
-            crate::planet::surface_height(eye.normalize_or(Vec3::Y)) < 0.0
-                && eye.length() < sheet_radius
-        }
-    }
-}
+/// Whether the eye is under the water's surface: the one rule
+/// (`crate::planet::eye_under_water`).
+pub use crate::planet::eye_under_water;
 
 /// The listener's surroundings, four times a second (design section 5), and
 /// the world bus's state.

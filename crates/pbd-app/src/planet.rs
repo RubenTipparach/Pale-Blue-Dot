@@ -57,8 +57,8 @@ pub use terrain::{
     switch_generator, terrain_config, terrain_epoch, terrain_radius, tileset_slot,
 };
 pub use water::{
-    EyeWater, EyeWaterState, RainShadows, emerge, eye_surface_radius, eye_water_at, inland_surface,
-    submersion,
+    EyeWater, EyeWaterState, RainShadows, emerge, eye_surface_radius, eye_under_water,
+    eye_water_at, inland_surface, submersion,
 };
 
 use bevy::math::{DMat4, DVec3};
@@ -391,7 +391,10 @@ impl Plugin for PlanetPlugin {
         .init_resource::<lod::NearField>()
         .init_resource::<lod::DuskLamps>()
         .add_systems(Startup, create_planet)
-        .add_systems(Update, (lod::switch_dusk_lamps, lod::refresh_lod).chain())
+        .add_systems(
+            Update,
+            (lod::switch_dusk_lamps, lod::relight_edits, lod::refresh_lod).chain(),
+        )
         .add_systems(
             PostUpdate,
             (crate::render_origin::rebase, update_planet_frame)
