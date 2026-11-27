@@ -79,14 +79,31 @@ pub fn run_clock(
     time: Res<Time>,
     mut sun: ResMut<Sun>,
     sped: Option<Res<ClockRate>>,
+    speed: Option<Res<TimeSpeed>>,
     mut rate: Local<Option<f32>>,
 ) {
     if sun.running {
         let own = *rate.get_or_insert_with(|| clock_runs().unwrap_or(1.0));
-        let rate = sped.map_or(own, |s| s.0);
+        let player = speed.map_or(1.0, |s| s.0);
+        let rate = sped.map_or(own * player, |s| s.0);
         sun.clock.advance(time.delta_secs() * rate);
     }
 }
+
+/// The player's clock speed (`time-speed`): how many times its own pace the
+/// world clock runs, set on the pause panel. One by default and not saved,
+/// so a world always opens at its own pace.
+#[derive(Resource, Clone, Copy, Debug, PartialEq)]
+pub struct TimeSpeed(pub f32);
+
+impl Default for TimeSpeed {
+    fn default() -> Self {
+        Self(1.0)
+    }
+}
+
+/// The pause panel's speeds (`time-speed` design 1).
+pub const TIME_SPEEDS: [u16; 4] = [1, 10, 60, 300];
 
 /// How many times its own pace the clock runs, where something asks it to
 /// run faster for a while: a showcase waiting on a crop or an egg, with a
@@ -118,6 +135,7 @@ pub struct SkyPlugin;
 
 impl Plugin for SkyPlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<TimeSpeed>();
         app.add_plugins(MaterialPlugin::<SkyMaterial>::default())
             .add_plugins(MaterialPlugin::<SunDiscMaterial>::default())
             .init_resource::<Sun>()

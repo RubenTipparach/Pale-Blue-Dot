@@ -261,6 +261,8 @@ controls:
     missions: the starter missions
     move: move
     noon_midnight: noon or midnight
+    time_back: time back (held)
+    time_forward: time forward (held)
     pack: "the pack: thirty more slots"
     paddle: paddle forward or back
     paddle_steer: steer with the paddle
@@ -307,6 +309,8 @@ controls:
     arrow_right: "→"
     arrow_up: "↑"
     backspace: BACK
+    bracket_left: "["
+    bracket_right: "]"
     caps_lock: CAPS
     comma: ","
     control_left: CTRL
@@ -1007,12 +1011,14 @@ menu:
     menus: Menus
     music: Music
   tab:
+    debug: DEBUG
     input: INPUT
     movement: MOVEMENT
     picture: PICTURE
     sound: SOUND
     weather: WEATHER
     world: WORLD
+  time_controls: Time controls
   that_world_open_load_another: "that world is open; load another first"
   world_name: "World {number}"
   world_open: "{world} (open)"
@@ -1811,8 +1817,13 @@ tier:
     name: Stone
 time:
   day: DAY
+  day_on: "+1 DAY"
+  fast: "TIME {rate}x"
+  hour_on: "+1 HOUR"
   line: "TIME  {hours}:{minutes}"
   night: NIGHT
+  rate: "{rate}x"
+  speed: SPEED
   title: TIME
 toasts:
   town_missions: Town missions unlocked

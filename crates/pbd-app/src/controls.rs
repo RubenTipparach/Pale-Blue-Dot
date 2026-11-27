@@ -153,7 +153,7 @@ pub enum Key {
 /// is in the kit's font (`ui_kit::tests::the_kit_font_has_every_label_glyph`
 /// reads this table). A key outside it is not taken by a rebind, and a cap
 /// waits for another.
-pub const ASSIGNABLE: [KeyCode; 87] = [
+pub const ASSIGNABLE: [KeyCode; 89] = [
     KeyCode::KeyA,
     KeyCode::KeyB,
     KeyCode::KeyC,
@@ -230,6 +230,8 @@ pub const ASSIGNABLE: [KeyCode; 87] = [
     KeyCode::Comma,
     KeyCode::Period,
     KeyCode::Slash,
+    KeyCode::BracketLeft,
+    KeyCode::BracketRight,
     KeyCode::Numpad0,
     KeyCode::Numpad1,
     KeyCode::Numpad2,
@@ -578,12 +580,16 @@ const AFLOAT: [Binding; 3] = [
     row(&[Key::Board(KeyCode::KeyG)], " ", "tool_wheel"),
 ];
 
-const WORLD: [Binding; 5] = [
+const WORLD: [Binding; 7] = [
     row(&[Key::Board(KeyCode::KeyM)], " ", "map"),
     row(&[Key::Board(KeyCode::KeyR)], " ", "walk_or_fly"),
     row(&[Key::Board(KeyCode::KeyH)], " ", "spawn"),
     row(&[Key::Board(KeyCode::KeyP)], " ", "weather"),
     row(&[Key::Board(KeyCode::KeyL)], " ", "noon_midnight"),
+    // With the DEBUG page's time controls on (`time-speed`); Shift held
+    // with either, a day every five seconds.
+    row(&[Key::Board(KeyCode::BracketLeft)], " ", "time_back"),
+    row(&[Key::Board(KeyCode::BracketRight)], " ", "time_forward"),
 ];
 
 /// The repro key (`repro-capture`; the owner, 2026-11-16: "add a button

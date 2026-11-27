@@ -2230,7 +2230,7 @@ pub fn run(args: &[String]) {
                 .chain(),
             (menu::press, menu::paint, menu::rebuild_saves).chain(),
             (weather_ui::drag, weather_ui::show).chain(),
-            (time_ui::press, time_ui::toggle, time_ui::show).chain(),
+            (time_ui::press, time_ui::toggle, time_ui::show, time_ui::tag).chain(),
             overlay_ui::show,
             autosave,
             save_weather,
