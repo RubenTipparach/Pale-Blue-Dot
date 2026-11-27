@@ -459,6 +459,9 @@ pub struct Launch {
     /// tree whatever the world's own mode (a capture instrument,
     /// `survival-mode` 6.5, until worlds carry their mode).
     pub mission_mode: Option<pbd_core::missions::Mode>,
+    /// `--combat <scene>`: a capture's combat scene (`survival-mode` combat
+    /// C1 to C3), a measurement instrument.
+    pub combat: Option<String>,
     /// `--pick-path <branch>`: once the path picker is up, that path is
     /// picked as a click on its card would (a capture instrument,
     /// `survival-mode` 6.5).
@@ -651,6 +654,7 @@ impl Launch {
             tree_town: false,
             town_focus: None,
             mission_mode: None,
+            combat: None,
             pick_path: None,
             tree_jobs: false,
             track_job: false,
@@ -947,6 +951,15 @@ impl Launch {
                         args.get(i)
                             .expect("--town-focus takes a town mission id")
                             .clone(),
+                    );
+                }
+                "--combat" => {
+                    i += 1;
+                    result.walk = true;
+                    result.combat = Some(
+                        args.get(i)
+                            .cloned()
+                            .expect("--combat takes a scene: fox-stalk, fox-warn, hound-warn, swing-hit, spear-throw or guard"),
                     );
                 }
                 "--mission-mode" => {
@@ -2060,6 +2073,13 @@ pub fn run(args: &[String]) {
     .add_plugins(survival_play::SurvivalPlayPlugin)
     // Fire in the player's hands, in Survival (`wildfire` 4.1, 4.3, 4.4).
     .add_plugins(fire_play::FirePlayPlugin)
+    // Combat (`survival-mode` combat C1 to C4): the swing's rule and its
+    // claim on the click run before the digging reads it.
+    .add_plugins(pbd_app::combat::CombatPlugin)
+    .configure_sets(
+        Update,
+        pbd_app::combat::CombatSet.before(digging::dig_and_place),
+    )
     // `--craft pack-locked`'s pointer, after the UI's focus pass (a capture
     // instrument, `tool-crafting` 5.5).
     .add_systems(
@@ -2691,6 +2711,9 @@ pub fn run(args: &[String]) {
         }
         if let Some(scene) = launch.husbandry.clone() {
             app.insert_resource(pbd_app::husbandry::HusbandryScript { scene });
+        }
+        if let Some(scene) = launch.combat.clone() {
+            app.insert_resource(pbd_app::combat::CombatScript::new(scene));
         }
         if launch.cast {
             app.add_systems(

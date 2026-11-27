@@ -336,6 +336,54 @@ impl Townsfolk {
     pub fn drawn(&self) -> usize {
         self.slots.iter().filter(|s| s.who.is_some()).count()
     }
+
+    /// A town of `people` standing at a planet of `radius_m`, for another
+    /// module's tests (`combat`: a struck villager brings the guards).
+    #[cfg(test)]
+    pub(crate) fn stand_for_test(&mut self, site: u32, people: Vec<Person>, radius_m: f64) {
+        let live = people
+            .into_iter()
+            .map(|person| {
+                let placed = person.at(0.0, radius_m);
+                Live {
+                    mood: Mood::new(Expression::Neutral),
+                    face: Face::new(1, Expression::Neutral),
+                    body: Body::new(1),
+                    forward: placed.forward,
+                    placed,
+                    driven: None,
+                    posture: None,
+                    walk: None,
+                    door: None,
+                    chosen: Chosen {
+                        expression: Expression::Neutral,
+                        focus: false,
+                    },
+                    talking: false,
+                    held: None,
+                    behind: 0.0,
+                    person,
+                }
+            })
+            .collect();
+        self.towns.push(Folk { site, live });
+    }
+
+    /// Whether a person is driven by another part of the game now.
+    pub fn driven(&self, id: PersonId) -> bool {
+        self.live(id).is_some_and(|l| l.driven.is_some())
+    }
+}
+
+/// A plain person at a post, for another module's tests.
+#[cfg(test)]
+pub(crate) fn test_person(site: u32, index: u32, at: Vec3, spear: bool) -> Person {
+    Person {
+        id: PersonId { site, index },
+        spear,
+        at,
+        ..proxy_person()
+    }
 }
 
 /// Hold a person for a talk, or let them go when it ends

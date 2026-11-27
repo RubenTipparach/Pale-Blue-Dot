@@ -677,9 +677,11 @@ pub fn dig_and_place(
     ),
     // The fell's dust and leaves (`tree_fx`); and whether the tool in hand
     // is broken, which digs as bare hands (`survival-mode` design 11).
-    (mut tree_fx, broken): (
+    (mut tree_fx, broken, claim): (
         Option<ResMut<pbd_app::tree_fx::TreeFxQueue>>,
         Option<Res<pbd_app::survival::HeldBroken>>,
+        // A click that is a strike's (`survival-mode` combat C1).
+        Option<Res<pbd_app::combat::CombatClaim>>,
     ),
 ) {
     let broken = broken.is_some_and(|b| b.0);
@@ -688,6 +690,13 @@ pub fn dig_and_place(
     }
     let dt = time.delta_secs();
     let between = dig.0.between_s;
+    // A click that is a strike's digs nothing, and the strike draws its
+    // own stroke (`survival-mode` combat C1).
+    if claim.is_some_and(|c| c.0) {
+        aimed.target = None;
+        mining.breaking.step(dt, false, None, between);
+        return;
+    }
     // The walker has the pointer, and a digger is in hand (bare hands or a
     // digging tool; the rod casts).
     let captured = walking

@@ -18,6 +18,7 @@ pub mod chests;
 pub mod clutter;
 #[cfg(feature = "desktop")]
 pub mod coast_walk;
+pub mod combat;
 #[cfg(feature = "desktop")]
 pub mod compass;
 #[cfg(feature = "desktop")]

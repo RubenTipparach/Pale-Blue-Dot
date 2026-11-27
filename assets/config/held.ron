@@ -199,4 +199,54 @@
         spear_up: (-0.22, 0.62, -1.0),
         breathe_m: 0.003,
     ),
+    // The weapons' swings (`survival-mode` combat C1, task 1.6), from the
+    // drafted Weapons tab's In hand view (its RON button prints this block):
+    // stage times s; keyed poses, the arm raised about the stroke's shoulder
+    // (phi) and swung across (yaw, left positive), the fist pulled along the
+    // aim (pull_m), the weapon's own pitch (tip up and back positive) and
+    // roll. A melee swing's times are fitted to the rule's hit
+    // (survival.ron); a thrown spear and the bow wait for the release.
+    weapon_swing: (
+        spear: (
+            windup_s: 0.14, anticipate_s: 0.1, strike_s: 0.07,
+            impact_hold_s: 0.05, recoil_s: 0.08, recover_s: 0.26,
+            top: (phi: 0.04, yaw: 0.06, pull_m: -0.22, pitch: -0.58, roll: 0.0),
+            coil: (phi: 0.06, yaw: 0.08, pull_m: -0.28, pitch: -0.62, roll: 0.0),
+            hit: (phi: -0.05, yaw: -0.08, pull_m: 0.4, pitch: -0.74, roll: 0.0),
+            recoil: (phi: -0.03, yaw: -0.05, pull_m: 0.3, pitch: -0.7, roll: 0.0),
+        ),
+        axe: (
+            windup_s: 0.11, anticipate_s: 0.07, strike_s: 0.07,
+            impact_hold_s: 0.05, recoil_s: 0.07, recover_s: 0.23,
+            top: (phi: 0.55, yaw: -0.1, pull_m: -0.08, pitch: 0.95, roll: 0.1),
+            coil: (phi: 0.62, yaw: -0.12, pull_m: -0.1, pitch: 1.08, roll: 0.12),
+            hit: (phi: -0.3, yaw: 0.14, pull_m: 0.14, pitch: -1.45, roll: -0.05),
+            recoil: (phi: -0.2, yaw: 0.1, pull_m: 0.1, pitch: -1.15, roll: 0.0),
+        ),
+        sword: (
+            windup_s: 0.09, anticipate_s: 0.06, strike_s: 0.06,
+            impact_hold_s: 0.03, recoil_s: 0.08, recover_s: 0.18,
+            top: (phi: 0.4, yaw: -0.5, pull_m: -0.06, pitch: 0.55, roll: -0.85),
+            coil: (phi: 0.46, yaw: -0.6, pull_m: -0.08, pitch: 0.65, roll: -0.95),
+            hit: (phi: -0.25, yaw: 0.7, pull_m: 0.12, pitch: -1.1, roll: 0.7),
+            recoil: (phi: -0.32, yaw: 0.85, pull_m: 0.08, pitch: -1.2, roll: 0.8),
+        ),
+        throw: (
+            windup_s: 0.25, anticipate_s: 0.15, strike_s: 0.08,
+            impact_hold_s: 0.0, recoil_s: 0.1, recover_s: 0.3,
+            top: (phi: 0.42, yaw: -0.08, pull_m: -0.2, pitch: -0.5, roll: 0.0),
+            coil: (phi: 0.46, yaw: -0.1, pull_m: -0.28, pitch: -0.52, roll: 0.0),
+            hit: (phi: 0.12, yaw: 0.2, pull_m: 0.35, pitch: -0.72, roll: 0.0),
+            recoil: (phi: -0.2, yaw: 0.28, pull_m: 0.2, pitch: -0.9, roll: 0.0),
+        ),
+        bow: (
+            windup_s: 0.15, anticipate_s: 0.8, strike_s: 0.04,
+            impact_hold_s: 0.02, recoil_s: 0.1, recover_s: 0.3,
+            top: (phi: 0.12, yaw: 0.36, pull_m: 0.08, pitch: 0.32, roll: -0.12),
+            coil: (phi: 0.14, yaw: 0.36, pull_m: 0.06, pitch: 0.32, roll: -0.12),
+            hit: (phi: 0.15, yaw: 0.36, pull_m: 0.12, pitch: 0.34, roll: -0.12),
+            recoil: (phi: 0.08, yaw: 0.34, pull_m: 0.06, pitch: 0.32, roll: -0.1),
+        ),
+        exaggerate: 1.0,
+    ),
 )

@@ -44,6 +44,7 @@ pub mod placed;
 pub mod punch;
 pub mod stroke;
 pub mod weapon;
+pub mod weapon_swing;
 use stroke::{
     DigBeat, Gear, Meets, Motion, PunchSettings, ShovelSettings, StrokeClock, StrokeSettings,
     StrokeTool, SwingSettings,
@@ -75,6 +76,8 @@ pub struct HeldSettings {
     pub light: light::LightHold,
     /// How a weapon is held (`survival-mode` design 16).
     pub weapon: weapon::WeaponHold,
+    /// The weapons' swings (`survival-mode` combat C1).
+    pub weapon_swing: weapon_swing::WeaponSwings,
 }
 
 /// The hand's wrapped light, in `held.hand_light`: a face's shade is
@@ -275,6 +278,7 @@ impl Default for HeldSettings {
             hand_light: HandLight::default(),
             light: light::LightHold::default(),
             weapon: weapon::WeaponHold::default(),
+            weapon_swing: weapon_swing::WeaponSwings::default(),
         }
     }
 }
@@ -309,6 +313,7 @@ impl HeldSettings {
         self.swing.validate()?;
         self.light.validate()?;
         self.weapon.validate()?;
+        self.weapon_swing.validate()?;
         self.rod.validate()
     }
 }
@@ -1136,6 +1141,7 @@ pub struct HeldPlugin;
 impl Plugin for HeldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Swinging>()
+            .init_resource::<weapon_swing::SwingNow>()
             .init_resource::<RodCue>()
             .init_resource::<RodMotion>()
             .init_resource::<RodTipNow>()

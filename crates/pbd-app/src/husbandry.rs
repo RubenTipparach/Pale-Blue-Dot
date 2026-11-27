@@ -15,6 +15,7 @@
 
 pub mod breed;
 pub mod forms;
+pub mod hunt;
 pub mod loft;
 pub mod rig;
 
@@ -93,6 +94,9 @@ enum Mode {
     Flee,
     Approach,
     Follow,
+    /// A predator hunting (`survival-mode` combat C2): its pace is the
+    /// hunt's.
+    Hunt,
 }
 
 /// Where an animal may go.
@@ -150,6 +154,10 @@ struct Beast {
     /// Its head held where a capture set it (`--husbandry close-stand` or
     /// `close-graze`): grazing or up, looking ahead. A capture instrument.
     held_graze: Option<bool>,
+    /// Its health, hunt and carcass in a Survival world (combat C2).
+    game: hunt::Game,
+    /// The hunt's pace while in [`Mode::Hunt`], m/s.
+    hunt_mps: f32,
 }
 
 impl Beast {
@@ -203,6 +211,8 @@ impl Beast {
             sitting: false,
             posed: false,
             held_graze: None,
+            game: hunt::Game::default(),
+            hunt_mps: 0.0,
         }
     }
 }
@@ -231,6 +241,8 @@ pub struct Farmyard {
     /// Hearts to show over an animal this frame, for a feed
     /// (`taming-hearts`): whose, and how many.
     hearts: Vec<(Who, u8)>,
+    /// Predators' bites landed, pts, for the combat path (combat C2).
+    bites: Vec<f32>,
 }
 
 impl Default for Farmyard {
@@ -248,6 +260,7 @@ impl Default for Farmyard {
             deeds: Vec::new(),
             gained: Vec::new(),
             hearts: Vec::new(),
+            bites: Vec::new(),
         }
     }
 }
@@ -930,11 +943,17 @@ fn sync(world: World, mut save: Option<ResMut<WorldSave>>, mut yard: ResMut<Farm
     }
     // Wild herds near, on dry grass.
     let roster: Vec<LandSpecies> = world.roster().to_vec();
+    // A member killed in a Survival world stays away until its herd comes
+    // back (design 17): its `hunted` record.
+    let survival = hunt::mode_of(Some(&*save)).is_survival();
+    let day = world.day();
     for herd in wild_herds_near(up, near, &s.herds, &roster, world.sea.as_deref()) {
         let east = Vec3::Y.cross(herd.centre).normalize_or(Vec3::X);
         let north = herd.centre.cross(east);
-        for m in &herd.members {
-            if tamed.contains(&m.seed) {
+        for (member, m) in herd.members.iter().enumerate() {
+            if tamed.contains(&m.seed)
+                || (survival && hunt::away(save, crate::survival::rules(), m.seed, day))
+            {
                 continue;
             }
             let who = Who::Wild { seed: m.seed };
@@ -949,7 +968,7 @@ fn sync(world: World, mut save: Option<ResMut<WorldSave>>, mut yard: ResMut<Farm
             let genome = sp.keep.as_ref().map_or_else(Genome::default, |k| {
                 Genome::roll(m.seed, k.coats.len(), k.patterns.len())
             });
-            yard.beasts.push(Beast::new(
+            let mut beast = Beast::new(
                 who,
                 herd.species,
                 m.sex,
@@ -958,7 +977,9 @@ fn sync(world: World, mut save: Option<ResMut<WorldSave>>, mut yard: ResMut<Farm
                 d,
                 Range::Around(herd.centre, s.herds.spread_m * 1.5),
                 m.seed,
-            ));
+            );
+            beast.game.herd = Some((hunt::square_id(herd.square), member as u32));
+            yard.beasts.push(beast);
         }
     }
     // Everything else fades out. A follower and a scripted animal stay.
@@ -1710,6 +1731,10 @@ fn step(
     mut yard: ResMut<Farmyard>,
     hotbar: Option<Res<Hotbar>>,
     mut trace: Local<Option<Option<HerdTrace>>>,
+    (save, survival): (
+        Option<Res<WorldSave>>,
+        Option<Res<crate::survival::Survival>>,
+    ),
 ) {
     let trace = trace.get_or_insert_with(herd_trace);
     if let Some(t) = trace.as_mut() {
@@ -1729,6 +1754,13 @@ fn step(
     let held = hotbar.as_ref().and_then(|h| h.held()).map(|st| st.item);
     let hours = dt / DAY_S * 24.0;
     let fade = dt / s.herds.fade_s;
+    // The hunt (combat C2): Survival only, never on a downed player.
+    let mode = hunt::mode_of(save.as_deref());
+    let rules = crate::survival::rules();
+    let player_down = survival
+        .as_deref()
+        .is_some_and(|sv| sv.dead || sv.vitals.as_ref().is_some_and(|v| v.consciousness.is_out()));
+    let mut bites = Vec::new();
     for b in yard.beasts.iter_mut() {
         b.shown = if b.leaving {
             (b.shown - fade).max(0.0)
@@ -1743,10 +1775,34 @@ fn step(
         let up = o.up_at(b.pos);
         let night = world.night_at(up);
         let bird = sp.plan == Plan::Bird;
+        if !b.posed {
+            bites.extend(hunt::drive(
+                b,
+                sp,
+                rules,
+                mode,
+                feet,
+                up,
+                night,
+                player_down,
+                dt,
+            ));
+        }
+        // A carcass lies where it fell (design 17).
+        if b.game.dead_s.is_some() {
+            b.speed = 0.0;
+            b.goal = None;
+            b.mode = Mode::Idle;
+            b.swing = 0.0;
+            b.pos = stand_on(&o, b.pos, ground);
+            continue;
+        }
         // What it wants.
         b.mode_s -= dt;
         if let (Who::Wild { .. }, Some(feet)) = (b.who, feet)
             && !b.posed
+            && b.game.hunt.phase == pbd_core::survival::predator::Phase::Wander
+            && b.mode != Mode::Hunt
         {
             b.trust.decay(hours, &s.taming);
             let d = feet.distance(b.pos);
@@ -1824,6 +1880,7 @@ fn step(
                 }
             }
             Mode::Approach => sp.walk_mps * 0.8,
+            Mode::Hunt => hunt::hunt_pace(b),
             _ => sp.walk_mps,
         };
         let mut want = 0.0;
@@ -1961,6 +2018,7 @@ fn step(
             (b.clock_s * 2.2 + b.phase * 0.1).sin() * 0.35
         };
     }
+    yard.bites.extend(bites);
     yard.beasts
         .retain(|b| !(b.leaving && b.shown <= 0.0 && b.entity.is_none()));
 }
@@ -2050,7 +2108,8 @@ fn draw(
         let pose = rig::Pose {
             phase: b.phase,
             swing: b.swing,
-            head_down: b.head_down,
+            // A blow throws the head up (combat C2); drawn only.
+            head_down: b.head_down - b.game.flinch * 0.6,
             glance: b.glance,
             bob: if sp.plan == Plan::Bird {
                 (b.phase * 2.0).sin() * 0.02 * (b.swing / 0.45).min(1.0)
@@ -2063,7 +2122,8 @@ fn draw(
             } else {
                 0.0
             },
-            down: b.down,
+            // A carcass lies, a warning predator crouches.
+            down: hunt::drawn_down(b),
         };
         let mut builder = rig::Builder::default();
         rig::build(
@@ -2549,7 +2609,7 @@ fn script(
                     n as u64 + 1,
                     feet_point + right * x + ahead * y,
                 );
-                let d = yard.beasts[k].pos.normalize();
+                let d = world.query(yard.beasts[k].pos).normalize();
                 yard.beasts[k].range = Range::Around(d, 0.05);
                 yard.beasts[k].facing = right;
                 yard.beasts[k].idle_s = 1.0e6;

@@ -8,8 +8,9 @@
 //! further out), the fist closed on the weapon where it is gripped (a
 //! spear near its balance, a sword at its grip). It is in the right hand
 //! when the tool slot is empty, and mirrored into the left beside a tool.
-//! Its swings are not here: they wait on their mockup (task 1.6), so the
-//! weapon rests in the hand with the breath of the held items' sway.
+//! It swings as the rule's swing clock says ([`super::weapon_swing`],
+//! `survival-mode` combat C1, from the drafted mockup), and between swings
+//! rests in the hand with the breath of the held items' sway.
 //!
 //! Each part is unlit with a light fixed in its own frame baked in, and the
 //! field's light at the eye laid over it (`light_held`), as the tools and
@@ -256,7 +257,9 @@ pub(super) fn hold_weapons(
     view: Option<Res<crate::vehicles::view::VehicleView>>,
     vehicles: Query<&crate::vehicles::Vehicle>,
     time: Res<Time>,
-    mut holders: Query<(&HeldWeaponView, &mut Transform, &mut Visibility)>,
+    swing: Res<super::weapon_swing::SwingNow>,
+    mut holders: Query<(&HeldWeaponView, &Held, &mut Transform, &mut Visibility)>,
+    mut arms: Query<&mut Transform, Without<HeldWeaponView>>,
 ) {
     let on_foot = walking.is_some_and(|w| w.active)
         || seated_afloat(aboard.as_deref(), view.as_deref(), &vehicles);
@@ -264,7 +267,7 @@ pub(super) fn hold_weapons(
     let left = tools.held().is_some();
     let t = time.elapsed_secs();
     let breath = settings.0.weapon.breathe_m * (t * 1.7).sin();
-    for (view, mut transform, mut visibility) in &mut holders {
+    for (view, held, mut transform, mut visibility) in &mut holders {
         let shown = good == Some(view.good);
         let want = if shown {
             Visibility::Inherited
@@ -282,6 +285,36 @@ pub(super) fn hold_weapons(
             ..default()
         };
         let mut posed = pose.apply(view.rest, view.fist);
+        // The swing under way, drawn only (combat C1): the weapon turns on
+        // the fist, and the arm follows the arm's own arc about the
+        // shoulder, not the weapon's turn.
+        let mut arm_local = Transform::IDENTITY;
+        if let Some((kind, timing)) = swing.0 {
+            let sw = &settings.0.weapon_swing;
+            let (key, stage, _) = super::weapon_swing::pose_at(sw.of(kind), sw.exaggerate, timing);
+            if stage != super::weapon_swing::Stage::Rest {
+                let fist = view.fist + Vec3::Y * breath;
+                let shoulder = Vec3::from(settings.0.stroke.shoulder);
+                let weapon = super::weapon_swing::place(key, posed, fist, shoulder);
+                let arm = super::weapon_swing::place(
+                    super::weapon_swing::Key {
+                        pitch: key.phi,
+                        roll: 0.0,
+                        ..key
+                    },
+                    posed,
+                    fist,
+                    shoulder,
+                );
+                arm_local = Transform::from_matrix(weapon.to_matrix().inverse() * arm.to_matrix());
+                posed = weapon;
+            }
+        }
+        if let Ok(mut t) = arms.get_mut(held.arm)
+            && *t != arm_local
+        {
+            *t = arm_local;
+        }
         if left {
             let q = posed.rotation;
             posed.translation.x = -posed.translation.x;
