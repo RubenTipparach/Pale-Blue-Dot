@@ -8392,6 +8392,7 @@ mod tests {
             .add_message::<pbd_app::husbandry::Deed>()
             .add_message::<pbd_app::kitchen::Cooked>()
             .add_message::<pbd_app::kitchen::Ate>()
+            .add_message::<pbd_app::kitchen::Munched>()
             .add_systems(First, clear_edges)
             .add_systems(
                 PreUpdate,

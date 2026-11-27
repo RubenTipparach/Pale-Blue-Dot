@@ -517,6 +517,7 @@ pub fn eat(
     mut hotbar: ResMut<slots::Hotbar>,
     mut note: ResMut<FarmNote>,
     mut ate: MessageWriter<Ate>,
+    mut munched: MessageWriter<pbd_app::kitchen::Munched>,
     mut did: MessageWriter<pbd_app::missions::Did>,
 ) {
     if !buttons.just_pressed(MouseButton::Right) || *screen != Screen::Playing {
@@ -555,6 +556,7 @@ pub fn eat(
         );
     } else if let Some((good, _)) = pbd_app::survival::eat_raw(&mut save, &mut hotbar.0) {
         // Raw food, Survival only: no buff, the bars show what it gave.
+        munched.write(pbd_app::kitchen::Munched { good });
         did.write(pbd_app::missions::Did::new(
             pbd_core::missions::Kind::Eat,
             good.code(),

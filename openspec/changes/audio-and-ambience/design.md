@@ -771,3 +771,38 @@ approve it.
 reads the asks `Sfx` holds: `eat_soft` and `eat_crisp`, at the eye. The
 cue-book tests hold both cues to `cues.ron` and every take's file to an Ogg
 that exists and is mono, and a test decodes each take.
+
+## Munching, take 2 (owner, 2026-11-27)
+
+**The ask.** "Can you get some proper munching sounds for me? Eating is
+rusuing the gasp from diving lol which doesn't work".
+
+**What was measured.** The code is right: `Ate` plays `eat_soft` or
+`eat_crisp` at the eye (`audio::hooks::deeds`), not `breath`. The
+recordings are the trouble. `eat_soft`'s source, Freesound 707806
+("CHEWING_02"), has 34% of its energy above 4 kHz and 1% below 250 Hz: a
+close, airy recording whose chews are mostly breath through the teeth.
+`breath` itself (65620, the surfacing gasp) is 12% above 4 kHz. The munch
+is hissier than the gasp, and reads as one.
+
+**The fix, recorded CC0 only** (each page read for its CC0 link by
+`fetch_cc0.py`, 2026-11-27):
+- `eat_soft` is cut from Freesound 798398 ("Person Eating", DuranBurrus)
+  and 593596 ("Chewing.wav", Rehanjo): their loudest 1.2 s chewing windows
+  have under 1% of their energy above 4 kHz and 6 or 7 bites each, a full,
+  wet chew with body. A 150 Hz high pass takes off the handling and room
+  rumble under it (798398's windows sit 74 to 85% below 250 Hz).
+- `eat_crisp` keeps its apple and carrot crunches; a bite should be bright.
+  A fifth source, 634123 ("Eating a Raw Carrot", Erbsland-Music), is
+  fetched for later takes.
+- **Raw food munches too.** Raw meat, eggs, milk and tree fruit eaten from
+  the hand in Survival (survival-mode, "Eating in a Survival world") raised
+  no event, so they were silent. They raise `kitchen::Munched` on the frame
+  the save took them, and the audio plays the same `eat_cue`. `crisp_foods`
+  gains the fruit that crunch, apple and pear; the soft fruit, raw meat, the
+  egg and milk chew as `eat_soft`.
+
+**Verify.** `inspect_sfx.py check` on the new takes (no clipping; each a
+few separate bursts ending at nothing) and their energy above 4 kHz,
+before and after; the audio test that `Munched` asks for the cue at the
+eye. Only the owner's ears approve it.

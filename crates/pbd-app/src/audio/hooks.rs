@@ -119,6 +119,7 @@ pub(super) fn register(app: &mut App) {
         .add_message::<crate::husbandry::Deed>()
         .add_message::<crate::kitchen::Cooked>()
         .add_message::<crate::kitchen::Ate>()
+        .add_message::<crate::kitchen::Munched>()
         .add_message::<crate::missions::Did>()
         .add_message::<crate::missions::MissionDone>()
         .add_systems(
@@ -521,6 +522,7 @@ fn deeds(
     mut deeds: MessageReader<crate::husbandry::Deed>,
     mut cooked: MessageReader<crate::kitchen::Cooked>,
     mut ate: MessageReader<crate::kitchen::Ate>,
+    mut munched: MessageReader<crate::kitchen::Munched>,
     mut did: MessageReader<crate::missions::Did>,
     mut finished: MessageReader<crate::missions::MissionDone>,
     hotbar: Option<Res<crate::hotbar::Hotbar>>,
@@ -549,6 +551,11 @@ fn deeds(
     // makes two meals in a frame one munch.
     for crate::kitchen::Ate { dish, .. } in ate.read() {
         let cue = pbd_core::audio::eat_cue(*dish, &data.mix);
+        sfx.play(cue, Where::At(listener.eye));
+    }
+    // Raw food from the hand munches the same way.
+    for crate::kitchen::Munched { good } in munched.read() {
+        let cue = pbd_core::audio::eat_cue(*good, &data.mix);
         sfx.play(cue, Where::At(listener.eye));
     }
     for crate::missions::Did(happened) in did.read() {
@@ -1018,6 +1025,7 @@ mod tests {
             world.init_resource::<Messages<crate::husbandry::Deed>>();
             world.init_resource::<Messages<crate::kitchen::Cooked>>();
             world.init_resource::<Messages<crate::kitchen::Ate>>();
+            world.init_resource::<Messages<crate::kitchen::Munched>>();
             world.init_resource::<Messages<crate::missions::Did>>();
             world.init_resource::<Messages<crate::missions::MissionDone>>();
             world.init_resource::<Sfx>();
@@ -1051,6 +1059,42 @@ mod tests {
             heard("glowing-mushroom", Effect::Glow),
             vec![("eat_crisp", Where::At(eye))]
         );
+        // Raw food from the hand (Survival): an apple crunches, raw meat
+        // chews.
+        let munched = |good: &str| {
+            let mut world = World::new();
+            world.init_resource::<Messages<crate::hotbar::Gained>>();
+            world.init_resource::<Messages<crate::hotbar::Planted>>();
+            world.init_resource::<Messages<crate::husbandry::Deed>>();
+            world.init_resource::<Messages<crate::kitchen::Cooked>>();
+            world.init_resource::<Messages<crate::kitchen::Ate>>();
+            world.init_resource::<Messages<crate::kitchen::Munched>>();
+            world.init_resource::<Messages<crate::missions::Did>>();
+            world.init_resource::<Messages<crate::missions::MissionDone>>();
+            world.init_resource::<Sfx>();
+            world.insert_resource(Listener {
+                eye,
+                valid: true,
+                ..Listener::default()
+            });
+            world.insert_resource(AudioData {
+                cues: book(),
+                mix: ron::from_str(include_str!("../../../../assets/config/audio/mix.ron"))
+                    .unwrap(),
+                ambience: Default::default(),
+            });
+            world.write_message(crate::kitchen::Munched {
+                good: Good::by_code(good).unwrap(),
+            });
+            bevy::ecs::system::RunSystemOnce::run_system_once(&mut world, deeds).unwrap();
+            let mut sfx = world.resource_mut::<Sfx>();
+            std::mem::take(&mut sfx.requests)
+                .into_iter()
+                .map(|r| (r.cue, r.at))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(munched("apple"), vec![("eat_crisp", Where::At(eye))]);
+        assert_eq!(munched("raw-meat"), vec![("eat_soft", Where::At(eye))]);
         let book = book();
         for cue in ["eat_crisp", "eat_soft"] {
             assert_eq!(book.cues[cue].bus, pbd_core::audio::Bus::Effects, "{cue}");

@@ -31,6 +31,14 @@ pub struct Ate {
     pub effect: Effect,
 }
 
+/// Raw food was eaten from the hand (Survival only: raw meat, an egg, milk,
+/// a tree fruit), with no effect. Raised on the frame the save took it, so
+/// it munches as a dish does (`audio-and-ambience`, "Munching, take 2").
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Munched {
+    pub good: Good,
+}
+
 /// What the running effects do this frame: each a multiplier, 1 when it is
 /// not running. Kept in step with the save's `meal` record by
 /// [`refresh_effects`]; walking, fishing and digging read it.
