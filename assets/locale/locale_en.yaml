@@ -723,6 +723,7 @@ interact:
     build: "Build {thing}"
     check: "Check {thing}"
     collect: "Collect {thing}"
+    drink: "Drink {thing}"
     drive: "Drive {thing}"
     feed: "Feed {thing}"
     fill: "Place {thing}"
@@ -2018,6 +2019,12 @@ station:
   workbench:
     name: workbench
 survival:
+  broke: "{tool} broke"
+  hud:
+    body_c: "{c} C"
+    heat_stroke: Heat stroke
+    wake_up: Wake up
+    you_died: You died
   mode:
     explorer: Explorer
     survival: Survival
@@ -2027,6 +2034,7 @@ survival:
     thirsty: Thirsty
     very_thirsty: Very thirsty
     protected: Protected
+  water: water
 talk:
   back: BACK
   bye: BYE

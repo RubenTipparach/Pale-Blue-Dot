@@ -38,6 +38,8 @@ mod showcase;
 mod slots;
 mod sounds;
 mod survival_kit;
+// Survival's HUD, death, drinking and wear (`survival-mode`).
+mod survival_play;
 mod talk;
 mod time_ui;
 mod toasts;
@@ -2054,6 +2056,7 @@ pub fn run(args: &[String]) {
     // state and counting, then the coin count and the talk, trade and
     // board panels.
     .add_plugins((pbd_app::economy::EconomyPlugin, talk::TalkPlugin))
+    .add_plugins(survival_play::SurvivalPlayPlugin)
     // `--craft pack-locked`'s pointer, after the UI's focus pass (a capture
     // instrument, `tool-crafting` 5.5).
     .add_systems(

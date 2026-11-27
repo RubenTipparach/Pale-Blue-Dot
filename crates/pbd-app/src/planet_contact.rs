@@ -454,6 +454,17 @@ impl PlanetContact {
         (alt, out)
     }
 
+    /// The material at a body-local point by the column there: `None` off
+    /// the tier. The shade march's question (`survival-mode` design 13).
+    pub fn column_material(&self, point: Vec3) -> Option<pbd_core::terrain::Material> {
+        let direction = point.try_normalize()?;
+        let fine = self.fine.as_ref()?;
+        let id = fine.locate(direction)?;
+        let column = fine.set.columns.column(id)?;
+        let layer = pbd_core::column::layer_at(point.length() - PLANET_RADIUS)?;
+        Some(column.material(layer))
+    }
+
     /// Whether `point` (body-local) is over a column of the tier: what the
     /// river walk logs as on or off the tier.
     pub fn on_tier(&self, point: Vec3) -> bool {

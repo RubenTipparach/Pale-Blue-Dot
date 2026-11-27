@@ -61,6 +61,9 @@ pub enum Screen {
     /// The building planner, opened with F at a drafting table or O in
     /// build mode (`building-planner` design 3).
     Planner,
+    /// "You died" in a Survival world, until Wake up (`survival-mode`
+    /// design 8).
+    Dead,
 }
 
 impl Screen {
@@ -89,6 +92,8 @@ impl Screen {
             | Screen::Talk
             | Screen::Planner => Screen::Playing,
             Screen::Trade | Screen::Board => Screen::Talk,
+            // Only Wake up leaves it.
+            Screen::Dead => Screen::Dead,
             Screen::Settings | Screen::Saves => Screen::Pause,
         }
     }
@@ -152,6 +157,9 @@ pub enum MenuAction {
     FlowArrows,
     /// Put the open Input sub-tab's keys back to their defaults.
     ResetTab,
+    /// Make the next new world a Survival one (true) or an Explorer one
+    /// (`survival-mode` design 1).
+    Mode(bool),
     /// The breeding screen's species tab, by roster index.
     BreedSpecies(u16),
     /// A kept animal of the herd pressed: sire or dam by its sex.
@@ -684,6 +692,9 @@ pub struct NameField {
     pub edited: bool,
     /// Enter was pressed in the field; `press` makes the world.
     pub submit: bool,
+    /// The mode the next new world is made in (`survival-mode` design 1):
+    /// Explorer unless Survival is picked.
+    pub survival: bool,
 }
 
 impl NameField {
@@ -798,7 +809,7 @@ pub struct Panel(pub(super) Screen);
 /// time a binding is added, and a magic offset would be wrong the day it does.
 /// The first cut used `top: 50%` and the input list ran off the bottom of the
 /// window.
-pub(super) fn layer() -> Node {
+pub(crate) fn layer() -> Node {
     Node {
         position_type: PositionType::Absolute,
         left: px(0),
@@ -1936,6 +1947,27 @@ pub fn rebuild_saves(
                     field.spawn((body(name.shown(), 10.0, ui_kit::TEXT), NameText));
                 });
             });
+            // The new world's mode (`survival-mode` design 1): Explorer or
+            // Survival, the one picked lit as the focused plaque.
+            rows.spawn(Node {
+                column_gap: px(3),
+                align_items: AlignItems::Center,
+                ..default()
+            })
+            .with_children(|line| {
+                for (survival, mode) in [
+                    (false, pbd_core::survival::WorldMode::Explorer),
+                    (true, pbd_core::survival::WorldMode::Survival),
+                ] {
+                    let plaque = small(line, kit, mode.name(), MenuAction::Mode(survival));
+                    if name.survival == survival {
+                        line.commands().entity(plaque).insert(Plaque {
+                            focus: true,
+                            ..Plaque::new(Set::Oak)
+                        });
+                    }
+                }
+            });
             rows.spawn(Node {
                 justify_content: JustifyContent::FlexStart,
                 ..default()
@@ -2016,7 +2048,21 @@ pub fn rebuild_saves(
                             Localized::verbatim(slot.file.name.clone())
                         };
                         words.spawn(KitText::new(shown, ui_kit::TITLE).shadow(ui_kit::INK));
-                        words.spawn(note(since(slot.file.played_unix_s), ui_kit::TEXT_DIM));
+                        // Its mode beside when it was played (`survival-mode`
+                        // design 1): a world from before modes is Explorer.
+                        let mode = slot
+                            .identity
+                            .as_ref()
+                            .map_or(pbd_core::survival::WorldMode::Explorer, |i| i.mode());
+                        words
+                            .spawn(Node {
+                                column_gap: px(4),
+                                ..default()
+                            })
+                            .with_children(|under| {
+                                under.spawn(note(since(slot.file.played_unix_s), ui_kit::TEXT_DIM));
+                                under.spawn(note(mode.name().into(), ui_kit::TEXT_DIM));
+                            });
                     });
                     if here {
                         small(line, kit, tr("menu.continue"), MenuAction::Resume);
@@ -2142,6 +2188,11 @@ pub fn press(
         }
         match action {
             MenuAction::EditName => name.focused = true,
+            MenuAction::Mode(survival) => {
+                name.survival = survival;
+                // The page is drawn from the index: redraw it.
+                index.set_changed();
+            }
             MenuAction::Weather(percent) => forcing.0 = f32::from(percent.min(100)) / 100.0,
             // The clock's own control answers it (`time_ui::press`).
             MenuAction::Time(_) => {}
@@ -2207,7 +2258,12 @@ pub fn press(
             MenuAction::New => {
                 let wanted = name.name(index.slots.len());
                 index.asking = None;
-                match saves::create(&root, &wanted, seed) {
+                let mode = if name.survival {
+                    pbd_core::survival::WorldMode::Survival
+                } else {
+                    pbd_core::survival::WorldMode::Explorer
+                };
+                match saves::create_in(&root, &wanted, seed, mode) {
                     Ok(slot) => {
                         // Made, and entered: a world a player just named is
                         // the world they want to be in. It is made by the

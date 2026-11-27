@@ -10,33 +10,6 @@ Explorer worlds left exactly as calm as before.
 
 ## ADDED Requirements
 
-### Requirement: A world is Explorer or Survival
-A world SHALL have a mode, Explorer or Survival, chosen when it is made and
-stored with it. In Explorer, no rule in this capability SHALL apply. A world
-saved before modes existed SHALL open as Explorer.
-
-#### Scenario: An old save
-- **WHEN** a world saved before this change is opened
-- **THEN** it opens as Explorer, with no health, hunger or breath shown, and
-  plays as before
-
-#### Scenario: A new Survival world
-- **WHEN** a player makes a world and picks Survival
-- **THEN** the world opens with full health, hunger and breath, and keeps
-  Survival every time it is opened
-
-### Requirement: Health and death
-In Survival, the player SHALL have health that damage lowers and that
-refills slowly while hunger is not empty. At zero health the player SHALL
-die, their pack SHALL drop at that place as a bag that stays until picked up,
-and they SHALL wake at their bed, or at the world's spawn if they have none.
-
-#### Scenario: Dying with a full pack
-- **WHEN** the player dies carrying items
-- **THEN** a bag holding all of them lies where they died, it is still there
-  after the world is closed and reopened, and walking into it returns the
-  items
-
 ### Requirement: Falling hurts by impact speed
 In Survival, landing SHALL cause damage when the speed at impact exceeds a
 safe speed, growing with the excess. The safe speed SHALL be computed in the
@@ -138,40 +111,6 @@ tools SHALL NOT wear.
 #### Scenario: Explorer never wears
 - **WHEN** an Explorer player breaks a thousand blocks with one pickaxe
 - **THEN** the pickaxe has not changed
-
-### Requirement: Stamina is spent by effort and refilled from food
-In Survival, the player SHALL have a stamina bar that sprinting, swimming,
-treading water and climbing spend, and a jump spends a little. Tool work
-SHALL NOT spend it. After a short pause it SHALL refill on its own, and
-every point refilled SHALL cost food: less a point while the bar is at or
-below half than above it. Points spent sprinting or swimming SHALL also
-burn food while they are spent, and SHALL cost more food to refill than
-other points. In Explorer there SHALL be no stamina bar.
-
-#### Scenario: A minute of sprinting
-- **WHEN** a Survival player with full stamina and 80 food sprints for 60 s
-  and then walks
-- **THEN** the bar falls to about 40 and is not empty, refills in a few
-  seconds, and food falls by about 6.3 in all, against about 1.6 for the
-  same time walking
-
-#### Scenario: The bottom half is cheaper
-- **WHEN** the bar refills from 0 to 50, and then from 50 to 100
-- **THEN** the first half costs less food than the second
-
-#### Scenario: Tool work is free
-- **WHEN** a Survival player digs and chops for a minute without sprinting
-- **THEN** stamina stays full
-
-### Requirement: An empty bar leaves the player winded, never drowned
-In Survival, at zero stamina the player SHALL be winded until a quarter of
-the bar is back: no sprint, slower swimming and lower jumps. A winded
-swimmer SHALL float with the head out of the water.
-
-#### Scenario: Winded far from shore
-- **WHEN** a Survival player's stamina runs out while swimming on the surface
-- **THEN** they float with the head above the water, can still swim slowly,
-  and the bar refills once they stop swimming
 
 ### Requirement: Water is drunk, and heat uses it faster
 In Survival, the player SHALL have a water bar that empties with play time,

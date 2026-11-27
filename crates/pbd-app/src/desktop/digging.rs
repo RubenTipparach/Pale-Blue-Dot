@@ -675,9 +675,14 @@ pub fn dig_and_place(
         MessageWriter<pbd_app::missions::Did>,
         Option<ResMut<pbd_app::walking::Lift>>,
     ),
-    // The fell's dust and leaves (`tree_fx`).
-    mut tree_fx: Option<ResMut<pbd_app::tree_fx::TreeFxQueue>>,
+    // The fell's dust and leaves (`tree_fx`); and whether the tool in hand
+    // is broken, which digs as bare hands (`survival-mode` design 11).
+    (mut tree_fx, broken): (
+        Option<ResMut<pbd_app::tree_fx::TreeFxQueue>>,
+        Option<Res<pbd_app::survival::HeldBroken>>,
+    ),
 ) {
+    let broken = broken.is_some_and(|b| b.0);
     if let Some(ground) = ground.as_mut() {
         ground.0 = None;
     }
@@ -688,7 +693,7 @@ pub fn dig_and_place(
     let captured = walking
         .as_deref()
         .is_some_and(|readout| readout.active && readout.captured);
-    let a_digger = tools.bare_handed() || tools.digging().is_some();
+    let a_digger = tools.bare_handed() || broken || tools.digging().is_some();
     // The tool in hand strokes on the dig's beat (`held-swing` decision 5):
     // last frame's answer, a frame behind, which nobody can see. While a
     // block breaks, its time and how far in; in the pause after it, on
@@ -787,7 +792,7 @@ pub fn dig_and_place(
     }
     // What breaks: bare hands dig soft ground (`tool-crafting` decision 1),
     // a tool at its tier; the rod nothing.
-    let digger = if tools.bare_handed() {
+    let digger = if tools.bare_handed() || broken {
         Some(Digger::Hands)
     } else {
         tools.digging().map(|(tool, tier)| Digger::Tool(tool, tier))

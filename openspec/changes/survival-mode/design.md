@@ -1011,6 +1011,103 @@ that makes the game do it.
 - **Meals' `fills` live in `survival.ron`**, not in `cooking.ron`, so the
   kitchen's file is unchanged in Explorer.
 
+## As built: survival in the game (2026-11-27)
+
+Tasks 2.1 (its UI half), 4.1, 4.2, 4.6, 4.9 and parts of 4.8, 6.3 and 6.6.
+
+- **The mode on the new-world screen.** Under the name, two oak plaques,
+  Explorer and Survival, the picked one lit; NEW WORLD makes the world in it
+  (`saves::create_in`, `Identity::new_in`). An Explorer world's identity is
+  written as before modes, so nothing in an Explorer save changes. Each row
+  of the world list says its mode under the name, beside when it was played.
+- **The server ticks the bars** (design 10). `pbd_server::Player` gains
+  `vitals: Option<Vitals>`; `Server::survive` ticks them by the core's
+  `Vitals::tick` and `Server::survival_act` lands a hit, a meal, a sip, a
+  jump or a climb, a wake. They are a world record, kind `vitals`, one per
+  player, journaled through `Store::commit_record`: at once for anything
+  that happens to the player, and every `VITALS_EVERY_S` (5 s) of play
+  while they only tick (recommendation taken, ask only with screenshots: a
+  line every frame would be sixty a second; five seconds is the most a crash
+  can take back). Single player's in-process server reads them from the
+  world's records when it is made (`WorldSave::survive`, `survival_act`,
+  `vitals`); an old save has no record and reads Explorer, so it has none.
+- **The walker** (`pbd_app::survival`, `walking.rs`). The walker reports its
+  effort (sprint, swim, swim with sprint, tread), its jumps and the water at
+  its head in `Activity`; the tick reads climbs (the feet rising a layer
+  while they stand) and falls (the fastest downward speed along up while in
+  the air, spent by `fall::fall_damage` on landing, on the ground or in
+  water with its depth) off its motion, with the body's own gravity. It
+  obeys `WalkerLimits`: winded (no sprint, `swim_speed_mult`, jumps at
+  `jump_mult` of the height, no climbing out of water, a swimmer that floats
+  up), passed out (no controls, floating face up in deep water), dazed (no
+  sprint, `walk_mult`) and dead (no controls).
+- **The conditions** at the player: the atmosphere's sample at the player
+  (`Exposure::from_sample`), the shade by `temperature::shaded` with the
+  column tier as its `solid` closure (`PlanetContact::column_material`),
+  shelter as no open sky over the head, the placed campfires within 6 m
+  (looked for twice a second), what is worn, and wet while in water. A
+  craft's seat is a cabin.
+- **Worn slots.** The right button with a straw hat or a wool cloak in the
+  selected slot puts it on (a `worn` record, saved with the hands); what was
+  worn there comes back. Shown in the pack's stats panel when that lands.
+- **The HUD** (design 9, the approved mockup): the left stack of short stone
+  bars with the mockup's icons (`assets/ui/survival/`, copied unchanged),
+  hidden while full, hunger and water only at half or lower, a bar flashing
+  when it is low (health under 30%, food under 15%, water dry, stamina
+  winded), stamina's strain shown as a paler band past its fill; the
+  thermometer only outside fine, with the reading, the trend arrow and the
+  cause; breath as ten bubbles over the hotbar while not full; "Heat stroke"
+  above the hotbar from heat exhaustion on, with a warm wash on the screen;
+  the line above the hotbar for the core's notes ("Salt water", "Thirsty",
+  "Very thirsty") and "Pickaxe broke"; a red edge for a moment when hit; the
+  pass-out's fade to dark. "You died" with Wake up is a screen of its own
+  (`Screen::Dead`), so it holds the pointer and Escape does not leave it.
+  The pack's stats panel (G7) is not built yet: the pack screen is another
+  change's in this round, and it follows.
+- **Death and the bag** (design 8). At zero health the whole pack, the
+  hotbar included, goes into one `pack-bag` record at the feet, body-relative
+  f64 (`WorldPos`), written in one line with the emptied slots
+  (`store_with_hands`); it is drawn turning slowly over the ground as its
+  first stack's card, lit by the field. Walking within 1.6 m of it takes
+  everything that fits, and what does not stays in it. The tool slot is not
+  the pack and stays with the player (recommendation taken, ask only with
+  screenshots). Wake up wakes with full health, half food and half water, at
+  the spawn record a laid bedroll writes (`survival::spawn_point`, the hook
+  for task 6.3: the bedroll is a good in this build, and laying it waits for
+  its laid model) or else at the world's spawn.
+- **Drinking** (design 15). F with an empty hand at water within 3 m, or
+  standing in it, takes one sip (the interact table's last row, "Drink
+  water"). Where the water is: the sea (the sea's level and not
+  `fresh_water_at`), fresh (a river, a lake, a swamp pool, or water gathered
+  off the sea's level), brackish (a river's water standing level with the sea,
+  at its mouth; the design's "6 cells along the flow" is approximated by that
+  level). Salt gives nothing and "Salt water"; a fresh sip raises the bar and
+  counts the missions' `drink`. Holding the right button with an empty hand
+  in rain under open sky catches it (`rain_catch`), counted as `drink rain`.
+  Not built yet: the still, a bucket's sip, the cactus and the straw, and the
+  spawn near fresh water.
+- **Wear** (design 11). A `wear` record holds each tool's uses left (no
+  entry reads full, so an old save is full). A finished dig, fell, till or
+  catch, read off the missions' own `Did` messages, spends the tool in hand;
+  the record is written in the same frame as the action's own line, the next
+  line after it, not in it (the action's line is the edit's, and widening it
+  would change the save format for every edit). The tool slot gains its bar
+  (red below a tenth); a broken tool's icon is greyed, it digs as bare hands,
+  and "Pickaxe broke" shows once. The workbench and the smith's repair are
+  `survival::repair_tool` and the core's `repair_inputs` / `repair_coins`;
+  their buttons are not on a panel yet.
+- **What the missions count, raised here.** A sip of fresh water raises
+  `drink` by `missions::drink_name` (salt none), rain `drink rain`; a body
+  back to fine from hot `cool heat`, from cold `warm fire` within a fire's
+  reach or `warm other`; a hat or a cloak put on `wear <good>`. A Survival
+  death clears the dawn watch, so a night counts only if lived through.
+  `kill`, `drive-off`, `relight` and `douse` wait for hunting, predators
+  and the wildfire's torches.
+- **The recipe book follows the world.** The open world's mode sets
+  `RecipeBook.survival` each frame it differs, so a Survival world offers
+  the spears, the bow, the tanning rack, the still, the bedroll and the stew,
+  and an Explorer world does not.
+
 ## Questions for the owner (with screenshots), 2026-11-26: answered
 
 Asked only where there is something to look at (CLAUDE.md, "Ask only with

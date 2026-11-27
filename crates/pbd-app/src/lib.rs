@@ -87,6 +87,9 @@ pub mod settings;
 pub mod sites;
 #[cfg(feature = "desktop")]
 pub mod sky;
+// Survival in the game (`survival-mode` tasks 4.1, 4.2, 4.8, 4.9, 6.6).
+#[cfg(feature = "desktop")]
+pub mod survival;
 #[cfg(feature = "desktop")]
 pub mod tone;
 #[cfg(feature = "desktop")]

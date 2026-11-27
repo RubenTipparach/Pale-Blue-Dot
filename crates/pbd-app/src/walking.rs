@@ -1296,8 +1296,25 @@ fn drive_walker(
     roads: Option<Res<crate::roads::RoadPieces>>,
     pace: Option<Res<Pace>>,
     space: crate::SimSpace,
+    survival: (
+        Option<Res<crate::survival::WalkerLimits>>,
+        Option<ResMut<crate::survival::Activity>>,
+    ),
 ) {
     let o = space.origin();
+    // Survival (`survival-mode` task 4.9): winded, passed out and dazed
+    // limit the walker; what it does is reported for the stamina rule.
+    let (limits, mut activity) = survival;
+    let limits = limits.as_deref().copied().unwrap_or_default();
+    if !limits.control.controls {
+        state.axes = Vec2::ZERO;
+        state.jump = false;
+        state.jump_held = false;
+        state.sprinting = false;
+    }
+    if !limits.can_sprint() {
+        state.sprinting = false;
+    }
     // Stride (`cooking` design S5): sprinting and swimming are faster while
     // it runs; walking is not.
     let stride = meals.as_deref().map_or(1.0, |m| m.stride);
@@ -1351,7 +1368,7 @@ fn drive_walker(
             config.sprint_speed * stride
         } else {
             config.walk_speed
-        };
+        } * limits.control.walk_mult;
         // A road under the feet (`townsfolk` design 10): gravel is walked
         // faster.
         if ground.grounded
@@ -1364,7 +1381,7 @@ fn drive_walker(
             speed = speed.min(cap.max(0.0));
         }
         if wet.body {
-            speed *= config.water_movement_mult;
+            speed *= config.water_movement_mult * limits.stamina.swim_speed_mult;
             if !state.sprinting {
                 speed *= stride;
             }
@@ -1380,7 +1397,26 @@ fn drive_walker(
         let planar = (right * state.axes.x + state.heading * state.axes.y) * speed + drift;
         let mut vertical = velocity.0.dot(up);
         let swimming = (wet.eyes && !wading) || (wet.body && !ground.grounded);
-        if state.jump || (state.jump_held && swimming) {
+        // Winded or passed out in deep water the body floats head out
+        // (design 12, 14): it rises while the eyes are under.
+        let floating = limits.floats() && swimming && wet.eyes;
+        if let Some(activity) = activity.as_deref_mut() {
+            let moving = state.axes.length() > 0.1;
+            activity.head_in_water = wet.eyes;
+            activity.in_deep_water = swimming && !wading;
+            activity.effort = if swimming && !wading {
+                match (moving, state.sprinting) {
+                    (true, true) => pbd_core::survival::stamina::Effort::SwimSprint,
+                    (true, false) => pbd_core::survival::stamina::Effort::Swim,
+                    (false, _) => pbd_core::survival::stamina::Effort::Tread,
+                }
+            } else if ground.grounded && state.sprinting && moving {
+                pbd_core::survival::stamina::Effort::Sprint
+            } else {
+                pbd_core::survival::stamina::Effort::None
+            };
+        }
+        if state.jump || ((state.jump_held || floating) && swimming) {
             if swimming {
                 // Continuous while held, as the reference does it. The second
                 // arm is this project's own: with no jetpack behind it, a
@@ -1390,7 +1426,11 @@ fn drive_walker(
                 vertical =
                     (vertical + config.water_swim_force * dt).min(config.water_swim_max_rise);
             } else if ground.grounded {
+                if let Some(activity) = activity.as_deref_mut() {
+                    activity.jumps += 1;
+                }
                 vertical = config.jump_speed
+                    * limits.jump_speed_mult()
                     * if wet.body && !wading {
                         config.water_submerged_jump_mult
                     } else {
@@ -1852,10 +1892,13 @@ fn resolve_ground(
     mut walkers: Query<(&mut Position, &mut LinearVelocity, &mut GroundState), With<Walker>>,
     space: crate::SimSpace,
     mut lift: ResMut<Lift>,
+    limits: Option<Res<crate::survival::WalkerLimits>>,
 ) {
     if !state.active {
         return;
     }
+    // A winded swimmer cannot climb out (`survival-mode` design 12).
+    let can_climb_out = limits.is_none_or(|l| l.stamina.can_climb_out);
     let o = space.origin();
     let o = &o;
     // A block set under the feet: up onto it, no speed from it.
@@ -2017,6 +2060,7 @@ fn resolve_ground(
         // Pressing into a low bank from the water climbs it (`swimming` 4).
         if let Some(face) = face
             && config.auto_step
+            && can_climb_out
             && wet.body
             && state.axes.y > 0.0
             && let Some(to) = water_climb(

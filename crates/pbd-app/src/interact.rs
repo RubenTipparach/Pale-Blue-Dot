@@ -44,6 +44,8 @@ pub enum Reader {
     Site,
     /// The sea floor's pieces, crawlers and ornaments (`sea-gathering`).
     Sea,
+    /// Survival's own: drinking (`survival-mode` design 15).
+    Survival,
 }
 
 /// A thing F can do.
@@ -114,6 +116,8 @@ pub enum Act {
     TakeOrnament,
     /// Feed a growing crop fertiliser (`sea-gathering` design 6).
     Fertilize,
+    /// A sip of water with an empty hand (`survival-mode` design 15).
+    Drink,
 }
 
 /// One row of the table: an act, the verb the prompt names it by (the
@@ -132,7 +136,7 @@ const fn row(act: Act, verb: &'static str, reader: Reader) -> Row {
 
 /// Everything F does, highest priority first: the one table the prompt and
 /// the readers share.
-pub const ACTS: [Row; 41] = [
+pub const ACTS: [Row; 42] = [
     // A cart in hand, a seat or a back taken comes first: F lets it go.
     row(Act::LetGo, "let_go", Reader::Carts),
     row(Act::StepDown, "step_down", Reader::Carts),
@@ -176,6 +180,8 @@ pub const ACTS: [Row; 41] = [
     row(Act::Unhitch, "unhitch", Reader::Carts),
     row(Act::Mend, "mend", Reader::Mend),
     row(Act::Light, "light", Reader::Lamps),
+    // Last: anything else at the water's edge comes first.
+    row(Act::Drink, "drink", Reader::Survival),
 ];
 
 impl Act {
