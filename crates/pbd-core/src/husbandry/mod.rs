@@ -52,6 +52,15 @@ pub enum Plan {
     Horse,
 }
 
+/// Which ground a species' wild herds stand on (`survival-mode` design 17):
+/// the meadows' grass, or the desert's sand and rock (the dust hound).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub enum Ground {
+    #[default]
+    Grass,
+    Desert,
+}
+
 /// A sex. Hens lay and cows give milk; a product may name one.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub enum Sex {
@@ -185,6 +194,16 @@ pub struct LandSpecies {
     /// How it is kept; `None` for a species that is not.
     #[serde(default)]
     pub keep: Option<Keeping>,
+    /// The roll its wild herds are drawn in (`survival-mode` design 17): 0
+    /// the first roll, which holds the hen, the woolback and the plodder
+    /// and never changes; 1 the game's roll, made over the same squares
+    /// with its own hash and `herds.game_chance`, so appending species to
+    /// it moves no herd a world already had.
+    #[serde(default)]
+    pub herd_layer: u8,
+    /// The ground its wild herds stand on.
+    #[serde(default)]
+    pub ground: Ground,
 }
 
 impl LandSpecies {
@@ -278,6 +297,9 @@ pub struct HerdSettings {
     pub near_m: f32,
     /// Seconds an animal takes to fade in or out.
     pub fade_s: f32,
+    /// The chance a square holds a herd of the game's roll (layer 1), 0..1
+    /// (`survival-mode` design 17).
+    pub game_chance: f32,
 }
 
 /// `assets/config/husbandry.ron`.
@@ -382,8 +404,8 @@ impl HusbandrySettings {
         )?;
         let h = &self.herds;
         positive("herds", &[h.square_m, h.spread_m, h.near_m, h.fade_s])?;
-        if !(0.0..=1.0).contains(&h.chance) {
-            return Err("herds: chance is 0..1".into());
+        if !(0.0..=1.0).contains(&h.chance) || !(0.0..=1.0).contains(&h.game_chance) {
+            return Err("herds: chance and game_chance are 0..1".into());
         }
         let b = &self.breeding;
         positive(
@@ -422,6 +444,9 @@ impl HusbandrySettings {
                         sp.stride_m,
                     ],
                 )?;
+                if sp.herd_layer > 1 {
+                    return Err(format!("{at}: a herd rolls in layer 0 or 1"));
+                }
                 if sp.herd.0 == 0 || sp.herd.1 < sp.herd.0 {
                     return Err(format!("{at}: a herd has at least one animal"));
                 }

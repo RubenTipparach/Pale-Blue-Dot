@@ -41,6 +41,18 @@ fn the_land_roster_keeps_its_order() {
         .map(|s| s.id.clone())
         .collect();
     assert_eq!(ids[..3], ["meadow-hen", "woolback", "plodder"]);
+    // `land-transport` and `survival-mode` 4.11 appended after them.
+    assert_eq!(
+        ids[3..],
+        [
+            "horse",
+            "hare",
+            "ridge-goat",
+            "rootling",
+            "red-fox",
+            "dust-hound"
+        ]
+    );
 }
 
 #[test]
@@ -536,6 +548,146 @@ fn the_horse_is_bought_and_every_wild_herd_is_unchanged() {
         }
     }
     assert!(herds > 50, "{herds} herds compared");
+}
+
+/// `survival-mode` task 4.11: the game is appended to the home roster after
+/// the horse, in its own herd roll. Every older species keeps its index (a
+/// kept animal's record names it by index), and every herd of the first roll
+/// is what it was before the game, square for square and animal for
+/// animal, under several seeds; the game's roll draws only the game, the
+/// dust hound on the desert's ground.
+#[test]
+fn the_game_is_appended_and_every_older_herd_is_unchanged() {
+    let s = settings();
+    let roster = s.roster("home");
+    let ids: Vec<&str> = roster.iter().map(|sp| sp.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        [
+            "meadow-hen",
+            "woolback",
+            "plodder",
+            "horse",
+            "hare",
+            "ridge-goat",
+            "rootling",
+            "red-fox",
+            "dust-hound"
+        ]
+    );
+    let game = &roster[4..];
+    assert!(game.iter().all(|sp| sp.herd_layer == 1));
+    assert!(roster[..4].iter().all(|sp| sp.herd_layer == 0));
+    let by = |id: &str| roster.iter().find(|sp| sp.id == id).unwrap();
+    assert_eq!(by("dust-hound").ground, Ground::Desert);
+    assert!(
+        game.iter()
+            .filter(|sp| sp.id != "dust-hound")
+            .all(|sp| sp.ground == Ground::Grass)
+    );
+    // The hare, the fox and the hound are wild only; the goat and the
+    // rootling are kept as the herd is.
+    for id in ["hare", "red-fox", "dust-hound"] {
+        assert!(by(id).refusal().is_some(), "{id}");
+        assert!(by(id).keep.is_none(), "{id}");
+    }
+    for id in ["ridge-goat", "rootling"] {
+        assert!(by(id).refusal().is_none(), "{id}");
+    }
+    let before = &roster[..4];
+    let radius = 4800.0;
+    let (mut first, mut games) = (0, 0);
+    for seed in [1u64, 42, 0x5eed, 987_654_321] {
+        for at in [
+            glam::Vec3::new(0.3, 0.5, 0.8),
+            glam::Vec3::new(-0.7, 0.1, 0.2),
+            glam::Vec3::new(0.0, -1.0, 0.1),
+        ] {
+            for q in herds::squares_near(at.normalize(), 1500.0, radius, &s.herds) {
+                let now = herds::herd_in(seed, q, radius, &s.herds, roster);
+                let then = herds::herd_in(seed, q, radius, &s.herds, before);
+                assert_eq!(now, then, "seed {seed}, square {q:?}");
+                first += usize::from(now.is_some());
+                if let Some(h) = herds::game_herd_in(seed, q, radius, &s.herds, roster) {
+                    assert!(h.species >= 4, "the game's roll draws only the game");
+                    let sp = &roster[h.species as usize];
+                    assert!(h.members.len() >= sp.herd.0 as usize);
+                    assert!(h.members.len() <= sp.herd.1 as usize);
+                    games += 1;
+                }
+                let all: Vec<_> = herds::herds_in(seed, q, radius, &s.herds, roster).collect();
+                if let Some(n) = &now {
+                    assert_eq!(&all[0], n, "the first roll's herd comes first");
+                }
+            }
+        }
+    }
+    assert!(
+        first > 50 && games > 20,
+        "{first} first-roll herds, {games} game herds"
+    );
+    // A roster from before the game rolls no game herd.
+    for q in herds::squares_near(glam::Vec3::Y, 1500.0, radius, &s.herds) {
+        assert!(herds::game_herd_in(7, q, radius, &s.herds, before).is_none());
+    }
+}
+
+/// `survival-mode` task 4.11's drops: every species `survival.ron` hunts
+/// (`hunting.game`) is on the home roster, and every drop names a good, raw
+/// meat, hide, bone and feather among them. Read from the file itself, the
+/// survival rules' own, so the two cannot drift.
+#[test]
+fn every_hunted_species_is_on_the_roster_and_drops_real_goods() {
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../assets/config/survival.ron"
+    );
+    let text = std::fs::read_to_string(path).expect("assets/config/survival.ron");
+    let value: ron::Value = ron::from_str(&text).expect("survival.ron parses");
+    let field = |v: &ron::Value, name: &str| -> ron::Value {
+        let ron::Value::Map(map) = v else {
+            panic!("{name}: not a struct")
+        };
+        map.iter()
+            .find(|(k, _)| matches!(k, ron::Value::String(s) if s == name))
+            .map(|(_, v)| v.clone())
+            .unwrap_or_else(|| panic!("no {name}"))
+    };
+    let hunting = field(&value, "hunting");
+    let ron::Value::Map(game) = field(&hunting, "game") else {
+        panic!("game is a map")
+    };
+    let roster = settings();
+    let roster = roster.roster("home");
+    let mut seen = std::collections::BTreeSet::new();
+    for (id, row) in game.iter() {
+        let ron::Value::String(id) = id else { panic!() };
+        assert!(roster.iter().any(|sp| &sp.id == id), "{id} on the roster");
+        let ron::Value::Seq(drops) = field(row, "drops") else {
+            panic!("{id}: drops")
+        };
+        for drop in drops {
+            let ron::Value::Seq(pair) = drop else {
+                panic!()
+            };
+            let ron::Value::String(code) = &pair[0] else {
+                panic!()
+            };
+            assert!(Good::by_code(code).is_some(), "{id} drops {code}");
+            seen.insert(code.clone());
+        }
+    }
+    for want in ["raw-meat", "bone", "feather"] {
+        assert!(seen.contains(want), "{want}");
+    }
+    assert!(Good::by_code("hide").is_some());
+    for id in ["hare", "ridge-goat", "rootling", "red-fox", "dust-hound"] {
+        assert!(
+            game.iter()
+                .any(|(k, _)| matches!(k, ron::Value::String(s) if s == id)),
+            "{id} is hunted"
+        );
+    }
 }
 
 // ---- 7 and 8: eggs, young and breeding (design 13) -------------------------

@@ -3174,8 +3174,10 @@ mod tests {
         let roster = config.0.roster(pbd_core::fauna::HOME_BODY);
         let seed = pbd_app::planet::terrain_config().seed;
         let spawns = |square: herds::Square| {
-            herds::herd_in(seed, square, PLANET_RADIUS, s, roster)
-                .is_some_and(|h| pbd_app::husbandry::grassy_land(None, h.centre))
+            herds::herds_in(seed, square, PLANET_RADIUS, s, roster).any(|h| {
+                let ground = roster[h.species as usize].ground;
+                pbd_app::husbandry::herd_ground(None, h.centre, ground)
+            })
         };
         let empty: Vec<herds::Square> =
             herds::squares_near(herd.centre, REACH_M * 0.8, PLANET_RADIUS, s)

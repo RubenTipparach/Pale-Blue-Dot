@@ -87,8 +87,8 @@ pub fn squares_near(d: Vec3, reach_m: f32, radius_m: f32, s: &HerdSettings) -> V
     out
 }
 
-/// The herd a square holds, if its hash gives one: not yet checked against
-/// the ground.
+/// The herd a square holds in the first roll, if its hash gives one: not
+/// yet checked against the ground.
 pub fn herd_in(
     seed: u64,
     square: Square,
@@ -96,20 +96,64 @@ pub fn herd_in(
     s: &HerdSettings,
     roster: &[LandSpecies],
 ) -> Option<Herd> {
-    // Every species but a bought one (`land-transport` design 10): a
-    // horse is sold in town, never rolled wild, so the herds of every world
-    // made before it are the same animal for animal.
+    roll(seed, square, radius_m, s, roster, 0)
+}
+
+/// The herd a square holds in the game's roll (`survival-mode` design 17):
+/// the hare, the ridge goat, the rootling, the red fox and the dust hound,
+/// over the same squares with a hash of their own, so the first roll's
+/// herds are what they were before any of them. Not yet checked against
+/// the ground.
+pub fn game_herd_in(
+    seed: u64,
+    square: Square,
+    radius_m: f32,
+    s: &HerdSettings,
+    roster: &[LandSpecies],
+) -> Option<Herd> {
+    roll(seed, square, radius_m, s, roster, 1)
+}
+
+/// Every herd a square holds, the first roll's first.
+pub fn herds_in(
+    seed: u64,
+    square: Square,
+    radius_m: f32,
+    s: &HerdSettings,
+    roster: &[LandSpecies],
+) -> impl Iterator<Item = Herd> {
+    herd_in(seed, square, radius_m, s, roster)
+        .into_iter()
+        .chain(game_herd_in(seed, square, radius_m, s, roster))
+}
+
+fn roll(
+    seed: u64,
+    square: Square,
+    radius_m: f32,
+    s: &HerdSettings,
+    roster: &[LandSpecies],
+    layer: u8,
+) -> Option<Herd> {
+    // Every species of the layer but a bought one (`land-transport` design
+    // 10): a horse is sold in town, never rolled wild, so the herds of
+    // every world made before it are the same animal for animal.
     let candidates: Vec<usize> = (0..roster.len())
         .filter(|&i| roster[i].status != crate::fauna::Status::Bought)
+        .filter(|&i| roster[i].herd_layer == layer)
         .collect();
     if candidates.is_empty() {
         return None;
     }
+    let (salt, chance) = match layer {
+        0 => (0x4e2d_0000, s.chance),
+        _ => (0x4e2d_0001, s.game_chance),
+    };
     let h = hash2(
-        hash2(seed, 0x4e2d_0000),
+        hash2(seed, salt),
         (u64::from(square.row as u32) << 32) | u64::from(square.col as u32),
     );
-    if (h >> 40) as f32 / (1u64 << 24) as f32 >= s.chance {
+    if (h >> 40) as f32 / (1u64 << 24) as f32 >= chance {
         return None;
     }
     let species = candidates[(hash2(h, 1) % candidates.len() as u64) as usize];

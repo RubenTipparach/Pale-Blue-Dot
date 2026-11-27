@@ -135,6 +135,10 @@ pub fn colours(species: &LandSpecies, genome: &Genome) -> ([[f32; 3]; 4], usize)
             "bay" => [0.45, 0.28, 0.16],
             "chestnut" => [0.58, 0.3, 0.14],
             "dapple" => [0.7, 0.68, 0.64],
+            // The rootling's (M26's sounder): pink is its own colour.
+            "ginger" => [0.77, 0.43, 0.15],
+            "gold" => [0.98, 0.69, 0.36],
+            "sooty" => [0.40, 0.21, 0.23],
             _ => return None,
         })
     };

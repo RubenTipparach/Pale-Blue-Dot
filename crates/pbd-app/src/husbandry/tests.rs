@@ -550,6 +550,12 @@ fn the_herd_is_built_blocky_with_its_head_at_the_grass() {
         ("plodder", 200),
         ("woolback", 168),
         ("meadow-hen", 180),
+        // `survival-mode` 4.11: the game, of the same family.
+        ("hare", 156),
+        ("ridge-goat", 204),
+        ("rootling", 156),
+        ("red-fox", 168),
+        ("dust-hound", 168),
     ] {
         let sp = find(id);
         let mut b = Builder::default();

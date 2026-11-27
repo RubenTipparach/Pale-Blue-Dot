@@ -36,7 +36,7 @@ use pbd_core::goods::Good;
 use pbd_core::husbandry::farm::{Conditions, FarmState};
 use pbd_core::husbandry::record::{self, AnimalBody, FenceBody, Standing};
 use pbd_core::husbandry::{
-    Edge, Genome, HusbandrySettings, LandSpecies, Pen, Plan, Sex, Trust, herds, taming,
+    Edge, Genome, Ground, HusbandrySettings, LandSpecies, Pen, Plan, Sex, Trust, herds, taming,
 };
 use pbd_core::inventory::{Item, Slots};
 use pbd_core::locale::{Localized, tr, tr_with};
@@ -985,10 +985,42 @@ pub fn wild_herds_near(
     let up = up.normalize_or(Vec3::Y);
     herds::squares_near(up, reach_m, PLANET_RADIUS, settings)
         .into_iter()
-        .filter_map(|square| herds::herd_in(seed, square, PLANET_RADIUS, settings, roster))
+        .flat_map(|square| herds::herds_in(seed, square, PLANET_RADIUS, settings, roster))
         .filter(|herd| herd.centre.angle_between(up) * PLANET_RADIUS <= reach_m + settings.spread_m)
-        .filter(|herd| grassy_land(sea, herd.centre))
+        .filter(|herd| {
+            let ground = roster
+                .get(herd.species as usize)
+                .map_or(Ground::Grass, |sp| sp.ground);
+            herd_ground(sea, herd.centre, ground)
+        })
         .collect()
+}
+
+/// Whether a direction is the ground a herd of this kind stands on: dry
+/// grass (the meadows' game and herds), or dry desert sand and rock (the
+/// dust hound, `survival-mode` design 17).
+pub fn herd_ground(sea: Option<&crate::sea::Sea>, d: Vec3, ground: Ground) -> bool {
+    match ground {
+        Ground::Grass => grassy_land(sea, d),
+        Ground::Desert => desert_land(sea, d),
+    }
+}
+
+/// Whether a direction is dry land of the desert: its sand or bare rock.
+pub fn desert_land(sea: Option<&crate::sea::Sea>, d: Vec3) -> bool {
+    if crate::planet::surface_height(d) <= 0.5 {
+        return false;
+    }
+    if sea.is_some_and(|s| s.depth_at(d) > 0.0) {
+        return false;
+    }
+    let config = crate::planet::terrain_config();
+    let altitude = pbd_core::planet_gen::surface_altitude(config, d);
+    pbd_core::planet_gen::biome_at(config, d, altitude) == pbd_core::planet_gen::Biome::Desert
+        && matches!(
+            pbd_core::planet_gen::top_material(config, d, altitude),
+            Material::Sand | Material::Rock | Material::Stone
+        )
 }
 
 /// Whether a direction is dry land topped with grass, by the generator (a
@@ -2479,24 +2511,35 @@ fn script(
                 );
             }
         }
-        "close" | "close-stand" | "close-graze" => {
+        "close" | "close-stand" | "close-graze" | "game" | "game-stand" => {
             // One of each species of the herd broadside a few metres ahead,
             // held where it stands, to look at close up; `close-stand` and
             // `close-graze` hold its head up or down to graze as well.
+            // `game` and `game-stand` are the game of `survival-mode` design
+            // 17 (task 4.11) the same way: the hare, the ridge goat, the
+            // rootling, the red fox and the dust hound.
             let held = match script.scene.as_str() {
-                "close-stand" => Some(false),
+                "close-stand" | "game-stand" => Some(false),
                 "close-graze" => Some(true),
                 _ => None,
             };
-            for (n, (id, x, y)) in [
-                ("meadow-hen", -1.9f32, 2.4f32),
-                ("woolback", -0.6, 3.4),
-                ("plodder", 1.6, 4.6),
-                ("horse", 4.6, 5.6),
-            ]
-            .into_iter()
-            .enumerate()
-            {
+            let herd: &[(&str, f32, f32)] = if script.scene.starts_with("game") {
+                &[
+                    ("hare", -2.0, 2.3),
+                    ("red-fox", -0.9, 3.0),
+                    ("ridge-goat", 0.6, 3.6),
+                    ("rootling", 2.3, 4.3),
+                    ("dust-hound", 4.1, 5.0),
+                ]
+            } else {
+                &[
+                    ("meadow-hen", -1.9, 2.4),
+                    ("woolback", -0.6, 3.4),
+                    ("plodder", 1.6, 4.6),
+                    ("horse", 4.6, 5.6),
+                ]
+            };
+            for (n, &(id, x, y)) in herd.iter().enumerate() {
                 if !roster.iter().any(|s| s.id == id) {
                     continue;
                 }

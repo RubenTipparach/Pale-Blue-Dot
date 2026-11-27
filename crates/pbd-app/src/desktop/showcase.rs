@@ -6896,7 +6896,7 @@ fn nearest_herd(s: &Sight, species: &str) -> Option<Vec3> {
     let config = pbd_app::planet::terrain_config();
     herds::squares_near(up, 1200.0, PLANET_RADIUS, s.herds)
         .into_iter()
-        .filter_map(|sq| herds::herd_in(seed, sq, PLANET_RADIUS, s.herds, s.land))
+        .flat_map(|sq| herds::herds_in(seed, sq, PLANET_RADIUS, s.herds, s.land))
         .filter(|h| {
             s.land
                 .get(h.species as usize)
