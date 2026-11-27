@@ -228,8 +228,8 @@
             impact_hold_s: 0.03, recoil_s: 0.08, recover_s: 0.18,
             top: (phi: 0.4, yaw: -0.5, pull_m: -0.06, pitch: 0.55, roll: -0.85),
             coil: (phi: 0.46, yaw: -0.6, pull_m: -0.08, pitch: 0.65, roll: -0.95),
-            hit: (phi: -0.25, yaw: 0.7, pull_m: 0.12, pitch: -1.1, roll: 0.7),
-            recoil: (phi: -0.32, yaw: 0.85, pull_m: 0.08, pitch: -1.2, roll: 0.8),
+            hit: (phi: -0.05, yaw: 0.6, pull_m: 0.12, pitch: -0.75, roll: 0.7),
+            recoil: (phi: -0.1, yaw: 0.75, pull_m: 0.08, pitch: -0.85, roll: 0.8),
         ),
         throw: (
             windup_s: 0.25, anticipate_s: 0.15, strike_s: 0.08,

@@ -123,7 +123,7 @@ dialog.infomodal::backdrop { background: rgba(1, 14, 26, .74); }
 /* ---- 3D tabs ---- */
 #fire, #weapons, #hunt { flex-direction: column; }
 .wrow { flex: 1; min-height: 0; display: flex; }
-.wside { width: 250px; overflow: auto; padding: 8px 10px; border-right: 1px solid var(--page-line); display: flex; flex-direction: column; gap: 6px; }
+.wside { flex: none; width: 250px; overflow: auto; padding: 8px 10px; border-right: 1px solid var(--page-line); display: flex; flex-direction: column; gap: 6px; }
 .wside[hidden], .bar[hidden], .btn[hidden] { display: none; }
 .slbl { position: absolute; left: 10px; top: 10px; font: 600 15px/1 var(--body); letter-spacing: 1px; color: var(--label); background: rgba(1,14,26,.72); padding: 5px 8px; }
 pre.ron { font: 13px/1.35 ui-monospace, Menlo, Consolas, monospace; color: var(--page-text); background: var(--well); padding: 10px; overflow: auto; white-space: pre; }
@@ -140,6 +140,7 @@ input.scrub { width: 220px; }
 .go img { width: min(720px, 92vw); border: 2px solid var(--stone-2); }
 
 @media (max-width: 760px) {
+  .wrow { flex-direction: column; } .wside { width: auto; max-height: 32%; border-right: 0; border-bottom: 1px solid var(--page-line); }
   .hudrow { flex-direction: column; }
   #stamina { flex-direction: column; }
   .side { width: auto; max-height: 40%; border-right: 0; border-bottom: 1px solid var(--page-line); }

@@ -1030,7 +1030,10 @@ print the RON their sliders make. Everything here is a recommendation taken
   animation skill's rule). A tool or bare hands swing on `weapons.tool_swing_s`
   (0.55 s), today's stroke period. The hit is tested **at the hit moment**,
   along the aim then (staging: the blow lands where the player looks when
-  it lands), against what is within the weapon's reach.
+  it lands), against what is within the weapon's reach, measured level
+  along the ground from the eye (so an animal at the feet is in reach), and
+  a swing sweeps an arc, so it meets a body the aim passes within 0.35 m
+  of (`SWING_SLACK_M`).
 - **The drawing.** `held.ron`'s `weapon_swing` keys each swing's poses
   (rest, top, coil, hit, recoil) on the fist's arc about the shoulder, with
   the weapon's own pitch and roll on top, blended by the skill's curves:

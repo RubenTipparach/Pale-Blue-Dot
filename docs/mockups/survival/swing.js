@@ -22,7 +22,7 @@
     axe: { kind: "melee", windup_s: 0.11, anticipate_s: 0.07, strike_s: 0.07, impact_hold_s: 0.05, recoil_s: 0.07, recover_s: 0.23,
       top: K(0.55, -0.1, -0.08, 0.95, 0.1), coil: K(0.62, -0.12, -0.1, 1.08, 0.12), hit: K(-0.3, 0.14, 0.14, -1.45, -0.05), recoil: K(-0.2, 0.1, 0.1, -1.15) },
     sword: { kind: "melee", windup_s: 0.09, anticipate_s: 0.06, strike_s: 0.06, impact_hold_s: 0.03, recoil_s: 0.08, recover_s: 0.18,
-      top: K(0.4, -0.5, -0.06, 0.55, -0.85), coil: K(0.46, -0.6, -0.08, 0.65, -0.95), hit: K(-0.25, 0.7, 0.12, -1.1, 0.7), recoil: K(-0.32, 0.85, 0.08, -1.2, 0.8) },
+      top: K(0.4, -0.5, -0.06, 0.55, -0.85), coil: K(0.46, -0.6, -0.08, 0.65, -0.95), hit: K(-0.05, 0.6, 0.12, -0.75, 0.7), recoil: K(-0.1, 0.75, 0.08, -0.85, 0.8) },
     throw: { kind: "draw", windup_s: 0.25, anticipate_s: 0.15, strike_s: 0.08, impact_hold_s: 0.0, recoil_s: 0.1, recover_s: 0.3,
       top: K(0.42, -0.08, -0.2, -0.5), coil: K(0.46, -0.1, -0.28, -0.52), hit: K(0.12, 0.2, 0.35, -0.72), recoil: K(-0.2, 0.28, 0.2, -0.9) },
     bow: { kind: "draw", windup_s: 0.15, anticipate_s: 0.8, strike_s: 0.04, impact_hold_s: 0.02, recoil_s: 0.1, recover_s: 0.3,

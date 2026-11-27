@@ -217,8 +217,12 @@ fn aimed_person(
         };
         let feet = origin.to_local(WorldPos::new(origin.frame, placed.feet));
         let centre = feet + origin.up_at(feet) * 0.95;
-        if let Some(d) = ray_sphere(eye, look, centre, 0.45)
-            && d <= reach_m
+        if let Some(d) = ray_sphere(
+            eye,
+            look,
+            centre,
+            0.45 + crate::husbandry::hunt::SWING_SLACK_M,
+        ) && crate::husbandry::hunt::level_m(origin, eye, look, d) <= reach_m
             && best.is_none_or(|(_, e)| d < e)
         {
             best = Some((person.id, d));
@@ -653,7 +657,11 @@ pub fn swing(
                 }
             }
             _ => {
-                info!("COMBAT_HIT air");
+                let near = yard
+                    .as_deref()
+                    .map(|y| y.near_for_log(&origin, &roster, eye, look))
+                    .unwrap_or_default();
+                info!("COMBAT_HIT air; near {near:?}");
                 landed.write(Landed::Air);
             }
         }

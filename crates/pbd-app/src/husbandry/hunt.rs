@@ -80,6 +80,19 @@ fn body(b: &Beast, sp: &LandSpecies, up: Vec3) -> (Vec3, f32) {
     (b.pos + up * sp.height_m * lie, r)
 }
 
+/// A swing sweeps an arc, not a line: it meets a body the aim passes this
+/// close to, m (combat C1). A projectile's flight has none.
+pub const SWING_SLACK_M: f32 = 0.35;
+
+/// How far along the ground from the eye a point `d` along the look is: a
+/// swing's reach is measured level, so a low animal at the feet is in reach
+/// of a blade that reaches the same distance (combat C1).
+pub fn level_m(origin: &pbd_core::world_frame::SimOrigin, eye: Vec3, look: Vec3, d: f32) -> f32 {
+    let up = origin.up_at(eye);
+    let v = look * d;
+    (v - up * v.dot(up)).length()
+}
+
 fn ray_sphere(from: Vec3, dir: Vec3, centre: Vec3, r: f32) -> Option<f32> {
     let m = from - centre;
     let b = m.dot(dir);
@@ -111,8 +124,8 @@ impl Farmyard {
                 continue;
             };
             let (c, r) = body(b, sp, origin.up_at(b.pos));
-            if let Some(d) = ray_sphere(eye, look, c, r)
-                && d <= reach_m
+            if let Some(d) = ray_sphere(eye, look, c, r + SWING_SLACK_M)
+                && level_m(origin, eye, look, d) <= reach_m
                 && best.is_none_or(|a| d < a.distance)
             {
                 best = Some(Aimed {
@@ -285,6 +298,12 @@ impl Farmyard {
     pub fn hold_still(&mut self, index: usize, still: bool) {
         if let Some(b) = self.beasts.get_mut(index) {
             b.posed = still;
+            if still {
+                // Not even pottering about (the yard's own capture does the
+                // same).
+                b.idle_s = 1.0e6;
+                b.goal = None;
+            }
         }
     }
 
@@ -294,6 +313,30 @@ impl Farmyard {
             b.game.hunt.phase = phase;
             b.game.crouch = crouch;
         }
+    }
+
+    /// Every beast within 4 m of the eye, for a swing that met the air: its
+    /// species, where its body is from the eye and how far the aim passes
+    /// it, m (the capture's log).
+    pub fn near_for_log(
+        &self,
+        origin: &pbd_core::world_frame::SimOrigin,
+        roster: &[LandSpecies],
+        eye: Vec3,
+        look: Vec3,
+    ) -> Vec<(String, Vec3, f32)> {
+        self.beasts
+            .iter()
+            .filter_map(|b| {
+                let sp = roster.get(b.species as usize)?;
+                let (c, r) = body(b, sp, origin.up_at(b.pos));
+                let to = c - eye;
+                (to.length() < 4.0).then(|| {
+                    let miss = (to - look * to.dot(look)).length() - r;
+                    (sp.id.clone(), to, miss)
+                })
+            })
+            .collect()
     }
 
     /// A beast's roster index.

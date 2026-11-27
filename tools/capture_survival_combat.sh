@@ -15,7 +15,7 @@ shift || true
 cd "$(dirname "$0")/.."
 EXE=target/fast/pbd-app
 AT="--at -37.5 -84"
-TOWN="--at 29.208122 8.793697 --yaw 87.5"
+TOWN="--at 29.221240 8.794353 --yaw 87.5"
 shot() {
   local name=$1; shift
   timeout 1500 xvfb-run -a -s "-screen 0 1440x900x24" $EXE "$@" --rain 0 --weather-at 7200 --capture "$D/$name.png" > "$D/$name.log" 2>&1
@@ -34,7 +34,7 @@ want combat-hound-warn-day && shot combat-hound-warn-day --world cb-5 $AT --comb
 want combat-swing-hit-day && shot combat-swing-hit-day --world cb-6 $AT --combat swing-hit --hold bronze-sword $DAY --pitch -35 --frames ${HIT_F:-75}
 want combat-swing-hit-night && shot combat-swing-hit-night --world cb-7 $AT --combat swing-hit --hold bronze-sword $NIGHT --pitch -35 --frames ${HIT_F:-75}
 want combat-axe-hit-day && shot combat-axe-hit-day --world cb-8 $AT --combat swing-hit --hold iron-hunting-axe $DAY --pitch -35 --frames ${AXE_F:-76}
-want combat-spear-flight-day && shot combat-spear-flight-day --world cb-9 $AT --combat spear-throw --hold stone-spear $DAY --pitch -4 --frames ${FLY_F:-98}
-want combat-spear-flight-night && shot combat-spear-flight-night --world cb-10 $AT --combat spear-throw --hold stone-spear $NIGHT --pitch -4 --frames ${FLY_F:-98}
-want combat-guard-day && shot combat-guard-day --world cb-11 $TOWN --combat guard --time 11 --pitch -6 --frames ${GUARD_F:-160}
-want combat-guard-night && shot combat-guard-night --world cb-12 $TOWN --combat guard --time 20.6 --pitch -6 --frames ${GUARD_F:-160}
+want combat-spear-flight-day && shot combat-spear-flight-day --world cb-9 $AT --combat spear-throw --hold stone-spear $DAY --pitch -4 --frames ${FLY_F:-104}
+want combat-spear-flight-night && shot combat-spear-flight-night --world cb-10 $AT --combat spear-throw --hold stone-spear $NIGHT --pitch -4 --frames ${FLY_F:-104}
+want combat-guard-day && shot combat-guard-day --world cb-g1 $TOWN --combat guard --time 11 --pitch -6 --frames ${GUARD_F:-220}
+want combat-guard-night && shot combat-guard-night --world cb-g2 $TOWN --combat guard --time 20.6 --pitch -6 --frames ${GUARD_F:-220}
