@@ -2587,6 +2587,9 @@ DRAW_M (60 m).
   and the band, the card's resolution and its offset, and a view that
   forces near, far or auto so the two can be compared at one distance. The
   game's code waits on the owner's numbers from it.
+- **Approved** (owner, 2026-11-28, on M5 version 14's Face LOD tab: "face
+  approved"), at the tab's defaults: switch at 20 m, a 0.3 s fade, a 1 m
+  band, 32 px tiles, the card 1 cm proud.
 - **Tests, when built.** Each expression's tile is drawn and differs from
   Neutral's; a person past the line has the card and not the pieces, and
   inside it the pieces and not the card; a crossing starts one fade that
