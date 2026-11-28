@@ -1,5 +1,6 @@
 use super::*;
 use pbd_core::townsfolk::face::Mouth;
+use pbd_core::townsfolk::face_card::{self, CardLook, FaceLod};
 
 /// Every colour a person can wear has its own swatch inside the atlas, and
 /// a swatch reads back its colour.
@@ -77,7 +78,7 @@ fn every_part_is_posed_on_the_figure() {
     let pose = Body::new(1).step(0.016, Doing::Standing, 0.0);
     let parts = pose_parts(&f, &pose, &fp, &person.look);
     let ks: std::collections::BTreeSet<usize> = parts.iter().map(|(k, _)| *k).collect();
-    assert_eq!(ks, (0..27).collect());
+    assert_eq!(ks, (0..28).collect());
     // The mouth stands on the head's front, a little proud of it.
     let head = parts[5].1.unwrap();
     let mouth = parts.iter().find(|(k, _)| *k == 26).unwrap().1.unwrap();
@@ -85,6 +86,11 @@ fn every_part_is_posed_on_the_figure() {
     let at = mouth.transform_point3(Vec3::ZERO);
     let proud = (at - front).length();
     assert!(proud > 0.001 && proud < 0.004, "{proud}");
+    // The far card stands 1 cm proud of the head's front, over every piece.
+    let card = parts.iter().find(|(k, _)| *k == CARD).unwrap().1.unwrap();
+    let front = head.transform_point3(Vec3::new(0.0, 0.0, figure::HA));
+    let proud = (card.transform_point3(Vec3::ZERO) - front).length();
+    assert!((proud - face_card::CARD_PROUD_M).abs() < 1e-4, "{proud}");
     // Feet on the ground, head at the figure's height.
     let top = head.transform_point3(Vec3::new(0.0, figure::HH, 0.0)).y;
     assert!(
@@ -229,4 +235,111 @@ fn a_talk_holds_a_person_and_they_go_on_from_where_they_stopped() {
         "goes on from the same place, no jump"
     );
     assert_eq!(place_of(l, 45.0, radius).feet, person.at(15.0, radius).feet);
+}
+
+/// 15.2: past the line a person's face is the card and none of its pieces;
+/// inside it the pieces and no card; during a fade both, each through its
+/// half of the mask. The body is drawn whatever the face shows.
+#[test]
+fn far_off_the_card_shows_and_the_pieces_do_not() {
+    let near = FaceLod::new(10.0).card();
+    let far = FaceLod::new(face_card::FACE_CARD_M + 5.0).card();
+    assert_eq!((near, far), (0.0, 1.0));
+    for k in 6..=26 {
+        assert!(part_drawn(k, true, near), "piece {k} near");
+        assert!(!part_drawn(k, true, far), "piece {k} far");
+        assert!(part_drawn(k, true, 0.5), "piece {k} fading");
+        assert!(!part_drawn(k, false, near), "a piece its pose hides");
+    }
+    assert!(!part_drawn(CARD, true, near), "no card near");
+    assert!(part_drawn(CARD, true, far), "the card far");
+    assert!(part_drawn(CARD, true, 0.5), "the card fading");
+    for k in 0..6 {
+        assert!(part_drawn(k, true, near) && part_drawn(k, true, far));
+    }
+    // The two halves of the mask: every threshold is drawn by exactly one.
+    for share in [0.0, 0.25, 0.5, 0.75, 1.0] {
+        let (leave, come) = (
+            CrossFaded::Leaving(share).packed(),
+            CrossFaded::Coming(share).packed(),
+        );
+        for i in 0..16 {
+            let mask = (i as f32 + 0.5) / 16.0;
+            let pieces = !(leave > 0.0 && mask < leave) && !(leave < 0.0 && mask >= leave + 2.0);
+            let card = !(come > 0.0 && mask < come) && !(come < 0.0 && mask >= come + 2.0);
+            assert!(pieces != card, "share {share}, threshold {mask}");
+        }
+    }
+    // A talking person far off shows Talking's tile; asleep, Sleepy's.
+    assert_eq!(
+        card_expression(Expression::Happy, true, false),
+        Expression::Talking
+    );
+    assert_eq!(
+        card_expression(Expression::Neutral, false, true),
+        Expression::Sleepy
+    );
+    assert_eq!(
+        card_expression(Expression::Cross, false, false),
+        Expression::Cross
+    );
+}
+
+/// 15.1 and 15.2: a card is one flat mesh on the face's area, each texel
+/// its colour's swatch, and an expression's card differs from Neutral's.
+#[test]
+fn a_face_card_is_its_tile_in_swatches() {
+    let person = proxy_person();
+    let figure = Figure::of(&person.look);
+    let colours = look::swatches([]);
+    let (_, swatch) = atlas_pixels(&colours);
+    let kit = Kit {
+        swatch: swatch.clone(),
+        solid: Handle::default(),
+        masked: Handle::default(),
+        card: Handle::default(),
+        white: Handle::default(),
+        pupil: Handle::default(),
+        glint: Handle::default(),
+        lash: Handle::default(),
+        arc: Handle::default(),
+        mouths: HashMap::new(),
+    };
+    let who = CardLook::of(&person.look, &figure);
+    let mut neutral = None;
+    for e in Expression::ALL {
+        let tile = face_card::bake_tile(&face_card::resting_pose(e), &who, face_card::TILE_PX);
+        let mesh = card_mesh(&kit, &tile, face_card::TILE_PX);
+        let Some(bevy::mesh::VertexAttributeValues::Float32x3(at)) =
+            mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+        else {
+            panic!("positions");
+        };
+        let Some(bevy::mesh::VertexAttributeValues::Float32x2(uvs)) =
+            mesh.attribute(Mesh::ATTRIBUTE_UV_0)
+        else {
+            panic!("uvs");
+        };
+        assert!(!at.is_empty() && at.len() % 6 == 0, "{e:?}");
+        let w = face_card::CARD_W / 2.0 + 1e-4;
+        let [y0, y1] = face_card::CARD_Y;
+        for p in at {
+            assert!(p[0].abs() <= w && p[1] >= y0 - 1e-4 && p[1] <= y1 + 1e-4);
+            assert_eq!(p[2], 0.0, "{e:?}: one flat piece");
+        }
+        let drawn: std::collections::BTreeSet<u32> = tile.iter().flatten().copied().collect();
+        let used: Vec<[u32; 2]> = uvs.iter().map(|uv| uv.map(f32::to_bits)).collect();
+        for c in &drawn {
+            let uv = swatch[c].map(f32::to_bits);
+            assert!(used.contains(&uv), "{e:?}: {c:06x} drawn");
+        }
+        let positions: Vec<[u32; 3]> = at.iter().map(|p| p.map(f32::to_bits)).collect();
+        match &neutral {
+            None => neutral = Some(positions),
+            Some(n) => assert!(
+                *n != positions || e == Expression::Neutral,
+                "{e:?} draws Neutral's card"
+            ),
+        }
+    }
 }

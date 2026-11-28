@@ -71,7 +71,8 @@ struct Field {
     low: vec4<f32>,
     high: vec4<f32>,
     // x how far it has faded out; on a town's outside (z one) y how far it
-    // has blended from the bake before to the one it carries.
+    // has blended from the bake before to the one it carries; w a
+    // cross-fade's share (`CrossFaded`: 0..1 leaving, less two coming).
     fade: vec4<f32>,
     // The field at the bounds' eight corners, corner `x + 2y + 4z`: sky in
     // `sky[i / 4][i % 4]`, block in `block[i / 4][i % 4]`, each 0..1.
@@ -290,6 +291,15 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     // slice 4a): drawn through the terrain's mask, never whole in one frame.
     field = rows[mesh_functions::get_tag(in.instance_index)];
     if bayer4(in.position.xy) < field.fade.x {
+        discard;
+    }
+    // One of two meshes cross-fading in one place (`townsfolk` 15.3, a
+    // face's pieces and its far card): the leaving one (w 0..1) keeps the
+    // mask at or over the share, the coming one (w the share less two) the
+    // rest, so every pixel is drawn by one of them.
+    let crossing = field.fade.w;
+    if (crossing > 0.0 && bayer4(in.position.xy) < crossing)
+        || (crossing < 0.0 && bayer4(in.position.xy) >= crossing + 2.0) {
         discard;
     }
     // Architecture mode's cutaway (`player-building` B11): over the cut near

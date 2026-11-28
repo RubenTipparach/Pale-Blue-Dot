@@ -2595,6 +2595,39 @@ DRAW_M (60 m).
   inside it the pieces and not the card; a crossing starts one fade that
   ends after `face_fade_s` whatever the person does after; standing inside
   the band does not flip.
+- **As built** (2026-11-28, tasks 15.1 to 15.3; a cloud session, unit and
+  app tests only). `pbd_core::townsfolk::face_card` holds the bake and the
+  switch: `resting_pose` is an expression's face at rest (its own numbers,
+  pupils ahead, no blink, no talk), `bake_tile` draws it flat into a 32 px
+  tile over the mockup's area (0.43 m across, 0.02 to 0.48 m up the head's
+  front), texel by texel, the topmost piece over each texel's middle in the
+  kit's own order, places, sizes and colours (blush, mouth cell, whites,
+  brows, happy arcs, pupils, catch-lights, lids, lash lines), and
+  `FaceLod` is the per-person near, far or fading state; the numbers are
+  its named constants (`FACE_CARD_M` 20 m, `FACE_FADE_S` 0.3 s,
+  `FACE_BAND_M` 1 m, `TILE_PX` 32, `CARD_PROUD_M` 0.01 m). Two things
+  differ from the plan. **The tile is drawn as geometry over the atlas's
+  swatches, not as texels in it**: each run of same-coloured texels in a
+  row is one quad whose corners sit on its colour's swatch, all of a card
+  one flat mesh, so it samples nearest exactly as a 32 px texture would and
+  nothing is drawn where the tile has none (no alpha cut needed). That is
+  how the per-person colours are handled without the mockup's key-colour
+  shader: each drawn figure bakes its own ten cards at spawn, from its own
+  skin (the lids), brows, blush and also its own eye gap and eye size,
+  which the mockup's one bake face did not follow; the mouth's six colours
+  joined the swatches for it. **The dither is the field-lit shader's own
+  mask, halved**: a new `field_light::CrossFaded` on a mesh (the pieces
+  `Leaving(share)`, the card `Coming(share)`) rides the row's unused
+  `fade.w`, and `field_lit.wgsl` gives the leaving mesh the mask's
+  thresholds at or over the share and the coming one the rest, so every
+  pixel is one of them, on top of the figure's own `Faded`. The card is a
+  child of the figure's root posed in the head's frame (it turns and nods
+  with it), drawn with a third material, the solid one with a depth bias of
+  1, field-lit like the rest; the prewarm shows it so its pipeline is built
+  before `READY`. A talking person far off shows Talking's tile, and one
+  asleep in a bed Sleepy's. How far off the pieces really start to fight,
+  and whether 20 m hides it on the owner's GPU, is not measured here
+  (lavapipe): task 15.4 is the desktop's.
 
 ## Risks / Trade-offs
 

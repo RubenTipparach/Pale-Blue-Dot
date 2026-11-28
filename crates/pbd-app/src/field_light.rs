@@ -74,6 +74,30 @@ impl RoomLights {
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
 pub struct Faded(pub f32);
 
+/// One of two meshes drawn in one place in turn, cross-fading through the
+/// same screen-door mask (`townsfolk` 15.3: a face's pieces and its far
+/// card). Each carries the fade's share, 0 to 1 from the leaving mesh to
+/// the coming one: the leaving mesh keeps the pixels whose threshold is at
+/// least the share, the coming one the rest, so together they draw every
+/// pixel once and never fight. On the mesh itself, beside any [`Faded`] on
+/// its parent.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub enum CrossFaded {
+    Leaving(f32),
+    Coming(f32),
+}
+
+impl CrossFaded {
+    /// As the row's `fade.w` carries it: a leaving share as itself (zero
+    /// draws whole, as a mesh without one), a coming share less two.
+    pub fn packed(self) -> f32 {
+        match self {
+            CrossFaded::Leaving(s) => s.clamp(0.0, 1.0),
+            CrossFaded::Coming(s) => s.clamp(0.0, 1.0) - 2.0,
+        }
+    }
+}
+
 /// How a room's faces are lit where the field cannot say (`sun-shadows`
 /// decision 7): the voxel field has never heard of a house's walls.
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
@@ -95,7 +119,7 @@ pub struct FieldRow {
     pub high: Vec4,
     /// x how far it has faded out ([`Faded`]); on a town's outside, y how
     /// far it has blended from the bake before to the one it carries and z
-    /// one (`baked-light-ease` 7.4).
+    /// one (`baked-light-ease` 7.4); w its cross-fade ([`CrossFaded`]).
     pub fade: Vec4,
     /// The field at the bounds' eight corners, corner `x + 2y + 4z`.
     pub sky: [Vec4; 2],
@@ -811,7 +835,11 @@ fn light_from_the_field(
     mut rows: ResMut<FieldRows>,
     mut read: Local<(u32, std::collections::HashMap<Entity, Corners>)>,
     frame_count: Option<Res<crate::loading::FrameCount>>,
-    (time, build_view): (Option<Res<Time>>, Option<Res<crate::build_view::BuildView>>),
+    (time, build_view, crossed): (
+        Option<Res<Time>>,
+        Option<Res<crate::build_view::BuildView>>,
+        Query<&CrossFaded>,
+    ),
 ) {
     let now_s = time.map_or(0.0, |t| t.elapsed_secs());
     let sky_light = sky_light.map(|s| *s).unwrap_or_default();
@@ -979,7 +1007,12 @@ fn light_from_the_field(
         let mut row = FieldRow {
             low: low.extend(0.0),
             high: high.extend(0.0),
-            fade: Vec4::new(gone, blend, carries, 0.0),
+            fade: Vec4::new(
+                gone,
+                blend,
+                carries,
+                crossed.get(entity).map_or(0.0, |c| c.packed()),
+            ),
             sky,
             block,
             look: current.look,
