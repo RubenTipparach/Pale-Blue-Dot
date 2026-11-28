@@ -191,14 +191,32 @@ impl Townsfolk {
     /// `feet` (the planet's frame, f64), facing `forward`, walking or not:
     /// made the first time, with a look of their number in `tunic`, then
     /// driven.
-    pub fn visit(&mut self, player: u32, feet: DVec3, forward: DVec3, walking: bool, tunic: u32) {
+    pub fn visit(
+        &mut self,
+        player: u32,
+        feet: DVec3,
+        forward: DVec3,
+        walking: bool,
+        chosen: Option<look::Look>,
+        tunic: u32,
+    ) {
         let id = PersonId {
             site: PLAYERS_SITE,
             index: player,
         };
+        // A look changed (the player chose another): drawn again with it.
+        if let (Some(chosen), Some(l)) = (chosen, self.live(id))
+            && l.person.look != chosen
+        {
+            self.unvisit(player);
+        }
         if self.live(id).is_none() {
             let seed = player.wrapping_mul(2_654_435_761).wrapping_add(17);
-            let look = look::generate(look::people_of_scene("fields"), seed, player, tunic);
+            // Their own character (`player-character`), or one rolled from
+            // their number until it arrives.
+            let look = chosen.unwrap_or_else(|| {
+                look::generate(look::people_of_scene("fields"), seed, player, tunic)
+            });
             let up = feet.normalize();
             let at = up.as_vec3();
             let person = Person {

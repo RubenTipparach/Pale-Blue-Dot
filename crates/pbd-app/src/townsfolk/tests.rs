@@ -239,8 +239,8 @@ fn another_player_is_a_visitor_not_a_townsperson() {
     let mut folk = Townsfolk::default();
     let feet = DVec3::new(0.0, 4800.0, 0.0);
     let forward = DVec3::X;
-    folk.visit(3, feet, forward, true, 0x4a6a8a);
-    folk.visit(3, feet + DVec3::X, forward, true, 0x4a6a8a);
+    folk.visit(3, feet, forward, true, None, 0x4a6a8a);
+    folk.visit(3, feet + DVec3::X, forward, true, None, 0x4a6a8a);
     let id = PersonId {
         site: PLAYERS_SITE,
         index: 3,
@@ -250,4 +250,19 @@ fn another_player_is_a_visitor_not_a_townsperson() {
     assert_eq!(folk.everyone().count(), 0);
     folk.unvisit(3);
     assert_eq!(folk.people(PLAYERS_SITE).count(), 0);
+}
+
+/// `player-character` 4.3: another player is drawn with the look they chose,
+/// and drawn again when they choose another.
+#[test]
+fn another_player_wears_the_look_they_chose() {
+    use pbd_core::townsfolk::character::rolled;
+    let mut folk = Townsfolk::default();
+    let feet = DVec3::new(0.0, 4800.0, 0.0);
+    let (a, b) = (rolled(&[1; 16]), rolled(&[2; 16]));
+    folk.visit(4, feet, DVec3::X, false, Some(a), 0);
+    assert_eq!(folk.people(PLAYERS_SITE).next().map(|p| p.look), Some(a));
+    folk.visit(4, feet, DVec3::X, false, Some(b), 0);
+    assert_eq!(folk.people(PLAYERS_SITE).count(), 1);
+    assert_eq!(folk.people(PLAYERS_SITE).next().map(|p| p.look), Some(b));
 }

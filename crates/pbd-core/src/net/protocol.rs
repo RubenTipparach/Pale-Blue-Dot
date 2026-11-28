@@ -226,6 +226,11 @@ pub enum ToServer {
     Chat {
         text: String,
     },
+    /// The player's own character (`player-character` 4.3), sent after the
+    /// hello and whenever it changes.
+    Look {
+        look: crate::townsfolk::look::Look,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -312,6 +317,11 @@ pub enum ToClient {
     /// A world record the server's store took (design 26).
     Record {
         record: crate::records::Record,
+    },
+    /// Another player's character (`player-character` 4.3).
+    Look {
+        player: u32,
+        look: crate::townsfolk::look::Look,
     },
 }
 
@@ -502,6 +512,12 @@ impl<'a> R<'a> {
             pitch: self.f32()?,
         })
     }
+    /// A character's look (`player-character`): refused unless whole and
+    /// one the townsfolk can draw.
+    fn look(&mut self) -> Result<crate::townsfolk::look::Look, Decode> {
+        let bytes = self.take(crate::townsfolk::character::ENCODED_LEN)?;
+        crate::townsfolk::character::decode(bytes).ok_or(Decode::Invalid)
+    }
     fn material(&mut self) -> Result<Material, Decode> {
         material_of(self.u8()?).ok_or(Decode::Invalid)
     }
@@ -682,6 +698,10 @@ impl ToServer {
                 w.u8(8);
                 w.bytes(text.as_bytes());
             }
+            Self::Look { look } => {
+                w.u8(9);
+                crate::townsfolk::character::encode(look, &mut w.0);
+            }
         }
         w.0
     }
@@ -767,6 +787,7 @@ impl ToServer {
                 }
             }
             8 => Self::Chat { text: r.text()? },
+            9 => Self::Look { look: r.look()? },
             other => return Err(Decode::Unknown(other)),
         };
         r.end(message)
@@ -889,6 +910,11 @@ impl ToClient {
                 w.u8(15);
                 w.u32(*player);
             }
+            Self::Look { player, look } => {
+                w.u8(17);
+                w.u32(*player);
+                crate::townsfolk::character::encode(look, &mut w.0);
+            }
             Self::Record { record } => {
                 w.u8(16);
                 w.bytes(record.kind.as_bytes());
@@ -993,6 +1019,10 @@ impl ToClient {
                 left: r.u16()?,
             },
             15 => Self::Gone { player: r.u32()? },
+            17 => Self::Look {
+                player: r.u32()?,
+                look: r.look()?,
+            },
             16 => {
                 let kind = r.text()?;
                 let id = r.u64()?;
@@ -1102,6 +1132,9 @@ mod tests {
             ToServer::Chat {
                 text: "hello, ünïcode".into(),
             },
+            ToServer::Look {
+                look: crate::townsfolk::character::rolled(&[3; 16]),
+            },
         ]
     }
 
@@ -1174,6 +1207,10 @@ mod tests {
             },
             ToClient::DropLeft { id: 41, left: 0 },
             ToClient::Gone { player: 3 },
+            ToClient::Look {
+                player: 2,
+                look: crate::townsfolk::character::rolled(&[9; 16]),
+            },
             ToClient::Record {
                 record: crate::records::Record {
                     kind: "plot".into(),

@@ -295,6 +295,8 @@ pub struct Player {
     /// Where they were last seen (design 24), and the server's clock then.
     pub pose: Option<pbd_core::net::protocol::Pose>,
     pub pose_s: f64,
+    /// Their own character (`player-character` 4.3), once sent.
+    pub look: Option<pbd_core::townsfolk::look::Look>,
 }
 
 /// A failed cheat check (design 30): what was seen, and the limit.
@@ -538,6 +540,7 @@ impl Server {
                 since_vitals_s: 0.0,
                 pose: None,
                 pose_s: 0.0,
+                look: None,
             },
         );
         self.send(
@@ -551,6 +554,16 @@ impl Server {
             },
         );
         self.send_slots(number);
+        // Everyone already in, as they chose to look (`player-character`).
+        let looks: Vec<(u32, pbd_core::townsfolk::look::Look)> = self
+            .players
+            .iter()
+            .filter(|(n, _)| **n != number)
+            .filter_map(|(n, p)| p.look.map(|l| (*n, l)))
+            .collect();
+        for (player, look) in looks {
+            self.send(To::Player(number), ToClient::Look { player, look });
+        }
         Some(number)
     }
 
@@ -589,6 +602,27 @@ impl Server {
         // Everyone still in stops drawing them (design 24).
         self.broadcast(ToClient::Gone { player });
         Some(left)
+    }
+
+    /// `player`'s own character (`player-character` 4.3): kept, and passed to
+    /// every other player. A look the townsfolk cannot draw is ignored.
+    pub fn look(&mut self, player: u32, look: pbd_core::townsfolk::look::Look) {
+        if !pbd_core::townsfolk::character::valid(&look) {
+            return;
+        }
+        let Some(p) = self.players.get_mut(&player) else {
+            return;
+        };
+        p.look = Some(look);
+        let others: Vec<u32> = self
+            .players
+            .keys()
+            .copied()
+            .filter(|&n| n != player)
+            .collect();
+        for to in others {
+            self.send(To::Player(to), ToClient::Look { player, look });
+        }
     }
 
     /// Where `player` is now (design 24): kept, and passed to every other
@@ -655,6 +689,7 @@ impl Server {
             // Subscription, presence, transactions and chat come with their
             // tasks (6.3, 8.1, 8.5).
             ToServer::Presence { pose } => self.presence(player, pose),
+            ToServer::Look { look } => self.look(player, look),
             _ => {}
         }
     }

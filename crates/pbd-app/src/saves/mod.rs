@@ -840,6 +840,14 @@ impl WorldSave {
         });
     }
 
+    /// The host's own player's look (`player-character` 4.3), for the
+    /// players who joined.
+    pub fn serve_look(&mut self, look: pbd_core::townsfolk::look::Look) {
+        if let Some(server) = self.local.as_mut() {
+            server.look(0, look);
+        }
+    }
+
     /// The host's own player's pose (`multiplayer` design 24), for the
     /// players who joined: nothing until someone has joined.
     pub fn serve_presence(&mut self, pose: pbd_core::net::protocol::Pose) {

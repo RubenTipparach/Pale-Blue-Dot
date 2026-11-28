@@ -9,6 +9,7 @@
 //! The figure, its face and its motion are [`figure`], [`face`] and
 //! [`motion`]; the game draws them.
 
+pub mod character;
 pub mod face;
 pub mod figure;
 pub mod look;

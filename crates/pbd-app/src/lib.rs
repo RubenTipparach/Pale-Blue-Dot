@@ -58,6 +58,7 @@ pub mod memory_trace;
 pub mod missions;
 #[cfg(feature = "desktop")]
 pub mod motion_trace;
+pub mod character;
 pub mod net_play;
 pub mod sim_origin;
 pub mod step_trace;

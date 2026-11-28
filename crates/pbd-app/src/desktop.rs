@@ -2150,6 +2150,8 @@ pub fn run(args: &[String]) {
     .insert_resource(world)
     // The network, hosting or joined (`multiplayer` design 20).
     .init_resource::<pbd_app::net_play::Others>()
+    // The player's own character (`player-character`).
+    .insert_resource(pbd_app::character::PlayerLook::load())
     .add_systems(
         Update,
         (
@@ -2157,6 +2159,7 @@ pub fn run(args: &[String]) {
             // Other players: this one's pose out, theirs drawn (design 24).
             pbd_app::net_play::send_presence,
             pbd_app::net_play::draw_others.after(pbd_app::net_play::play),
+            pbd_app::net_play::send_look.after(pbd_app::net_play::play),
         ),
     )
     // The clock: pinned and stopped where a capture asked for an hour, so a

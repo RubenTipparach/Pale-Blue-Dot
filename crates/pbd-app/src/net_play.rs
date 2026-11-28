@@ -56,6 +56,8 @@ pub const WALKING_MPS: f64 = 0.3;
 #[derive(Resource, Default, Debug)]
 pub struct Others {
     pub seen: BTreeMap<u32, Heard>,
+    /// Each other player's own character, once sent (`player-character`).
+    pub looks: BTreeMap<u32, pbd_core::townsfolk::look::Look>,
     /// When this game last sent its own pose, s.
     sent_s: f64,
 }
@@ -93,6 +95,11 @@ impl Others {
             }
             ToClient::Gone { player } => {
                 self.seen.remove(&player);
+                self.looks.remove(&player);
+                true
+            }
+            ToClient::Look { player, look } => {
+                self.looks.insert(player, look);
                 true
             }
             _ => false,
@@ -179,6 +186,38 @@ pub fn send_presence(
     }
 }
 
+/// Send this player's own look (`player-character` 4.3): once joined or
+/// when a player joins this host, and again whenever it changes.
+pub fn send_look(
+    net: Option<ResMut<NetPlay>>,
+    mut save: ResMut<WorldSave>,
+    look: Option<Res<crate::character::PlayerLook>>,
+    mut sent: Local<Option<pbd_core::townsfolk::look::Look>>,
+    mut players_seen: Local<usize>,
+) {
+    let (Some(net), Some(look)) = (net, look) else {
+        return;
+    };
+    let look = look.0;
+    match &*net {
+        NetPlay::Joined { client, .. } => {
+            if *sent != Some(look) {
+                client.send(&ToServer::Look { look });
+                *sent = Some(look);
+            }
+        }
+        NetPlay::Host { players, .. } => {
+            // A new player is sent everyone's looks by the server on join,
+            // the host's among them once it has given it.
+            if *sent != Some(look) || players.len() > *players_seen {
+                save.bypass_change_detection().serve_look(look);
+                *sent = Some(look);
+            }
+            *players_seen = players.len();
+        }
+    }
+}
+
 /// Draw the other players as townsfolk figures where they are now
 /// (design 24): stood and driven each frame, gone when they leave.
 pub fn draw_others(
@@ -197,7 +236,8 @@ pub fn draw_others(
         .unwrap_or(0x4a6a8a);
     for (&player, heard) in &others.seen {
         let d = heard.at(now);
-        folk.visit(player, d.feet, d.forward, d.walking, tunic);
+        let chosen = others.looks.get(&player).copied();
+        folk.visit(player, d.feet, d.forward, d.walking, chosen, tunic);
     }
     for gone in shown.iter().filter(|p| !others.seen.contains_key(p)) {
         folk.unvisit(*gone);
@@ -284,7 +324,7 @@ pub fn join(addr: std::net::SocketAddr, wait: std::time::Duration) -> Result<Joi
 
 /// This install's key, which a host knows its player by: kept beside the
 /// saves, made the first time.
-fn install_key() -> [u8; 16] {
+pub fn install_key() -> [u8; 16] {
     let path = crate::paths::saves_dir().join("install.key");
     if let Ok(bytes) = std::fs::read(&path)
         && let Ok(key) = <[u8; 16]>::try_from(bytes.as_slice())

@@ -1245,3 +1245,39 @@ fn the_cheat_checks_flag_a_teleport_and_a_reach_and_are_off_by_default() {
             .any(|(_, m)| matches!(m, ToClient::Accepted { id: 3, .. }))
     );
 }
+
+/// `player-character` 4.3: a player's look goes to every other player, a
+/// player who joins later is sent it, and a look the townsfolk cannot draw
+/// is ignored.
+#[test]
+fn a_players_look_reaches_everyone_and_a_late_joiner() {
+    use pbd_core::townsfolk::character::rolled;
+    let (mut s, mut st) = server();
+    let players = joined(&mut s, &[1, 2], Slots::default());
+    let look = rolled(&[5; 16]);
+    s.handle(&mut st, players[1], ToServer::Look { look });
+    let sent = s.drain();
+    assert_eq!(
+        sent,
+        vec![(
+            To::Player(players[0]),
+            ToClient::Look {
+                player: players[1],
+                look
+            }
+        )]
+    );
+    let late = s.join(9, &hello(3), Slots::default()).unwrap();
+    assert!(s.drain().contains(&(
+        To::Player(late),
+        ToClient::Look {
+            player: players[1],
+            look
+        }
+    )));
+    let mut bad = look;
+    bad.height_m = 3.0;
+    s.handle(&mut st, players[0], ToServer::Look { look: bad });
+    assert!(s.drain().is_empty());
+    assert_eq!(s.player(players[0]).unwrap().look, None);
+}

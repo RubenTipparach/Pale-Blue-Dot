@@ -348,8 +348,15 @@ pub fn swatches(tunics: impl IntoIterator<Item = u32>) -> Vec<u32> {
     for p in PEOPLES {
         for &s in p.skin {
             out.extend(BLUSH_LEVELS.iter().map(|&b| blush(s, b)));
-            // A beard's stubble, its people's hair on its skin (decision 36a).
-            out.extend(p.hair.iter().map(|&h| super::figure::stubble(h, s)));
+            // A beard's stubble, any people's hair on this skin (decision
+            // 36a): a player's own character mixes peoples
+            // (`player-character`).
+            out.extend(
+                PEOPLES
+                    .iter()
+                    .flat_map(|q| q.hair.iter())
+                    .map(|&h| super::figure::stubble(h, s)),
+            );
         }
     }
     out.extend(super::figure::FACE_COLOURS);
