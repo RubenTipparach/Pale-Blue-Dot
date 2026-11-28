@@ -2,6 +2,7 @@ mod arrival;
 mod boat;
 mod breeding;
 mod build_mode;
+mod character_ui;
 mod compass_bar;
 mod construction;
 mod cpu_times;
@@ -1143,7 +1144,7 @@ impl Launch {
                     result.settings_tab = menu::SETTINGS_TABS
                         .iter()
                         .position(|t| t.eq_ignore_ascii_case(name))
-                        .expect("--settings-tab takes picture, weather, world, movement, input or sound")
+                        .expect("--settings-tab takes picture, weather, world, movement, input, sound, debug or character")
                         as u8;
                 }
                 "--input-tab" => {
@@ -1822,9 +1823,17 @@ pub fn run(args: &[String]) {
         eprintln!("terrain generator: {why}");
     }
     let saved_seconds = world.world_seconds;
-    let hotbar = slots::Hotbar::restore(&mut world);
+    let mut hotbar = slots::Hotbar::restore(&mut world);
+    // A joined game carries what the host holds for this player (design 22).
+    if let Some(from_server) = world.remote_slots() {
+        pbd_app::net_play::follow(&mut hotbar.0, from_server);
+    }
     let tools = pbd_app::fish::ToolSlot::restore(&world);
-    let drops = pbd_app::drops::Drops::restore(&world);
+    let mut drops = pbd_app::drops::Drops::restore(&world);
+    // A joined game's drops are the ones the host told it of (design 23).
+    for news in world.drop_news() {
+        pbd_app::net_play::apply_drop_news(&mut drops, &news);
+    }
     // The saves page is the front door of a plain launch: a player picks the
     // world rather than being put in the last one.
     let opening = menu::opening_screen(
@@ -2142,9 +2151,18 @@ pub fn run(args: &[String]) {
     // rather than appearing when the player first walks.
     .insert_resource(world)
     // The network, hosting or joined (`multiplayer` design 20).
+    .init_resource::<pbd_app::net_play::Others>()
+    // The player's own character (`player-character`).
+    .insert_resource(pbd_app::character::PlayerLook::load())
     .add_systems(
         Update,
-        pbd_app::net_play::play.after(digging::dig_and_place),
+        (
+            pbd_app::net_play::play.after(digging::dig_and_place),
+            // Other players: this one's pose out, theirs drawn (design 24).
+            pbd_app::net_play::send_presence,
+            pbd_app::net_play::draw_others.after(pbd_app::net_play::play),
+            pbd_app::net_play::send_look.after(pbd_app::net_play::play),
+        ),
     )
     // The clock: pinned and stopped where a capture asked for an hour, so a
     // picture is a function of its flags rather than of when it was taken.
@@ -2209,7 +2227,10 @@ pub fn run(args: &[String]) {
         (
             fruit::offer.in_set(pbd_app::interact::InteractSet::Offer),
             glow_plants::offer.in_set(pbd_app::interact::InteractSet::Offer),
-            sea_gather::offer.in_set(pbd_app::interact::InteractSet::Offer),
+            // A photograph has no walker and no sea places (`photo`).
+            sea_gather::offer
+                .in_set(pbd_app::interact::InteractSet::Offer)
+                .run_if(resource_exists::<pbd_app::fish::places::SeaAim>),
             farm::offer
                 .in_set(pbd_app::interact::InteractSet::Offer)
                 .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
@@ -2302,6 +2323,17 @@ pub fn run(args: &[String]) {
         (repro::scripted_press, repro::scripted_keys).run_if(resource_exists::<CaptureState>),
     )
     .add_systems(Update, (breeding::press, breeding::paint).chain())
+    // The Character page (`player-character` design 7).
+    .add_systems(
+        Update,
+        (
+            character_ui::offer,
+            character_ui::press,
+            character_ui::show,
+            character_ui::preview,
+        )
+            .chain(),
+    )
     .add_systems(Update, (boat::press, boat::paint).chain())
     .add_systems(
         Update,

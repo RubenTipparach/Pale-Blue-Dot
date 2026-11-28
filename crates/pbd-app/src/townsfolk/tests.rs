@@ -237,6 +237,42 @@ fn a_talk_holds_a_person_and_they_go_on_from_where_they_stopped() {
     assert_eq!(place_of(l, 45.0, radius).feet, person.at(15.0, radius).feet);
 }
 
+/// `multiplayer` design 24: another player is drawn as a townsperson of
+/// their own site, driven where they are, and is not a townsperson to
+/// anything that asks `everyone()`; gone, they are forgotten.
+#[test]
+fn another_player_is_a_visitor_not_a_townsperson() {
+    let mut folk = Townsfolk::default();
+    let feet = DVec3::new(0.0, 4800.0, 0.0);
+    let forward = DVec3::X;
+    folk.visit(3, feet, forward, true, None, 0x4a6a8a);
+    folk.visit(3, feet + DVec3::X, forward, true, None, 0x4a6a8a);
+    let id = PersonId {
+        site: PLAYERS_SITE,
+        index: 3,
+    };
+    assert_eq!(folk.people(PLAYERS_SITE).count(), 1, "made once");
+    assert!(folk.driven(id));
+    assert_eq!(folk.everyone().count(), 0);
+    folk.unvisit(3);
+    assert_eq!(folk.people(PLAYERS_SITE).count(), 0);
+}
+
+/// `player-character` 4.3: another player is drawn with the look they chose,
+/// and drawn again when they choose another.
+#[test]
+fn another_player_wears_the_look_they_chose() {
+    use pbd_core::townsfolk::character::rolled;
+    let mut folk = Townsfolk::default();
+    let feet = DVec3::new(0.0, 4800.0, 0.0);
+    let (a, b) = (rolled(&[1; 16]), rolled(&[2; 16]));
+    folk.visit(4, feet, DVec3::X, false, Some(a), 0);
+    assert_eq!(folk.people(PLAYERS_SITE).next().map(|p| p.look), Some(a));
+    folk.visit(4, feet, DVec3::X, false, Some(b), 0);
+    assert_eq!(folk.people(PLAYERS_SITE).count(), 1);
+    assert_eq!(folk.people(PLAYERS_SITE).next().map(|p| p.look), Some(b));
+}
+
 /// 15.2: past the line a person's face is the card and none of its pieces;
 /// inside it the pieces and no card; during a fade both, each through its
 /// half of the mask. The body is drawn whatever the face shows.

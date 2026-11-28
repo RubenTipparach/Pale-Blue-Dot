@@ -16,10 +16,13 @@ use crate::terrain::{Material, material_code, material_of};
 use crate::world_frame::{FrameId, WorldPos};
 use glam::DVec3;
 
-/// This build's protocol.
-pub const PROTOCOL: u16 = 1;
-/// The oldest protocol this build still speaks (design 15.9).
-pub const PROTOCOL_MIN: u16 = 1;
+/// This build's protocol. 2: `ToClient::Slots` (design 22), `Drop` and
+/// `DropLeft` (design 23).
+pub const PROTOCOL: u16 = 2;
+/// The oldest protocol this build still speaks (design 15.9). A version-1
+/// game cannot read its own slots, so it is refused rather than left with
+/// an empty hotbar (design 22).
+pub const PROTOCOL_MIN: u16 = 2;
 /// The longest chat line or name, in bytes.
 pub const MAX_TEXT: usize = 512;
 /// The most items any one list may hold, which bounds what a malformed
@@ -27,6 +30,8 @@ pub const MAX_TEXT: usize = 512;
 pub const MAX_LIST: usize = 1 << 16;
 /// The largest snapshot, in bytes.
 pub const MAX_SNAPSHOT: usize = 1 << 22;
+/// The longest record body, bytes (design 26).
+pub const MAX_RECORD: usize = 1 << 16;
 
 /// What a world and a build must agree on before anything else is sent
 /// (design 9).
@@ -69,6 +74,18 @@ pub enum Request {
     Pack(crate::accept::PackMove),
     /// Pick up a drop the client's magnet brought in (design 19).
     Pick { drop: u64 },
+    /// Toss `count` of what `slot` holds, to land at `at_mm`, whole
+    /// millimetres in the body's frame (design 25).
+    Toss {
+        slot: u8,
+        count: u16,
+        at_mm: [i64; 3],
+    },
+    /// Sow the seed in `slot` on the tilled soil at the cell's layer
+    /// (design 26).
+    Plant { cell: u32, layer: u16, slot: u8 },
+    /// Harvest the crop on the cell.
+    Harvest { cell: u32 },
 }
 
 /// Why a request was refused. No undo rides with it: the server re-sends
@@ -89,6 +106,33 @@ pub enum Refusal {
     NotSaved,
     /// The drop is not there: picked up already, or never was.
     Gone,
+    /// Farming (design 26): the ground is not tilled soil with air over it.
+    NotTilled,
+    /// A crop already grows there.
+    Growing,
+    /// The crop does not grow in this climate.
+    Climate,
+    /// Nothing growing there.
+    NoCrop,
+    /// Not ripe yet.
+    NotRipe,
+    /// No room in the pack for all of it.
+    NoRoom,
+}
+
+impl From<crate::farming::accept::Refused> for Refusal {
+    fn from(r: crate::farming::accept::Refused) -> Self {
+        use crate::farming::accept::Refused as F;
+        match r {
+            F::NotTilled => Refusal::NotTilled,
+            F::Growing => Refusal::Growing,
+            F::Climate => Refusal::Climate,
+            F::EmptySlot => Refusal::EmptySlot,
+            F::NoCrop => Refusal::NoCrop,
+            F::NotRipe => Refusal::NotRipe,
+            F::NoRoom => Refusal::NoRoom,
+        }
+    }
 }
 
 /// A change to a region's state, in the server's order.
@@ -116,6 +160,30 @@ pub struct Pose {
     pub at: WorldPos,
     pub yaw: f32,
     pub pitch: f32,
+}
+
+/// A fixed tangent frame at `up` (a unit vector from the body's centre),
+/// east then north, that every game works yaw in (design 24): east is the
+/// body's Z axis crossed with up, or its Y axis near the poles of Z.
+pub fn tangent_frame(up: DVec3) -> (DVec3, DVec3) {
+    let axis = if up.z.abs() < 0.9 { DVec3::Z } else { DVec3::Y };
+    let east = axis.cross(up).normalize();
+    let north = up.cross(east);
+    (east, north)
+}
+
+/// The yaw of `forward` at `up`, radians from north toward east, in the
+/// plane tangent there (design 24).
+pub fn yaw_of(forward: DVec3, up: DVec3) -> f32 {
+    let (east, north) = tangent_frame(up);
+    forward.dot(east).atan2(forward.dot(north)) as f32
+}
+
+/// The unit tangent at `up` that faces `yaw` (the inverse of [`yaw_of`]).
+pub fn forward_of(yaw: f32, up: DVec3) -> DVec3 {
+    let (east, north) = tangent_frame(up);
+    let yaw = f64::from(yaw);
+    north * yaw.cos() + east * yaw.sin()
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -157,6 +225,11 @@ pub enum ToServer {
     },
     Chat {
         text: String,
+    },
+    /// The player's own character (`player-character` 4.3), sent after the
+    /// hello and whenever it changes.
+    Look {
+        look: crate::townsfolk::look::Look,
     },
 }
 
@@ -221,6 +294,34 @@ pub enum ToClient {
     Chat {
         from: u32,
         text: String,
+    },
+    /// The player's own carried slots, whole (design 22): after the
+    /// welcome, after a request that changed them, after a refusal. Which
+    /// slot is selected is the player's own and is not sent.
+    Slots {
+        slots: crate::inventory::Slots,
+    },
+    /// A drop a dig made, whoever dug (design 23).
+    Drop {
+        drop: crate::drops::ItemDrop,
+    },
+    /// A pickup was decided: `left` remain on drop `id`, 0 for gone.
+    DropLeft {
+        id: u64,
+        left: u16,
+    },
+    /// A player left the world (design 24).
+    Gone {
+        player: u32,
+    },
+    /// A world record the server's store took (design 26).
+    Record {
+        record: crate::records::Record,
+    },
+    /// Another player's character (`player-character` 4.3).
+    Look {
+        player: u32,
+        look: crate::townsfolk::look::Look,
     },
 }
 
@@ -287,6 +388,34 @@ impl W {
     fn bytes(&mut self, v: &[u8]) {
         self.u32(v.len() as u32);
         self.0.extend_from_slice(v);
+    }
+    /// A slot (design 22): a count, 0 for empty, then a kind byte and the
+    /// item's code; a good by its code, never its table index.
+    fn stack(&mut self, stack: Option<crate::inventory::Stack>) {
+        use crate::inventory::Item;
+        let Some(stack) = stack.filter(|s| s.count > 0) else {
+            self.u16(0);
+            return;
+        };
+        self.u16(stack.count);
+        match stack.item {
+            Item::Block(material) => {
+                self.u8(1);
+                self.u8(material_code(material));
+            }
+            Item::Tool(tool) => {
+                self.u8(2);
+                self.u8(tool.index() as u8);
+            }
+            Item::Fish(species) => {
+                self.u8(3);
+                self.u16(species);
+            }
+            Item::Good(good) => {
+                self.u8(4);
+                self.bytes(good.code().as_bytes());
+            }
+        }
     }
     fn regions(&mut self, v: &[u32]) {
         self.u32(v.len() as u32);
@@ -383,8 +512,33 @@ impl<'a> R<'a> {
             pitch: self.f32()?,
         })
     }
+    /// A character's look (`player-character`): refused unless whole and
+    /// one the townsfolk can draw.
+    fn look(&mut self) -> Result<crate::townsfolk::look::Look, Decode> {
+        let bytes = self.take(crate::townsfolk::character::ENCODED_LEN)?;
+        crate::townsfolk::character::decode(bytes).ok_or(Decode::Invalid)
+    }
     fn material(&mut self) -> Result<Material, Decode> {
         material_of(self.u8()?).ok_or(Decode::Invalid)
+    }
+    /// A slot (design 22): a count, 0 for empty, then its item.
+    fn stack(&mut self) -> Result<Option<crate::inventory::Stack>, Decode> {
+        use crate::inventory::{Item, Stack, Tool};
+        let count = self.u16()?;
+        if count == 0 {
+            return Ok(None);
+        }
+        let item = match self.u8()? {
+            1 => Item::Block(self.material()?),
+            2 => Item::Tool(*Tool::ALL.get(self.u8()? as usize).ok_or(Decode::Invalid)?),
+            3 => Item::Fish(self.u16()?),
+            4 => Item::Good(crate::goods::Good::by_code(&self.text()?).ok_or(Decode::Invalid)?),
+            _ => return Err(Decode::Invalid),
+        };
+        if count > item.stack_limit() {
+            return Err(Decode::Invalid);
+        }
+        Ok(Some(Stack::new(item, count)))
     }
     fn end<T>(self, value: T) -> Result<T, Decode> {
         if self.0.is_empty() {
@@ -403,7 +557,7 @@ const JOIN_REFUSALS: [JoinRefusal; 6] = [
     JoinRefusal::Banned,
     JoinRefusal::WrongPassword,
 ];
-const REFUSALS: [Refusal; 7] = [
+const REFUSALS: [Refusal; 13] = [
     Refusal::OutOfWorld,
     Refusal::Unchanged,
     Refusal::EmptySlot,
@@ -411,6 +565,12 @@ const REFUSALS: [Refusal; 7] = [
     Refusal::Cheat,
     Refusal::NotSaved,
     Refusal::Gone,
+    Refusal::NotTilled,
+    Refusal::Growing,
+    Refusal::Climate,
+    Refusal::NoCrop,
+    Refusal::NotRipe,
+    Refusal::NoRoom,
 ];
 
 fn code_of<T: PartialEq>(table: &[T], v: &T) -> u8 {
@@ -477,6 +637,24 @@ impl ToServer {
                         w.u8(4);
                         w.u64(drop);
                     }
+                    Request::Plant { cell, layer, slot } => {
+                        w.u8(6);
+                        w.u32(cell);
+                        w.u16(layer);
+                        w.u8(slot);
+                    }
+                    Request::Harvest { cell } => {
+                        w.u8(7);
+                        w.u32(cell);
+                    }
+                    Request::Toss { slot, count, at_mm } => {
+                        w.u8(5);
+                        w.u8(slot);
+                        w.u16(count);
+                        for v in at_mm {
+                            w.u64(v as u64);
+                        }
+                    }
                 }
             }
             Self::Reach { reach_m, dropped } => {
@@ -519,6 +697,10 @@ impl ToServer {
             Self::Chat { text } => {
                 w.u8(8);
                 w.bytes(text.as_bytes());
+            }
+            Self::Look { look } => {
+                w.u8(9);
+                crate::townsfolk::character::encode(look, &mut w.0);
             }
         }
         w.0
@@ -564,6 +746,17 @@ impl ToServer {
                         other => return Err(Decode::Unknown(other)),
                     }),
                     4 => Request::Pick { drop: r.u64()? },
+                    6 => Request::Plant {
+                        cell: r.u32()?,
+                        layer: r.u16()?,
+                        slot: r.u8()?,
+                    },
+                    7 => Request::Harvest { cell: r.u32()? },
+                    5 => Request::Toss {
+                        slot: r.u8()?,
+                        count: r.u16()?,
+                        at_mm: [r.u64()? as i64, r.u64()? as i64, r.u64()? as i64],
+                    },
                     other => return Err(Decode::Unknown(other)),
                 };
                 Self::Request { id, request }
@@ -594,6 +787,7 @@ impl ToServer {
                 }
             }
             8 => Self::Chat { text: r.text()? },
+            9 => Self::Look { look: r.look()? },
             other => return Err(Decode::Unknown(other)),
         };
         r.end(message)
@@ -689,6 +883,45 @@ impl ToClient {
                 w.u32(*from);
                 w.bytes(text.as_bytes());
             }
+            Self::Slots { slots } => {
+                w.u8(12);
+                for stack in slots.iter() {
+                    w.stack(stack);
+                }
+            }
+            Self::Drop { drop } => {
+                w.u8(13);
+                w.u64(drop.id);
+                w.stack(Some(crate::inventory::Stack {
+                    item: drop.item,
+                    count: drop.count,
+                }));
+                w.f64(drop.position.x);
+                w.f64(drop.position.y);
+                w.f64(drop.position.z);
+                w.f64(drop.made_s);
+            }
+            Self::DropLeft { id, left } => {
+                w.u8(14);
+                w.u64(*id);
+                w.u16(*left);
+            }
+            Self::Gone { player } => {
+                w.u8(15);
+                w.u32(*player);
+            }
+            Self::Look { player, look } => {
+                w.u8(17);
+                w.u32(*player);
+                crate::townsfolk::character::encode(look, &mut w.0);
+            }
+            Self::Record { record } => {
+                w.u8(16);
+                w.bytes(record.kind.as_bytes());
+                w.u64(record.id);
+                w.u32(record.schema);
+                w.bytes(record.body.as_bytes());
+            }
         }
         w.0
     }
@@ -759,6 +992,51 @@ impl ToClient {
                 from: r.u32()?,
                 text: r.text()?,
             },
+            12 => {
+                let mut slots = crate::inventory::Slots::new();
+                for index in 0..crate::inventory::CARRIED {
+                    slots.set(index, r.stack()?);
+                }
+                Self::Slots { slots }
+            }
+            13 => {
+                let id = r.u64()?;
+                // A drop holds something: an empty one is never sent.
+                let stack = r.stack()?.ok_or(Decode::Invalid)?;
+                let position = DVec3::new(r.f64()?, r.f64()?, r.f64()?);
+                Self::Drop {
+                    drop: crate::drops::ItemDrop {
+                        id,
+                        item: stack.item,
+                        count: stack.count,
+                        position,
+                        made_s: r.f64()?,
+                    },
+                }
+            }
+            14 => Self::DropLeft {
+                id: r.u64()?,
+                left: r.u16()?,
+            },
+            15 => Self::Gone { player: r.u32()? },
+            17 => Self::Look {
+                player: r.u32()?,
+                look: r.look()?,
+            },
+            16 => {
+                let kind = r.text()?;
+                let id = r.u64()?;
+                let schema = r.u32()?;
+                let body = String::from_utf8(r.bytes(MAX_RECORD)?).map_err(|_| Decode::Invalid)?;
+                Self::Record {
+                    record: crate::records::Record {
+                        kind,
+                        id,
+                        schema,
+                        body,
+                    },
+                }
+            }
             other => return Err(Decode::Unknown(other)),
         };
         r.end(message)
@@ -810,6 +1088,30 @@ mod tests {
                     slot: 3,
                 },
             },
+            ToServer::Request {
+                id: 11,
+                request: Request::Pick { drop: 9 },
+            },
+            ToServer::Request {
+                id: 13,
+                request: Request::Plant {
+                    cell: 9,
+                    layer: 7,
+                    slot: 2,
+                },
+            },
+            ToServer::Request {
+                id: 14,
+                request: Request::Harvest { cell: 9 },
+            },
+            ToServer::Request {
+                id: 12,
+                request: Request::Toss {
+                    slot: 39,
+                    count: 7,
+                    at_mm: [-4_800_123, 17, 2_000_000_000_000],
+                },
+            },
             ToServer::Reach {
                 reach_m: 300.0,
                 dropped: vec![1, 2, 3],
@@ -829,6 +1131,9 @@ mod tests {
             },
             ToServer::Chat {
                 text: "hello, ünïcode".into(),
+            },
+            ToServer::Look {
+                look: crate::townsfolk::character::rolled(&[3; 16]),
             },
         ]
     }
@@ -885,6 +1190,35 @@ mod tests {
                 from: 0,
                 text: String::new(),
             },
+            ToClient::Slots {
+                slots: one_of_each(),
+            },
+            ToClient::Slots {
+                slots: crate::inventory::Slots::new(),
+            },
+            ToClient::Drop {
+                drop: crate::drops::ItemDrop {
+                    id: 41,
+                    item: crate::inventory::Item::Block(Material::Dirt),
+                    count: 1,
+                    position: DVec3::new(1.0e6, -2.5, 3.0e-4),
+                    made_s: 812.25,
+                },
+            },
+            ToClient::DropLeft { id: 41, left: 0 },
+            ToClient::Gone { player: 3 },
+            ToClient::Look {
+                player: 2,
+                look: crate::townsfolk::character::rolled(&[9; 16]),
+            },
+            ToClient::Record {
+                record: crate::records::Record {
+                    kind: "plot".into(),
+                    id: 123_456,
+                    schema: 1,
+                    body: "(layer:7,crop:Some(\"wheat\"),planted_s:10.0)".into(),
+                },
+            },
         ];
         out.extend(
             JOIN_REFUSALS
@@ -897,6 +1231,69 @@ mod tests {
                 .map(|&reason| ToClient::Refused { id: 1, reason }),
         );
         out
+    }
+
+    /// Design 24: a forward made into yaw and back is the same tangent,
+    /// anywhere on the sphere, the poles of Z and Y included.
+    #[test]
+    fn yaw_and_forward_round_trip_everywhere() {
+        let ups = [
+            DVec3::X,
+            DVec3::Y,
+            DVec3::Z,
+            -DVec3::Z,
+            DVec3::new(0.3, -0.2, 0.93).normalize(),
+            DVec3::new(-0.7, 0.7, 0.1).normalize(),
+        ];
+        for up in ups {
+            let (east, north) = tangent_frame(up);
+            assert!(east.dot(up).abs() < 1e-12 && north.dot(up).abs() < 1e-12);
+            for k in 0..12 {
+                let yaw = -3.0 + 0.5 * k as f32;
+                let f = forward_of(yaw, up);
+                assert!((f.length() - 1.0).abs() < 1e-9 && f.dot(up).abs() < 1e-9);
+                let back = forward_of(yaw_of(f, up), up);
+                assert!((back - f).length() < 1e-6, "{up:?} {yaw}");
+            }
+        }
+    }
+
+    /// Carried slots with one of each kind of item, at both ends of the
+    /// array (design 22).
+    fn one_of_each() -> crate::inventory::Slots {
+        use crate::inventory::{CARRIED, Item, Slots, Stack, Tool};
+        let mut slots = Slots::new();
+        slots.set(0, Some(Stack::new(Item::Block(Material::Stone), 12)));
+        slots.set(3, Some(Stack::new(Item::Tool(Tool::Axe), 1)));
+        slots.set(9, Some(Stack::new(Item::Fish(7), 2)));
+        slots.set(
+            CARRIED - 1,
+            Some(Stack::new(Item::Good(crate::goods::Good::IRON_INGOT), 5)),
+        );
+        slots
+    }
+
+    /// Design 22: a good goes by its code, and a code this build lacks, or
+    /// a count past the stack's limit, fails to decode.
+    #[test]
+    fn a_slot_this_build_cannot_hold_fails_to_decode() {
+        let good = crate::goods::Good::IRON_INGOT;
+        let bytes = ToClient::Slots {
+            slots: one_of_each(),
+        }
+        .encode();
+        let code = good.code().as_bytes();
+        let at = bytes
+            .windows(code.len())
+            .position(|w| w == code)
+            .expect("the good goes by its code");
+        let mut unknown = bytes.clone();
+        unknown[at] = b'#';
+        assert_eq!(ToClient::decode(&unknown), Err(Decode::Invalid));
+        let mut too_many = bytes;
+        // The first slot's count: past any stack's limit.
+        too_many[1..3].copy_from_slice(&u16::MAX.to_le_bytes());
+        assert_eq!(ToClient::decode(&too_many), Err(Decode::Invalid));
     }
 
     /// Task 3.2: every message round-trips, and every shorter prefix of it

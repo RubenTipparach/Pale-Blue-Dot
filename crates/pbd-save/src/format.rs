@@ -220,7 +220,7 @@ fn drop_of(text: &str) -> Option<ItemDrop> {
     let stack = stack_of(fields.next()?)??;
     let made_s: f64 = fields.next()?.parse().ok()?;
     let mut xyz = fields.next()?.split(',').map(|v| v.parse::<f64>().ok());
-    let position = bevy::math::DVec3::new(xyz.next()??, xyz.next()??, xyz.next()??);
+    let position = glam::DVec3::new(xyz.next()??, xyz.next()??, xyz.next()??);
     if fields.next().is_some()
         || xyz.next().is_some()
         || stack.count == 0
@@ -855,7 +855,7 @@ mod tests {
         }
         // And what the f32 build wrote for an f32 point, this one writes for
         // the same point widened.
-        let p = bevy::math::DVec3::new(4436.4468, 1987.8191, -230.91805).as_vec3();
+        let p = glam::DVec3::new(4436.4468, 1987.8191, -230.91805).as_vec3();
         let old = format!("{:.3},{:.3},{:.3}", p.x, p.y, p.z);
         let wide = p.as_dvec3();
         assert_eq!(format!("{:.3},{:.3},{:.3}", wide.x, wide.y, wide.z), old);
@@ -874,7 +874,7 @@ mod tests {
             id: 41,
             item: Item::Block(Material::LanternPost),
             count: 1,
-            position: bevy::math::DVec3::new(-1.5, 299.875, 12.25),
+            position: glam::DVec3::new(-1.5, 299.875, 12.25),
             made_s: 86_400.5,
         };
         assert_eq!(
@@ -1018,7 +1018,7 @@ mod tests {
         for block in Material::ALL {
             assert!(material_code(block) < 64, "{block:?}");
         }
-        let author = crate::saves::water_author();
+        let author = crate::water_author();
         let edit = Edit {
             cell: 77,
             layer: 210,

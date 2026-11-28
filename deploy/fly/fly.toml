@@ -1,0 +1,43 @@
+# The persistent multiplayer server on Fly.io (`openspec/changes/multiplayer`
+# design 27), after Tenebris's `tenebris-rs/fly.toml`.
+#
+# The game speaks QUIC over UDP (pbd-net), so unlike Tenebris's WebSocket
+# server this is a UDP service:
+# - the app needs a dedicated IPv4 address, once:
+#     fly ips allocate-v4 -a pale-blue-dot
+# - Fly's proxy does not start a stopped machine for UDP, so the one
+#   machine is kept running (auto_stop_machines = 'off').
+#
+# One machine, one volume (the world is on it). The deploy workflow
+# (.github/workflows/server-deploy.yml) makes the volume the first time.
+# By hand, from the repository root:
+#     fly volumes create pbd_worlds -a pale-blue-dot -r ord --size 1
+#     fly deploy --config deploy/fly/fly.toml --dockerfile deploy/fly/Dockerfile --ha=false
+#
+# IMPORTANT: do not run `fly launch --copy-config`: it strips [[mounts]]
+# and the world stops persisting at the next deploy (Tenebris's warning).
+
+app = 'pale-blue-dot'
+primary_region = 'ord'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[[services]]
+  internal_port = 47123
+  protocol = 'udp'
+  auto_stop_machines = 'off'
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 47123
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+
+[[mounts]]
+  source      = 'pbd_worlds'
+  destination = '/data'

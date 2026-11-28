@@ -17,6 +17,10 @@ Found in the run, for the follow-ups:
 - With `--join` the game still opens on the title screen; CONTINUE enters the joined world.
 - The joined player's hotbar is empty while the server gave them the starting kit: the memory-only
   world the joining game opens deals no kit. Its pack and the server's copy disagree until the
-  inventory message (task 8.2).
+  inventory message (task 8.2). Fixed 2026-11-27 (`multiplayer` design 22 and 23): the server
+  sends a joined player their own slots, and a joined player's dig makes a drop that everyone
+  sees and their magnet can pick up. The kit is empty since 2026-11-17, so a first join still
+  starts empty-handed. Found with it: a guest's slots were written into the host's save as the
+  host's; fixed in the same change. Not yet seen on two machines.
 - Bare hands dug only straight down for the laptop's player; looking a little ahead did nothing. Not
   seen in single player yet; to check whether the joined game's aim or the request path drops it.

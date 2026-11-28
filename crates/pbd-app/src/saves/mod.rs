@@ -12,9 +12,10 @@
 //! hole the moment the player walked far enough for a new anchor - and it is
 //! the only thing in the process that queues a write.
 
-pub mod format;
+// The journal's format and writer live in `pbd-save`, shared with the
+// dedicated server (`multiplayer` design 27).
+pub use pbd_save::{format, writer};
 pub mod migrate;
-pub mod writer;
 
 use bevy::prelude::*;
 use format::{Identity, KEY_VERSION, Record, WorldFile};
@@ -35,7 +36,7 @@ pub const IDENTITY: &str = "identity.ron";
 /// The log of everything changed, appended to per edit. Version 1 keys each
 /// edit by its cell's exact key (`pbd_core::cell_key`); a save with only the
 /// old `edits.log` is migrated into it once, on open ([`migrate`]).
-pub const LOG: &str = "edits.v1.log";
+pub use pbd_save::LOG;
 /// The metadata and the pose, replaced whole on a timer.
 pub const WORLD: &str = "world.ron";
 /// The simulated atmosphere's state (`pbd_core::atmosphere`), replaced whole
@@ -60,14 +61,7 @@ pub const NAME_MAX: usize = 31;
 /// is exactly why it is the only part on a timer.
 pub const AUTOSAVE_S: f32 = 5.0;
 
-/// Who the water's edits are journaled as: `@wwater:flow/0`.
-pub fn water_author() -> Author {
-    Author::World {
-        process: "water".into(),
-        kind: "flow".into(),
-        id: 0,
-    }
-}
+pub use pbd_save::water_author;
 
 pub fn now_unix_s() -> u64 {
     SystemTime::now()
@@ -360,6 +354,20 @@ fn next_serial() -> u64 {
 struct Outgoing {
     queued: Vec<pbd_core::net::protocol::Request>,
     waiting: Vec<pbd_core::net::protocol::Request>,
+    /// The player's own slots, as the server last sent them and the hotbar
+    /// has not yet taken (design 22).
+    slots: Option<Slots>,
+    /// Drops made and picked, as the server told it, not yet applied to
+    /// the live drops (design 23).
+    drop_news: Vec<pbd_core::net::protocol::ToClient>,
+    /// The server's last sequence of each region this game applied
+    /// (design 29): not this game's own ledger's count.
+    server_seq: BTreeMap<u32, u64>,
+    /// Regions to ask for whole, and those asked for and not yet sent.
+    resync: Vec<u32>,
+    resync_waiting: std::collections::BTreeSet<u32>,
+    /// The world clock the server last sent, s (design 15.8), not yet taken.
+    clock_s: Option<f64>,
 }
 
 /// The save as the in-process server's store (`multiplayer` design 18):
@@ -367,7 +375,23 @@ struct Outgoing {
 /// [`WorldSave::accept`] writes, the drop the app made included.
 struct SaveStore<'a> {
     save: &'a mut WorldSave,
-    drop: Option<&'a ItemDrop>,
+    /// The drop the next commit writes: the app's, made before it asked, or
+    /// one made here for a remote player's dig (design 23).
+    drop: Option<ItemDrop>,
+}
+
+impl SaveStore<'_> {
+    /// The slots a line carries for `author`'s deed. A line has no author
+    /// token: every player line is player 0's, the host's (`world-persistence`
+    /// decision 11). So a guest's deed is written with the host's own slots
+    /// as they stand, never the guest's (`multiplayer` design 22).
+    fn own(&self, author: &Author, carried: &Slots) -> Slots {
+        if *author == Author::Player(0) {
+            carried.clone()
+        } else {
+            self.save.carried.clone().unwrap_or_default()
+        }
+    }
 }
 
 impl pbd_server::Store for SaveStore<'_> {
@@ -378,24 +402,93 @@ impl pbd_server::Store for SaveStore<'_> {
         &self.save.ledger
     }
     fn commit(&mut self, author: &Author, edit: Edit, carried: &Slots) -> Option<Sequenced> {
-        // A player's line carries no author token, and single player is
-        // player 0 (`world-persistence` decision 11).
-        debug_assert_eq!(*author, Author::Player(0));
-        self.save.accept_sequenced(edit, self.drop, carried)
+        let own = self.own(author, carried);
+        let drop = self.drop.take();
+        self.save.accept_sequenced(edit, drop.as_ref(), &own)
+    }
+    fn floating(
+        &mut self,
+        author: &Author,
+        item: pbd_core::inventory::Item,
+        cell: u32,
+        layer: u16,
+        made_s: f64,
+    ) -> Option<ItemDrop> {
+        if *author == Author::Player(0) {
+            // The host's own dig: the app made its drop before it asked, and
+            // single player's lines stay what they were.
+            return self.drop;
+        }
+        // A remote player's: the drop `Drops::make` makes for a dig, at the
+        // cell half a metre up, in the body's frame (`world-frames` 10.4).
+        let direction = pbd_core::cell_key::key_direction(cell)?
+            .as_dvec3()
+            .normalize();
+        let centre = direction
+            * (f64::from(crate::planet::PLANET_RADIUS)
+                + f64::from(pbd_core::column::layer_altitude(usize::from(layer)))
+                + 0.5);
+        let id = self.save.next_drop_id();
+        let drop = ItemDrop {
+            id,
+            item,
+            count: 1,
+            position: pbd_core::drops::scattered(centre, id),
+            made_s,
+        };
+        self.drop = Some(drop);
+        Some(drop)
     }
     fn commit_pack(&mut self, author: &Author, carried: &Slots) -> bool {
-        debug_assert_eq!(*author, Author::Player(0));
+        if *author != Author::Player(0) {
+            // Only the guest's own slots changed: the server holds them, and
+            // the save keeps nothing of a guest's until its player record.
+            return true;
+        }
         self.save.record_pack(carried)
     }
     fn drop(&self, id: u64) -> Option<ItemDrop> {
         self.save.live_drops.get(&id).copied()
     }
     fn commit_pick(&mut self, author: &Author, id: u64, left: u16, carried: &Slots) -> bool {
-        debug_assert_eq!(*author, Author::Player(0));
-        self.save.record_pick(id, left, carried)
+        let own = self.own(author, carried);
+        self.save.record_pick(id, left, &own)
     }
     fn commit_record(&mut self, author: &Author, record: StoredRecord) -> bool {
         self.save.store(author, vec![record]).is_some()
+    }
+    fn record(&self, kind: &str, id: u64) -> Option<StoredRecord> {
+        self.save.records.get(kind, id).cloned()
+    }
+    fn commit_record_with_hands(
+        &mut self,
+        author: &Author,
+        record: StoredRecord,
+        carried: &Slots,
+    ) -> bool {
+        let own = self.own(author, carried);
+        let schema = record.schema;
+        self.save.store_with_hands(record, schema, &own)
+    }
+    fn commit_toss(
+        &mut self,
+        author: &Author,
+        stack: pbd_core::inventory::Stack,
+        at: bevy::math::DVec3,
+        made_s: f64,
+        carried: &Slots,
+    ) -> Option<ItemDrop> {
+        let id = self.save.next_drop_id();
+        // Pushed aside by its id, as `Drops::make` always placed a toss.
+        let drop = ItemDrop {
+            id,
+            item: stack.item,
+            count: stack.count,
+            position: pbd_core::drops::scattered(at, id),
+            made_s,
+        };
+        let own = self.own(author, carried);
+        self.save.record_toss(&drop, &own).then_some(drop)
     }
 }
 
@@ -634,6 +727,59 @@ impl WorldSave {
         })
     }
 
+    /// Decide this game's own toss through the server (`multiplayer` design
+    /// 25): `count` of slot `slot`, to land at `at`, made at `made_s` (the
+    /// app's clock, so the line is the one `record_toss` always wrote).
+    pub fn decide_toss(
+        &mut self,
+        slot: usize,
+        count: u16,
+        at: bevy::math::DVec3,
+        made_s: f64,
+        carried: &Slots,
+    ) -> Result<(Slots, ItemDrop), pbd_core::net::protocol::Refusal> {
+        self.with_server(carried, None, |server, store| {
+            server.toss(store, 0, 0, (slot, count), at, made_s, carried.clone())
+        })
+    }
+
+    /// Decide this game's own sowing through the server (`multiplayer`
+    /// design 26): the seed in `slot` on the tilled soil at `cell`'s
+    /// `layer`, at `now_s`. The slots after, or why not.
+    pub fn decide_plant(
+        &mut self,
+        at: (u32, u16, usize),
+        now_s: f64,
+        carried: &Slots,
+    ) -> Result<Slots, pbd_core::net::protocol::Refusal> {
+        self.with_server(carried, None, |server, store| {
+            server.plant(store, 0, 0, at, now_s, carried.clone())
+        })
+    }
+
+    /// Decide this game's own harvest of `cell` through the server, with
+    /// `farm`'s tuning (design 26).
+    pub fn decide_harvest(
+        &mut self,
+        cell: u32,
+        now_s: f64,
+        farm: &pbd_core::farming::FarmSettings,
+        carried: &Slots,
+    ) -> Result<Slots, pbd_core::net::protocol::Refusal> {
+        self.with_server(carried, None, |server, store| {
+            server.set_farm(*farm);
+            server.harvest(store, 0, 0, cell, now_s, carried.clone())
+        })
+    }
+
+    /// A world record the server sent this joined game (design 26): held as
+    /// the host holds it, written nowhere.
+    pub fn take_remote_record(&mut self, record: StoredRecord) {
+        fold_glow_pick(&mut self.edits, &record);
+        let before = self.records.put(record.clone());
+        self.yields.touch_record(before.as_ref(), &record);
+    }
+
     /// Run `decide` on single player's server with this save as its store.
     fn with_server<T>(
         &mut self,
@@ -646,7 +792,10 @@ impl WorldSave {
             .take()
             .unwrap_or_else(|| self.local_server(carried));
         let decided = {
-            let mut store = SaveStore { save: self, drop };
+            let mut store = SaveStore {
+                save: self,
+                drop: drop.copied(),
+            };
             decide(&mut server, &mut store)
         };
         self.local = Some(server);
@@ -689,6 +838,22 @@ impl WorldSave {
         self.with_server(&carried, None, |server, store| {
             server.handle(store, player, message)
         });
+    }
+
+    /// The host's own player's look (`player-character` 4.3), for the
+    /// players who joined.
+    pub fn serve_look(&mut self, look: pbd_core::townsfolk::look::Look) {
+        if let Some(server) = self.local.as_mut() {
+            server.look(0, look);
+        }
+    }
+
+    /// The host's own player's pose (`multiplayer` design 24), for the
+    /// players who joined: nothing until someone has joined.
+    pub fn serve_presence(&mut self, pose: pbd_core::net::protocol::Pose) {
+        if let Some(server) = self.local.as_mut() {
+            server.presence(0, pose);
+        }
     }
 
     /// A remote player left.
@@ -741,6 +906,143 @@ impl WorldSave {
         let sent = std::mem::take(&mut out.queued);
         out.waiting.extend(sent.iter().copied());
         sent
+    }
+
+    /// The player's own slots, sent by the server (design 22), for the
+    /// hotbar to take.
+    pub fn take_remote_slots(&mut self, slots: Slots) {
+        if let Some(out) = self.outgoing.as_mut() {
+            out.slots = Some(slots);
+        }
+    }
+
+    /// A change the server sent, `seq` in `region` (design 29): its edit set
+    /// in this game's copy, and the server's sequence kept.
+    pub fn take_change(&mut self, region: u32, seq: u64, edit: Edit) {
+        self.take_remote(&[edit]);
+        if let Some(out) = self.outgoing.as_mut() {
+            out.server_seq.insert(region, seq);
+        }
+    }
+
+    /// A region whole from the server, as of `seq` (design 29): every cell
+    /// of it this game holds is cleared, the snapshot's edits set, and the
+    /// region's digest and sequence made the server's. Returns the edits the
+    /// tier must be brought round to: the snapshot's, and each cleared layer
+    /// the snapshot does not name back to what the seed made it.
+    pub fn take_snapshot(&mut self, region: u32, seq: u64, edits: &[Edit]) -> Vec<Edit> {
+        let in_region = |cell: u32| pbd_core::cell_key::region::of_key(cell) == Some(region);
+        let mut cleared: Vec<Edit> = self
+            .edits
+            .all()
+            .into_iter()
+            .filter(|e| in_region(e.cell))
+            .collect();
+        let mut cells: Vec<u32> = cleared.iter().map(|e| e.cell).collect();
+        cells.dedup();
+        for &cell in &cells {
+            self.edits.clear_cell(cell);
+        }
+        for &edit in edits {
+            self.edits.set(edit);
+        }
+        let mut keys: Vec<u32> = edits.iter().map(|e| e.cell).collect();
+        keys.dedup();
+        self.ledger.resync(region, seq, &keys, &self.edits);
+        // A cleared layer the snapshot does not name goes back to the seed's.
+        cleared.retain(|c| !edits.iter().any(|e| e.cell == c.cell && e.layer == c.layer));
+        let terrain = crate::planet::terrain_config();
+        let mut out: Vec<Edit> = edits.to_vec();
+        for gone in cleared {
+            let Some(direction) = pbd_core::cell_key::key_direction(gone.cell) else {
+                continue;
+            };
+            let near = pbd_core::worms::gather(&self.worms, terrain, direction, 0.0);
+            let column = pbd_core::column::generate_edited(
+                &near,
+                &self.worms,
+                terrain,
+                direction,
+                self.edits.for_cell(gone.cell),
+            );
+            out.push(Edit {
+                material: column.material(usize::from(gone.layer)),
+                ..gone
+            });
+        }
+        if let Some(out_) = self.outgoing.as_mut() {
+            out_.server_seq.insert(region, seq);
+            out_.resync_waiting.remove(&region);
+        }
+        out
+    }
+
+    /// A region's digest from the server, as of its `seq` (design 29): when
+    /// this game has reached that sequence and its own digest differs, the
+    /// region is asked for whole, once.
+    pub fn hear_digest(&mut self, region: u32, seq: u64, digest: u64) {
+        let mine = self.ledger.digest(region);
+        let Some(out) = self.outgoing.as_mut() else {
+            return;
+        };
+        let reached = out.server_seq.get(&region).copied().unwrap_or(0) == seq;
+        if reached
+            && mine != digest
+            && !out.resync_waiting.contains(&region)
+            && !out.resync.contains(&region)
+        {
+            out.resync.push(region);
+        }
+    }
+
+    /// The regions to ask for whole, now waiting for their snapshots.
+    pub fn take_resyncs(&mut self) -> Vec<u32> {
+        let Some(out) = self.outgoing.as_mut() else {
+            return Vec::new();
+        };
+        let asked = std::mem::take(&mut out.resync);
+        out.resync_waiting.extend(asked.iter().copied());
+        asked
+    }
+
+    /// The world clock the server sent (design 15.8).
+    pub fn take_remote_clock(&mut self, clock_s: f64) {
+        if let Some(out) = self.outgoing.as_mut() {
+            out.clock_s = Some(clock_s);
+        }
+    }
+
+    /// The server's clock, once, for the sky to follow.
+    pub fn remote_clock(&mut self) -> Option<f64> {
+        self.outgoing.as_mut().and_then(|out| out.clock_s.take())
+    }
+
+    /// The host's next digest, to everyone joined (design 29).
+    pub fn serve_digest(&mut self) {
+        let carried = self.carried.clone().unwrap_or_default();
+        self.with_server(&carried, None, |server, store| {
+            server.send_digest(&*store);
+        });
+    }
+
+    /// News of a drop from the server (design 23), for the live drops.
+    pub fn take_drop_news(&mut self, news: pbd_core::net::protocol::ToClient) {
+        if let Some(out) = self.outgoing.as_mut() {
+            out.drop_news.push(news);
+        }
+    }
+
+    /// The drop news the server sent since last asked.
+    pub fn drop_news(&mut self) -> Vec<pbd_core::net::protocol::ToClient> {
+        self.outgoing
+            .as_mut()
+            .map(|out| std::mem::take(&mut out.drop_news))
+            .unwrap_or_default()
+    }
+
+    /// The slots the server sent last, once: the hotbar follows them.
+    pub fn remote_slots(&mut self) -> Option<Slots> {
+        self.outgoing.as_mut().and_then(|out| out.slots.take())
     }
 
     /// The server answered the oldest request waiting (it answers in order).
@@ -1443,6 +1745,250 @@ mod tests {
         let log = |slot: &Slot| std::fs::read(root.join(&slot.id).join(LOG)).unwrap();
         assert!(!log(&a).is_empty());
         assert_eq!(log(&a), log(&b), "byte for byte");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// `multiplayer` design 29: a joined game whose copy of a region is
+    /// wrong asks for it once when the server's digest says so, not while
+    /// it is behind in sequence; the snapshot replaces the region whole and
+    /// its digest then matches the server's, the wrong layer taken out.
+    #[test]
+    fn a_wrong_region_is_asked_for_once_and_replaced_whole() {
+        let (cell, top) = dry_tops(1)[0];
+        let region = pbd_core::cell_key::region::of_key(cell).unwrap();
+        let dig = |layer| Edit {
+            cell,
+            layer,
+            material: Material::Air,
+        };
+        // The server's world: two layers dug.
+        let mut server_edits = Edits::new();
+        let mut server_ledger = Ledger::default();
+        for layer in [top, top - 1] {
+            server_edits.set(dig(layer));
+            server_ledger.accept(dig(layer), &server_edits);
+        }
+        let mut joined = WorldSave::memory_only();
+        joined.join_remote();
+        joined.take_change(region, 1, dig(top));
+        // A layer the server never had, in this game's copy only.
+        joined.take_remote(&[dig(top - 5)]);
+        let (seq, digest) = (server_ledger.seq(region), server_ledger.digest(region));
+        // Behind in sequence (change 2 is in flight): no ask.
+        joined.hear_digest(region, seq, digest);
+        assert!(joined.take_resyncs().is_empty());
+        joined.take_change(region, 2, dig(top - 1));
+        joined.hear_digest(region, seq, digest);
+        joined.hear_digest(region, seq, digest);
+        assert_eq!(joined.take_resyncs(), vec![region], "asked once");
+        joined.hear_digest(region, seq, digest);
+        assert!(joined.take_resyncs().is_empty(), "not again while waiting");
+        let snap = server_ledger.snapshot(region, &server_edits);
+        let (_, edits) = pbd_core::net::digest::snapshot_edits(&snap.bytes).unwrap();
+        let to_tier = joined.take_snapshot(region, snap.seq, &edits);
+        assert_eq!(joined.ledger().digest(region), digest);
+        assert_eq!(joined.edits.for_cell(cell), server_edits.for_cell(cell));
+        assert!(
+            to_tier
+                .iter()
+                .any(|e| e.layer == top - 5 && e.material != Material::Air),
+            "the wrong layer goes back to the seed's: {to_tier:?}"
+        );
+        joined.hear_digest(region, seq, digest);
+        assert!(joined.take_resyncs().is_empty(), "it now agrees");
+    }
+
+    /// `multiplayer` design 26: the host's sowing through the server writes
+    /// the line `store_with_hands` always wrote for it, byte for byte; sowing
+    /// again while it grows is refused and writes nothing.
+    #[test]
+    fn a_sowing_through_the_server_writes_the_same_line() {
+        use pbd_core::farming::{Climate, Crop, PLOT_KIND, PLOT_SCHEMA, Plot};
+        let root = temporary("plant-same");
+        let (a, b) = (
+            create(&root, "Through the server", 11).unwrap(),
+            create(&root, "Straight", 11).unwrap(),
+        );
+        let terrain = crate::planet::terrain_config();
+        let (cell, top) = dry_tops(60)
+            .into_iter()
+            .find(|&(cell, top)| {
+                let d = pbd_core::cell_key::key_direction(cell).unwrap();
+                let h = pbd_core::column::layer_altitude(usize::from(top)) + 1.0;
+                Crop::WHEAT.grows_in(Climate::of(pbd_core::planet_gen::biome_at(terrain, d, h)))
+            })
+            .expect("wheat ground among the dry tops");
+        let till = Edit {
+            cell,
+            layer: top,
+            material: Material::Tilled,
+        };
+        let mut carried = Slots::new();
+        carried.give(Item::Good(Crop::WHEAT.row().seed), 3);
+        {
+            let mut through = WorldSave::open(root.clone(), a.clone());
+            let mut straight = WorldSave::open(root.clone(), b.clone());
+            assert!(through.accept(till, None, &carried));
+            assert!(straight.accept(till, None, &carried));
+            let after = through
+                .decide_plant((cell, top, 0), 12.5, &carried)
+                .expect("a seed on tilled soil in its climate is sown");
+            assert_eq!(after.get(0).map(|s| s.count), Some(2));
+            let plot = Plot::sown(top, Crop::WHEAT, 12.5);
+            let record = StoredRecord::of(PLOT_KIND, u64::from(cell), PLOT_SCHEMA, &plot);
+            assert!(straight.store_with_hands(record, PLOT_SCHEMA, &after));
+            assert_eq!(
+                through.decide_plant((cell, top, 0), 13.0, &after),
+                Err(pbd_core::net::protocol::Refusal::Growing)
+            );
+            through.drain();
+            straight.drain();
+        }
+        let log = |slot: &Slot| std::fs::read(root.join(&slot.id).join(LOG)).unwrap();
+        assert_eq!(log(&a), log(&b), "byte for byte");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// `multiplayer` design 25: the host's toss through the server writes the
+    /// line `record_toss` always wrote, byte for byte.
+    #[test]
+    fn a_toss_through_the_server_writes_the_same_line() {
+        let root = temporary("toss-same");
+        let (a, b) = (
+            create(&root, "Through the server", 11).unwrap(),
+            create(&root, "Straight", 11).unwrap(),
+        );
+        let mut carried = Slots::new();
+        carried.give(Item::Block(Material::Stone), 5);
+        let centre = bevy::math::DVec3::new(3.0, 4801.5, -2.0);
+        {
+            let mut through = WorldSave::open(root.clone(), a.clone());
+            let mut straight = WorldSave::open(root.clone(), b.clone());
+            let (after, drop) = through
+                .decide_toss(0, 2, centre, 77.5, &carried)
+                .expect("a toss of what the slot holds is taken");
+            assert_eq!(after.get(0).map(|s| s.count), Some(3));
+            let mut by_hand = ItemDrop {
+                id: straight.next_drop_id(),
+                item: Item::Block(Material::Stone),
+                count: 2,
+                position: pbd_core::drops::scattered(centre, straight.next_drop_id()),
+                made_s: 77.5,
+            };
+            by_hand.count = 2;
+            assert_eq!(drop, by_hand);
+            assert!(straight.record_toss(&by_hand, &after));
+            assert_eq!(
+                through.decide_toss(0, 9, centre, 78.0, &after),
+                Err(pbd_core::net::protocol::Refusal::EmptySlot)
+            );
+            through.drain();
+            straight.drain();
+        }
+        let log = |slot: &Slot| std::fs::read(root.join(&slot.id).join(LOG)).unwrap();
+        assert_eq!(log(&a), log(&b), "byte for byte");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// `multiplayer` design 22: on a hosted world a guest's place and pack
+    /// move are decided against the guest's slots, but the host's save, whose
+    /// lines are all player 0's, keeps the host's own slots, in memory and
+    /// after a reload.
+    #[test]
+    fn a_guests_hands_never_become_the_hosts_slots() {
+        use pbd_core::accept::PackMove;
+        use pbd_core::net::protocol::{PROTOCOL, PROTOCOL_MIN, Request, ToServer, Versions};
+        let root = temporary("guest-hands");
+        let slot = create(&root, "Hosted", 11).unwrap();
+        let mut host = Slots::new();
+        host.give(Item::Block(Material::Dirt), 7);
+        let mut guest = Slots::new();
+        guest.give(Item::Block(Material::Stone), 4);
+        let (cell, top) = dry_tops(1)[0];
+        {
+            let mut save = WorldSave::open(root.clone(), slot.clone());
+            assert!(save.record_pack(&host));
+            let hello = ToServer::Hello {
+                versions: Versions {
+                    protocol: PROTOCOL,
+                    protocol_min: PROTOCOL_MIN,
+                    topology: pbd_core::terrain::TOPOLOGY_VERSION,
+                    generator: 0,
+                    content: 0,
+                    world: 0,
+                },
+                key: [9; 16],
+                name: String::new(),
+            };
+            let player = save.serve_join(7, &hello, &guest, None).expect("joined");
+            assert_ne!(player, 0);
+            save.serve(
+                player,
+                ToServer::Request {
+                    id: 1,
+                    request: Request::Place {
+                        cell,
+                        layer: top + 1,
+                        slot: 0,
+                    },
+                },
+            );
+            save.serve(
+                player,
+                ToServer::Request {
+                    id: 2,
+                    request: Request::Pack(PackMove::Send { index: 0 }),
+                },
+            );
+            let sent = save.take_outbox();
+            assert!(
+                sent.iter().any(|(_, m)| matches!(
+                    m,
+                    pbd_core::net::protocol::ToClient::Accepted { id: 1, .. }
+                )),
+                "the guest's place is taken: {sent:?}"
+            );
+            assert_eq!(save.carried.as_ref(), Some(&host), "in memory");
+            // The guest digs the block back up: its drop is made by the
+            // store, written with the dig, and told to everyone (design 23).
+            save.serve(
+                player,
+                ToServer::Request {
+                    id: 3,
+                    request: Request::Dig {
+                        cell,
+                        layer: top + 1,
+                    },
+                },
+            );
+            let made: Vec<_> = save
+                .take_outbox()
+                .into_iter()
+                .filter_map(|(_, m)| match m {
+                    pbd_core::net::protocol::ToClient::Drop { drop } => Some(drop),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(made.len(), 2, "the host and the guest are told");
+            assert_eq!(made[0].item, Item::Block(Material::Stone));
+            let radius = made[0].position.length();
+            assert!(
+                (radius - f64::from(crate::planet::PLANET_RADIUS)).abs() < 200.0,
+                "at the cell, in the body's frame: {radius}"
+            );
+            assert_eq!(save.carried.as_ref(), Some(&host), "still the host's");
+
+            save.drain();
+        }
+        let again = WorldSave::open(root.clone(), slot);
+        assert_eq!(again.carried.as_ref(), Some(&host), "after a reload");
+        assert!(
+            again
+                .drops
+                .iter()
+                .any(|d| d.item == Item::Block(Material::Stone)),
+            "the guest's drop is in the save"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 

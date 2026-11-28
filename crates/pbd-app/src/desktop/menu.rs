@@ -136,6 +136,11 @@ pub enum MenuAction {
     Overlay(u8),
     /// Open this species' entry in the field guide (`guide::press` acts).
     Species(u16),
+    /// Step a row of the Character page (`character_ui::press` acts): the
+    /// field's index in `Field::ALL`, and which way.
+    Look(u8, i8),
+    /// Roll a fresh look on the Character page.
+    LookRandom,
     /// Turn bloom on or off (`press_graphics` acts).
     Bloom,
     /// Cycle the frame limit: off, 60, 120 (`player-settings`).
@@ -589,8 +594,15 @@ pub struct Check;
 /// The settings page's tabs: Picture (with the rain shadow and the
 /// reflections), Weather (the storm forcing), World (the clock and the globe overlay), Movement, Input.
 /// Each is an id: its label is `menu.tab.<id>` in the locale file.
-pub const SETTINGS_TABS: [&str; 7] = [
-    "picture", "weather", "world", "movement", "input", "sound", "debug",
+pub const SETTINGS_TABS: [&str; 8] = [
+    "picture",
+    "weather",
+    "world",
+    "movement",
+    "input",
+    "sound",
+    "debug",
+    "character",
 ];
 
 /// A settings tab's label.
@@ -602,6 +614,7 @@ fn settings_tab_label(id: &str) -> Localized {
         "movement" => tr("menu.tab.movement"),
         "input" => tr("menu.tab.input"),
         "debug" => tr("menu.tab.debug"),
+        "character" => tr("menu.tab.character"),
         _ => tr("menu.tab.sound"),
     }
 }
@@ -1154,7 +1167,8 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
         .spawn(timber_layer(Screen::Settings))
         .with_children(|layer| {
             layer
-                .spawn(framed(kit, Set::Oak, 380.0))
+                // 420 px: eight tabs across (CHARACTER, `player-character`).
+                .spawn(framed(kit, Set::Oak, 420.0))
                 .with_children(|panel| {
                     timber_lintel(panel, kit, tr("menu.settings"));
                     // The tabs, oak, the open one capped (design 8).
@@ -1267,6 +1281,11 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                             MenuAction::TimeControls,
                         );
                         super::time_ui::spawn_speed(rows, kit);
+                    });
+                    // CHARACTER (`player-character` design 7).
+                    let character = page(panel, 7);
+                    panel.commands().entity(character).with_children(|rows| {
+                        super::character_ui::spawn(rows, kit);
                     });
                     panel
                         .spawn(Node {
@@ -2325,6 +2344,8 @@ pub fn press(
             | MenuAction::FlowArrows
             | MenuAction::TimeControls
             | MenuAction::ResetTab => {}
+            // The Character page's own (`character_ui::press` acts).
+            MenuAction::Look(..) | MenuAction::LookRandom => {}
             MenuAction::Load(row) => {
                 let Some(slot) = index.slots.get(row).cloned() else {
                     continue;
