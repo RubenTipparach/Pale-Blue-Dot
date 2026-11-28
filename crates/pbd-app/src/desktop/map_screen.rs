@@ -2838,8 +2838,9 @@ mod tests {
         app.world_mut()
             .resource_mut::<MapLayers>()
             .add(RasterLayer {
-                name: "Test layer",
-                note: "added by a test",
+                // Its name and note are locale keys, as every layer's are.
+                name: "map.layer.places",
+                note: "map.layer.places_note",
                 paint: |_| [0; 4],
                 key: &[],
                 class: |_| None,
@@ -2858,7 +2859,7 @@ mod tests {
         }
         assert_eq!(
             texts,
-            vec!["Test layer".to_string()],
+            vec![tr("map.layer.places")],
             "its plaque, in the kit's font"
         );
     }

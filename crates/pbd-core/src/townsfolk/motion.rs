@@ -43,6 +43,15 @@ pub struct Pose {
     pub head_nod: f32,
     pub head_roll: f32,
     pub head_drop: f32,
+    /// The body's lean forward from the hips, rad (`player-character`
+    /// design 8: a rower's stroke, a rider over the reins).
+    pub lean: f32,
+    /// The legs' spread apart from the hips, rad: astride a mount.
+    pub leg_spread: f32,
+    /// Where each hand goes, in the figure's own space (x across, y up, z
+    /// forward, m from the feet): the arm is aimed from its shoulder at it.
+    /// None: the arm hangs by its own angles, as every townsperson's does.
+    pub hands: [Option<[f32; 3]>; 2],
 }
 
 /// The body's own clock and the act it is playing.
@@ -153,6 +162,7 @@ impl Body {
             head_nod: 0.12 * shrug,
             head_roll: 0.26 * tilt - 0.05 * shrug,
             head_drop: 0.025 * shrug,
+            ..Pose::default()
         };
         for (i, s) in [(0usize, -1.0f32), (1, 1.0)] {
             let mut z = s * (0.12 + 0.75 * shrug + 1.5 * arms_up);

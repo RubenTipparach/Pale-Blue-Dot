@@ -8363,6 +8363,8 @@ mod tests {
             .init_resource::<AccumulatedMouseMotion>()
             .init_resource::<Tally>()
             .init_resource::<PendingClick>()
+            // The bot-takeover key reads the keyboard's own events.
+            .add_message::<bevy::input::keyboard::KeyboardInput>()
             // The showcase reads the furniture in reach (`Furniture`).
             .init_resource::<crate::desktop::furniture::Pieces>()
             .init_resource::<crate::desktop::furniture::Sitting>()

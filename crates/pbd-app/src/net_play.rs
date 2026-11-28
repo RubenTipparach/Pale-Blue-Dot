@@ -60,7 +60,13 @@ pub struct Others {
     pub looks: BTreeMap<u32, pbd_core::townsfolk::look::Look>,
     /// When this game last sent its own pose, s.
     sent_s: f64,
+    /// The chat's last lines, oldest first (design 31): when each was heard
+    /// (this game's clock, s), who said it, and what.
+    pub chat: std::collections::VecDeque<(f64, u32, String)>,
 }
+
+/// How many chat lines are kept (design 31).
+pub const CHAT_KEPT: usize = 8;
 
 /// One other player's last two poses, newest last.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -73,14 +79,23 @@ pub struct Heard {
 /// face, and whether they walk.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Drawn {
+    /// Their feet, or their hips while seated.
     pub feet: DVec3,
     pub forward: DVec3,
     pub walking: bool,
+    pub seat: pbd_core::net::protocol::Seat,
 }
 
 impl Others {
     /// Take a message about another player; `true` if it was one.
     pub fn hear(&mut self, now_s: f64, message: &ToClient) -> bool {
+        if let ToClient::Chat { from, text } = message {
+            self.chat.push_back((now_s, *from, text.clone()));
+            while self.chat.len() > CHAT_KEPT {
+                self.chat.pop_front();
+            }
+            return true;
+        }
         match *message {
             ToClient::Presence { player, pose } => {
                 let before = self.seen.get(&player).map(|h| h.last);
@@ -119,6 +134,7 @@ impl Heard {
                 feet: p1.at.pos,
                 forward: forward_of(p1.yaw, up1),
                 walking: false,
+                seat: p1.seat,
             };
         };
         let k = ((now_s - DRAW_BEHIND_S - t0) / (t1 - t0)).clamp(0.0, 1.0);
@@ -133,7 +149,8 @@ impl Heard {
         Drawn {
             feet,
             forward: forward_of(yaw, feet.normalize()),
-            walking: speed > WALKING_MPS && !stale,
+            walking: speed > WALKING_MPS && !stale && p1.seat == Default::default(),
+            seat: p1.seat,
         }
     }
 }
@@ -157,7 +174,33 @@ pub fn own_pose(origin: &pbd_core::world_frame::SimOrigin, walker: Vec3, look: V
             0.0
         },
         pitch: look.dot(up).clamp(-1.0, 1.0).asin() as f32,
+        seat: Default::default(),
     }
+}
+
+/// The eye over the hips of a seated player, m: where a seat's hips are
+/// found from a walker carried at the rider's eye.
+pub const EYE_OVER_HIPS_M: f64 = 0.72;
+
+/// `pose` seated as this game's player is (`player-character` design 8):
+/// at a raft's oars its hips are the raft's seat and its facing the bow; on
+/// a cart's bench or a mount its hips are under the eye.
+pub fn seated(mut pose: Pose, rower: Option<(DVec3, DVec3)>, bench: bool, mount: bool) -> Pose {
+    use pbd_core::net::protocol::Seat;
+    let up = pose.at.pos.normalize();
+    if let Some((hips, forward)) = rower {
+        pose.at.pos = hips;
+        let up = hips.normalize();
+        let flat = forward - up * forward.dot(up);
+        if flat.length() > 1e-6 {
+            pose.yaw = yaw_of(flat.normalize(), up);
+        }
+        pose.seat = Seat::Rower;
+    } else if bench || mount {
+        pose.at.pos += up * (f64::from(crate::walking::EYE_HEIGHT) - EYE_OVER_HIPS_M);
+        pose.seat = if mount { Seat::Mount } else { Seat::Bench };
+    }
+    pose
 }
 
 /// Send this game's pose 20 times a second, joined or hosting (design 24).
@@ -169,6 +212,9 @@ pub fn send_presence(
     space: crate::SimSpace,
     walkers: Query<&Transform, With<crate::walking::Walker>>,
     cameras: Query<&GlobalTransform, With<crate::walking::WalkingCamera>>,
+    aboard: Option<Res<crate::vehicles::Aboard>>,
+    crafts: Query<&crate::vehicles::Vehicle>,
+    carts: Option<Res<crate::vehicles::carts::Carts>>,
 ) {
     let Some(net) = net else { return };
     let now = time.elapsed_secs_f64();
@@ -179,7 +225,22 @@ pub fn send_presence(
         return;
     };
     others.sent_s = now;
-    let pose = own_pose(&space.origin(), walker.translation, *camera.forward());
+    // Seated, the others draw them sitting (`player-character` design 8).
+    let rower = aboard
+        .and_then(|a| a.0)
+        .and_then(|e| crafts.get(e).ok())
+        .filter(|v| v.craft.occupied)
+        .and_then(|v| crate::vehicles::rider::rower(&v.craft))
+        .map(|(hips, forward, _)| (hips, forward));
+    let (bench, mount) = carts
+        .as_deref()
+        .map_or((false, false), |c| (c.seated.is_some(), c.riding.is_some()));
+    let pose = seated(
+        own_pose(&space.origin(), walker.translation, *camera.forward()),
+        rower,
+        bench,
+        mount,
+    );
     match &*net {
         NetPlay::Host { .. } => save.bypass_change_detection().serve_presence(pose),
         NetPlay::Joined { client, .. } => client.send(&ToServer::Presence { pose }),
@@ -238,6 +299,17 @@ pub fn draw_others(
         let d = heard.at(now);
         let chosen = others.looks.get(&player).copied();
         folk.visit(player, d.feet, d.forward, d.walking, chosen, tunic);
+        // Seated: drawn sitting there (`player-character` design 8);
+        // standing again, the seat is let go.
+        let id = crate::townsfolk::player_id(player);
+        match crate::vehicles::rider::seat_pose(d.seat) {
+            Some(ride) => {
+                folk.rest(id, d.feet, d.forward, crate::townsfolk::Posture::Ride(ride));
+            }
+            None => {
+                folk.stand(id);
+            }
+        }
     }
     for gone in shown.iter().filter(|p| !others.seen.contains_key(p)) {
         folk.unvisit(*gone);
@@ -689,7 +761,29 @@ mod follow_tests {
             at: pbd_core::world_frame::WorldPos::new(pbd_core::world_frame::FrameId(0), at),
             yaw,
             pitch: 0.0,
+            seat: Default::default(),
         }
+    }
+
+    /// `player-character` design 8: at the oars a pose is the raft's seat
+    /// facing the bow; on a mount it is the hips under the eye; standing it
+    /// is left as it was.
+    #[test]
+    fn a_seated_pose_names_its_seat_and_its_hips() {
+        use pbd_core::net::protocol::Seat;
+        let feet = DVec3::new(0.0, 4800.0, 0.0);
+        let standing = pose(feet, 0.3);
+        assert_eq!(seated(standing, None, false, false), standing);
+        let hips = DVec3::new(0.0, 4800.5, 1.0);
+        let rowing = seated(standing, Some((hips, DVec3::Z)), false, false);
+        assert_eq!(rowing.seat, Seat::Rower);
+        assert_eq!(rowing.at.pos, hips);
+        assert!(forward_of(rowing.yaw, hips.normalize()).dot(DVec3::Z) > 0.99);
+        let mounted = seated(standing, None, false, true);
+        assert_eq!(mounted.seat, Seat::Mount);
+        let rise = mounted.at.pos.length() - feet.length();
+        assert!((rise - (f64::from(crate::walking::EYE_HEIGHT) - EYE_OVER_HIPS_M)).abs() < 1e-9);
+        assert_eq!(seated(standing, None, true, false).seat, Seat::Bench);
     }
 
     /// Design 24: another player is drawn 100 ms behind the newest pose,

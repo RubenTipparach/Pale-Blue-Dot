@@ -220,7 +220,7 @@ pub fn scripted_keys(
     state: Res<super::CaptureState>,
     windows: Query<Entity, With<bevy::window::PrimaryWindow>>,
     mut keys: MessageWriter<KeyboardInput>,
-    script: Local<std::sync::OnceLock<Vec<(u32, KeyCode)>>>,
+    script: Local<std::sync::OnceLock<Vec<(u32, KeyCode, Option<char>)>>>,
 ) {
     let script = script.get_or_init(|| {
         std::env::var("PBD_KEY_SCRIPT")
@@ -232,12 +232,21 @@ pub fn scripted_keys(
                     "Escape" => KeyCode::Escape,
                     name => pbd_app::controls::key_named(name)?,
                 };
-                Some((frame.trim().parse().ok()?, code))
+                // A letter key (`KeyH`) is typed as itself, so a script can
+                // type into a text box (the chat's shot, `multiplayer`
+                // design 31).
+                let letter = match key.trim().as_bytes() {
+                    [b'K', b'e', b'y', c] if c.is_ascii_alphabetic() => {
+                        Some(c.to_ascii_lowercase() as char)
+                    }
+                    _ => None,
+                };
+                Some((frame.trim().parse().ok()?, code, letter))
             })
             .collect()
     });
     let window = windows.iter().next().unwrap_or(Entity::PLACEHOLDER);
-    for &(frame, key) in script {
+    for &(frame, key, letter) in script {
         let down = state.frame == frame;
         if !down && state.frame != frame + 2 {
             continue;
@@ -247,9 +256,13 @@ pub fn scripted_keys(
         }
         keys.write(KeyboardInput {
             key_code: key,
-            logical_key: bevy::input::keyboard::Key::Unidentified(
-                bevy::input::keyboard::NativeKey::Unidentified,
-            ),
+            logical_key: match letter {
+                Some(l) => bevy::input::keyboard::Key::Character(l.to_string().into()),
+                None if key == KeyCode::Space => bevy::input::keyboard::Key::Space,
+                None => bevy::input::keyboard::Key::Unidentified(
+                    bevy::input::keyboard::NativeKey::Unidentified,
+                ),
+            },
             state: if down {
                 ButtonState::Pressed
             } else {

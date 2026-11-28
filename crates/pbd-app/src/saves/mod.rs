@@ -848,6 +848,19 @@ impl WorldSave {
         }
     }
 
+    /// The host's own chat line (`multiplayer` design 31), through the
+    /// server like anyone's. `false` if the server is not made yet (nothing
+    /// has been asked of it), so nobody else is on to hear it.
+    pub fn serve_chat(&mut self, text: &str) -> bool {
+        match self.local.as_mut() {
+            Some(server) => {
+                server.chat(0, text);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// The host's own player's pose (`multiplayer` design 24), for the
     /// players who joined: nothing until someone has joined.
     pub fn serve_presence(&mut self, pose: pbd_core::net::protocol::Pose) {

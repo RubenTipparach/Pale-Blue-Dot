@@ -1102,6 +1102,31 @@ Every word comes from the locale file. The mockup is M40's Join tab,
 updated with the Continue list. The game changes after the owner approves
 it.
 
+**As built (2026-11-28).** The owner asked again for this work ("can you
+continue with this work", listing the title menu), which is read as the
+request to build (CLAUDE.md, "Approved means build"). The decisions it took:
+
+- **Continue** opens the worlds page. Its first row is the latest save: the
+  worlds are listed newest first, and the world a plain launch opens is the
+  one played most recently (`open_world`), so the top row's CONTINUE is
+  "load latest". With no world yet the page offers NEW WORLD, as today.
+- **Options** is the settings screen under its new name, CHARACTER among its
+  tabs.
+- **Multiplayer** is a page of its own:
+  - **The Pale Blue Dot server**: the Fly.io server of design 27, by its
+    name (`pale-blue-dot.fly.dev`, port 47123), resolved when JOIN is pressed.
+  - **By address**: a field typed in the game's own box, as a world's name
+    is. It takes `host:port`, or a host alone with port 47123.
+  - JOIN starts the game again with `--join <address>`. The host's seed and
+    generator decide the world, and the game builds its world before it
+    starts (design 6.2). Joining in place, without a restart, is later work.
+    Every change of the world the player leaves is already durable, so
+    nothing is lost.
+  - An address that does not read, or a name that does not resolve, is said
+    under the field. A refused join is said by the joining game, as today.
+  - **Games on the LAN** wait for discovery, which is not built; the row is
+    not shown until it is. Task 5.3 keeps that part open.
+
 ### 29. The digest round robin and the resync (task 7.1; 2026-11-27)
 
 Design 2 says what a region's digest is. This is how a joined game finds a
@@ -1157,6 +1182,28 @@ the dedicated server's log and a later admin page.
 **Checks:** a teleporting pose is not relayed and is logged; a dig past
 reach is refused as `Cheat`, one within it is taken; with no flags set,
 nothing is checked.
+
+### 31. Chat (task 8.5, its first part; 2026-11-28)
+
+The owner listed "trade and chat" among the work left (2026-11-28). Chat
+first, because it needs no change to anyone's pack and no new rule:
+
+- **The server relays.** `ToServer::Chat` from a player is cleaned and sent
+  as `ToClient::Chat { from, text }` to everyone, the speaker included, so
+  every game shows the lines in the server's order. Cleaning: control
+  characters go, runs of spaces close up, the line is cut to
+  `CHAT_MAX_CHARS` (200), and an empty line is dropped. A player gets one
+  line per `CHAT_EVERY_S` (0.5 s); a faster line is dropped, not queued.
+  Nothing is journaled: chat is not world state (design 12).
+- **The game.** Enter opens a line at the bottom left, typed in the game's
+  own box. Enter sends it and Escape closes it; while it is open, the
+  world's keys stand down as for any menu. The last 8 lines are shown above
+  it, each for 12 s, and all of them while the line is open. A line reads
+  "Player 3: hello", and the host's own lines are player 0's. The words
+  around the text come from the locale file; what a player typed is shown
+  as typed.
+- **Single player** has no chat: the line does not open without a host or
+  a join.
 
 ## Risks / Trade-offs
 
