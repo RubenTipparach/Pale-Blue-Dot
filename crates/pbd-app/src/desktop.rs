@@ -21,6 +21,7 @@ mod furniture;
 mod glow_plants;
 mod guide;
 mod hud;
+mod join_ui;
 mod kitchen;
 mod map_herds;
 mod map_screen;
@@ -1128,13 +1129,14 @@ impl Launch {
                                 | "pause"
                                 | "settings"
                                 | "saves"
+                                | "multiplayer"
                                 | "pack"
                                 | "map"
                                 | "guide"
                                 | "missions"
                                 | "breeding"
                         ),
-                        "--menu takes title, pause, settings, saves, pack, map, guide, missions or breeding"
+                        "--menu takes title, pause, settings, saves, multiplayer, pack, map, guide, missions or breeding"
                     );
                     result.menu = Some(screen.clone());
                 }
@@ -2249,6 +2251,7 @@ pub fn run(args: &[String]) {
         menu::Screen::Title | menu::Screen::Saves
     )))
     .init_resource::<menu::NameField>()
+    .init_resource::<join_ui::AddressField>()
     .init_resource::<equipment::HandListOpen>()
     .init_resource::<toasts::Toasts>()
     .init_resource::<mission_tree::TreeView>()
@@ -2296,6 +2299,7 @@ pub fn run(args: &[String]) {
         (
             menu::capture_rebind,
             menu::name_input,
+            join_ui::address_input,
             menu::toggle,
             guide::open,
             breeding::open,
@@ -2323,6 +2327,8 @@ pub fn run(args: &[String]) {
         (repro::scripted_press, repro::scripted_keys).run_if(resource_exists::<CaptureState>),
     )
     .add_systems(Update, (breeding::press, breeding::paint).chain())
+    // The title's Multiplayer page (`multiplayer` design 28).
+    .add_systems(Update, (join_ui::press, join_ui::show).chain())
     // The Character page (`player-character` design 7).
     .add_systems(
         Update,

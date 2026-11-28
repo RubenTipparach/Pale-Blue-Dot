@@ -38,6 +38,9 @@ pub enum Screen {
     Pause,
     Settings,
     Saves,
+    /// The title's MULTIPLAYER: the hosted server and a game by its
+    /// address (`multiplayer` design 28).
+    Multiplayer,
     /// The field guide, opened with J.
     Guide,
     /// The pack, opened with I (`inventory-grid`).
@@ -75,7 +78,12 @@ impl Screen {
     /// where it is. Once the world is entered they step back to the pause
     /// menu, and the title is not seen again.
     fn back(self, front_door: bool, _has_world: bool) -> Self {
-        if front_door && matches!(self, Screen::Title | Screen::Saves | Screen::Settings) {
+        if front_door
+            && matches!(
+                self,
+                Screen::Title | Screen::Saves | Screen::Settings | Screen::Multiplayer
+            )
+        {
             return Screen::Title;
         }
         match self {
@@ -94,7 +102,7 @@ impl Screen {
             Screen::Trade | Screen::Board => Screen::Talk,
             // Only Wake up leaves it.
             Screen::Dead => Screen::Dead,
-            Screen::Settings | Screen::Saves => Screen::Pause,
+            Screen::Settings | Screen::Saves | Screen::Multiplayer => Screen::Pause,
         }
     }
 }
@@ -111,6 +119,14 @@ pub enum MenuAction {
     Saves,
     /// The pause menu's MAIN MENU: the title, as the front door again.
     MainMenu,
+    /// The title's MULTIPLAYER page (`multiplayer` design 28).
+    Multiplayer,
+    /// Join the Pale Blue Dot server (`join_ui::press` acts).
+    JoinHosted,
+    /// Join the address typed in the field (`join_ui::press` acts).
+    JoinAddress,
+    /// Put the keyboard in the address field.
+    EditAddress,
     Quit,
     Back,
     /// Open the slot at this row.
@@ -692,6 +708,7 @@ pub fn opening_screen(menu: Option<&str>, world_named: bool, capture: bool) -> S
         Some("pause") => Screen::Pause,
         Some("settings") => Screen::Settings,
         Some("saves") => Screen::Saves,
+        Some("multiplayer") => Screen::Multiplayer,
         Some("pack") => Screen::Pack,
         Some("map") => Screen::Map,
         Some("guide") => Screen::Guide,
@@ -920,15 +937,22 @@ fn spawn_title(commands: &mut Commands, kit: &UiKit, images: &mut Assets<Image>)
                         .with_children(|gap| {
                             gap.spawn(framed(kit, Set::Oak, 120.0))
                                 .with_children(|panel| {
+                                    // `multiplayer` design 28: Continue is the
+                                    // worlds, the latest on top.
                                     let go =
-                                        button(panel, kit, tr("menu.continue"), MenuAction::Resume);
+                                        button(panel, kit, tr("menu.continue"), MenuAction::Saves);
                                     panel.commands().entity(go).insert(Plaque {
                                         focus: true,
                                         ..Plaque::new(Set::Oak)
                                     });
                                     button(panel, kit, tr("menu.new_world"), MenuAction::NewWorld);
-                                    button(panel, kit, tr("menu.load_world"), MenuAction::Saves);
-                                    button(panel, kit, tr("menu.settings"), MenuAction::Settings);
+                                    button(
+                                        panel,
+                                        kit,
+                                        tr("menu.multiplayer"),
+                                        MenuAction::Multiplayer,
+                                    );
+                                    button(panel, kit, tr("menu.options"), MenuAction::Settings);
                                     button(panel, kit, tr("menu.quit"), MenuAction::Quit);
                                 });
                         });
@@ -949,7 +973,12 @@ pub struct SplashBackdrop;
 /// Whether the screen is one of the front door's: the title, or its saves
 /// page or settings while the title is the front door.
 fn on_front_door(screen: Screen, front: FrontDoor) -> bool {
-    screen == Screen::Title || (front.0 && matches!(screen, Screen::Saves | Screen::Settings))
+    screen == Screen::Title
+        || (front.0
+            && matches!(
+                screen,
+                Screen::Saves | Screen::Settings | Screen::Multiplayer
+            ))
 }
 
 /// Show the splash on the front door's pages and nowhere else.
@@ -989,7 +1018,7 @@ pub fn hide_hud_on_title(
 }
 
 /// An out-of-play menu's layer: the world dimmed behind the timber.
-fn timber_layer(screen: Screen) -> impl Bundle {
+pub(super) fn timber_layer(screen: Screen) -> impl Bundle {
     (
         layer(),
         BackgroundColor(ui_kit::DIMMER),
@@ -1023,7 +1052,7 @@ pub(super) fn lintel(parent: &mut ChildSpawnerCommands, kit: &UiKit, text: Local
 
 /// [`lintel`] on a timber menu (pause, settings, worlds): its X is oak, as
 /// every plaque out of play is.
-fn timber_lintel(parent: &mut ChildSpawnerCommands, kit: &UiKit, text: Localized) {
+pub(super) fn timber_lintel(parent: &mut ChildSpawnerCommands, kit: &UiKit, text: Localized) {
     lintel_in(parent, kit, text, Set::Oak);
 }
 
@@ -1138,6 +1167,7 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
     let kit = &*kit;
     spawn_saves(&mut commands, kit);
     spawn_title(&mut commands, kit, &mut images);
+    super::join_ui::spawn(&mut commands, kit);
     commands
         // Above the slot row, which is spawned a schedule later and would
         // otherwise draw over the panel: within a UI, later is on top.
@@ -2244,6 +2274,9 @@ pub fn press(
                 *screen = Screen::Playing;
             }
             MenuAction::Settings => *screen = Screen::Settings,
+            MenuAction::Multiplayer => *screen = Screen::Multiplayer,
+            // The Multiplayer page's own (`join_ui::press` acts).
+            MenuAction::JoinHosted | MenuAction::JoinAddress | MenuAction::EditAddress => {}
             MenuAction::NewWorld => {
                 name.focused = true;
                 *screen = Screen::Saves;

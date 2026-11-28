@@ -1099,6 +1099,15 @@ jobs:
   wall: wall
   wrong_town: Hand it in where you took it
   yours: YOUR JOBS
+join:
+  address_port: "{host}:{port}"
+  by_address: By address
+  could_not_start: "Could not start: {error}"
+  hosted: Pale Blue Dot server
+  join: JOIN
+  no_address: Type an address
+  not_found: "No game at {address}"
+  title: MULTIPLAYER
 kitchen:
   ate: "Ate the {dish}: {effect} for {minutes} min"
   cooking: "COOKING {recipe}"
@@ -1185,13 +1194,14 @@ menu:
     press_a_key: PRESS A KEY
   just_now: just now
   load: LOAD
-  load_world: LOAD WORLD
   made_with: "{world} was made with {why}"
   main_menu: MAIN MENU
   mission_line: Mission line
+  multiplayer: MULTIPLAYER
   name: NAME
   new_world: NEW WORLD
   no_worlds_yet: no worlds yet
+  options: OPTIONS
   other_world: "{world} was made in another world (seed {seed})"
   paused: PAUSED
   quality:

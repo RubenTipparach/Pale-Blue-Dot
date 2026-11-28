@@ -30,7 +30,7 @@ Groups 1 and 2 are the dependencies, and each is its own change.
 
 - [ ] 5.1 (Mockup made 2026-11-27: `docs/mockups/multiplayer.html`, M40, https://claude.ai/artifact/M4Mh9gpMWZYjnsVfnJYrh4, tabs `#host` and `#join`; waits for the owner's approval.) Mockup: host and join screens (pause menu Host, join by address or LAN, the refusal messages). Published, on the tracker. Verify: the owner approves it on the tracker.
 - [ ] 5.2 (Mockup made 2026-11-27: `docs/mockups/multiplayer.html`, tab `#player`; waits for the owner's approval.) Mockup: another player in the world, by day and lit at night, near with their name and far without. Verify: the owner approves it on the tracker.
-- [ ] 5.3 (Design 28.) The title menu: Continue (the worlds, Load latest), New world, Multiplayer (the hosted server, LAN, by address), Options (with Character), Quit. Mockup in M40 first. Verify: the owner approves it, then `--capture` shots.
+- [ ] 5.3 (Built 2026-11-28 but for games on the LAN: CONTINUE, NEW WORLD, MULTIPLAYER, OPTIONS, QUIT on the title; the MULTIPLAYER page, `desktop/join_ui.rs`, with the Pale Blue Dot server and a typed address, JOIN starting the game again with `--join`; tests `an_address_reads_with_or_without_its_port`, `the_field_takes_no_spaces_and_stops_at_its_length`; shots in `docs/screenshots/title-menu/`. LAN discovery is left.) (Design 28.) The title menu: Continue (the worlds, Load latest), New world, Multiplayer (the hosted server, LAN, by address), Options (with Character), Quit. Mockup in M40 first. Verify: the owner approves it, then `--capture` shots.
 
 ## 6. The network
 
