@@ -20,6 +20,7 @@ mod model;
 mod oar_hand;
 pub(crate) mod place;
 pub mod refund;
+pub mod rider;
 pub(crate) mod view;
 
 pub use view::{VehicleCamera, VehicleView};
@@ -193,6 +194,14 @@ impl Plugin for VehiclePlugin {
                     .in_set(RunFixedMainLoopSystems::BeforeFixedMainLoop),
             )
             .add_systems(FixedUpdate, step_vehicles)
+            // The player's figure in the seat, placed before the townsfolk
+            // pose it this frame (`player-character` design 8).
+            .add_systems(
+                Update,
+                rider::seat
+                    .before(crate::townsfolk::FolkPosed)
+                    .run_if(crate::world_open),
+            )
             .add_systems(
                 PostUpdate,
                 (draw::place, view::follow, lamps::gather)

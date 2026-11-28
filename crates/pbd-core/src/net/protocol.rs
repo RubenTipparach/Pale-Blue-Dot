@@ -17,12 +17,11 @@ use crate::world_frame::{FrameId, WorldPos};
 use glam::DVec3;
 
 /// This build's protocol. 2: `ToClient::Slots` (design 22), `Drop` and
-/// `DropLeft` (design 23).
-pub const PROTOCOL: u16 = 2;
-/// The oldest protocol this build still speaks (design 15.9). A version-1
-/// game cannot read its own slots, so it is refused rather than left with
-/// an empty hotbar (design 22).
-pub const PROTOCOL_MIN: u16 = 2;
+/// `DropLeft` (design 23). 3: a pose's [`Seat`] (`player-character` 4.2).
+pub const PROTOCOL: u16 = 3;
+/// The oldest protocol this build still speaks (design 15.9). A version-2
+/// game reads a pose a byte short, so it is refused rather than misread.
+pub const PROTOCOL_MIN: u16 = 3;
 /// The longest chat line or name, in bytes.
 pub const MAX_TEXT: usize = 512;
 /// The most items any one list may hold, which bounds what a malformed
@@ -157,9 +156,30 @@ pub enum Transaction {
 /// A player's place and look.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Pose {
+    /// Their feet, or their hips while they are in a [`Seat`].
     pub at: WorldPos,
     pub yaw: f32,
     pub pitch: f32,
+    pub seat: Seat,
+}
+
+/// Where a player is seated (`player-character` design 8), so the others
+/// draw them sitting there; the craft or animal itself is drawn by its own
+/// record.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Seat {
+    #[default]
+    Standing,
+    /// At a raft's oars, facing the bow.
+    Rower,
+    /// On a cart's bench.
+    Bench,
+    /// Astride a plodder or a horse.
+    Mount,
+}
+
+impl Seat {
+    pub const ALL: [Seat; 4] = [Seat::Standing, Seat::Rower, Seat::Bench, Seat::Mount];
 }
 
 /// A fixed tangent frame at `up` (a unit vector from the body's centre),
@@ -438,6 +458,7 @@ impl W {
         }
         self.f32(p.yaw);
         self.f32(p.pitch);
+        self.u8(Seat::ALL.iter().position(|s| *s == p.seat).unwrap_or(0) as u8);
     }
 }
 
@@ -510,6 +531,9 @@ impl<'a> R<'a> {
             at: WorldPos::new(frame, pos),
             yaw: self.f32()?,
             pitch: self.f32()?,
+            seat: *Seat::ALL
+                .get(usize::from(self.u8()?))
+                .ok_or(Decode::Invalid)?,
         })
     }
     /// A character's look (`player-character`): refused unless whole and
@@ -1063,6 +1087,7 @@ mod tests {
             at: WorldPos::new(FrameId(3), DVec3::new(1.5, -2.25e6, 3.0e-3)),
             yaw: 1.25,
             pitch: -0.5,
+            seat: Seat::Mount,
         }
     }
 

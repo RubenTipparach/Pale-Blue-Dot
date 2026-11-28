@@ -124,12 +124,35 @@ struct Live {
     behind: f64,
 }
 
+/// The person id a player's figure stands as (`multiplayer` design 24).
+pub fn player_id(player: u32) -> PersonId {
+    PersonId {
+        site: PLAYERS_SITE,
+        index: player,
+    }
+}
+
+/// A seat's pose (`player-character` design 8): the legs' turn forward
+/// from the hips, rad (negative is forward), their spread apart, rad, the
+/// body's lean forward, rad, and where each hand goes in the figure's own
+/// space (x across, y up, z forward, m from the hips), left first.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Ride {
+    pub legs: [f32; 2],
+    pub spread: f32,
+    pub lean: f32,
+    pub hands: [Option<Vec3>; 2],
+}
+
 /// How a person rests on a piece of furniture (`furniture` design 7): their
 /// feet stood under a seat's place, or laid along a bed from its pillow.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Posture {
     /// On a seat this high over the floor, m.
     Sit { seat_m: f32 },
+    /// In a craft's seat or on a mount (`player-character` design 8): the
+    /// hips where the person is driven, posed as the seat says.
+    Ride(Ride),
     /// On a bed whose mattress is this high, m; laid from where they are
     /// driven (the pillow) along their forward.
     Lie { top_m: f32 },
@@ -357,6 +380,16 @@ impl Townsfolk {
         l.posture = Some(posture);
         l.walk = None;
         true
+    }
+
+    /// Out of a seat, still driven where they are: another player who
+    /// stood up (`player-character` design 8). `false` if they were not
+    /// seated.
+    pub fn stand(&mut self, id: PersonId) -> bool {
+        let Some(l) = self.live_mut(id) else {
+            return false;
+        };
+        l.posture.take().is_some()
     }
 
     /// Whether a person rests on furniture now.
@@ -1069,19 +1102,36 @@ fn pose_parts(
     let body = g
         * t(Vec3::new(pose.body_x, f.leg_len + pose.body_y, 0.0))
         * Affine3A::from_rotation_z(pose.roll)
+        // A rider's lean (`player-character` design 8); 0 for everyone else.
+        * Affine3A::from_rotation_x(pose.lean)
         * Affine3A::from_scale(Vec3::new(pose.scale[0], pose.scale[1], pose.scale[0]));
     let mut out = Vec::with_capacity(30);
     out.push((0, Some(body)));
-    for i in 0..2 {
+    for (i, s) in [(0usize, -1.0f32), (1, 1.0)] {
         out.push((
             1 + i,
-            Some(body * t(f.leg_at[i]) * Affine3A::from_rotation_x(pose.legs[i])),
+            Some(
+                body * t(f.leg_at[i])
+                    * Affine3A::from_rotation_x(pose.legs[i])
+                    * Affine3A::from_rotation_z(s * pose.leg_spread),
+            ),
         ));
     }
     for i in 0..2 {
         let [x, z] = pose.arms[i];
-        let q = Quat::from_euler(EulerRot::XYZ, x, 0.0, z);
-        out.push((3 + i, Some(body * t(f.arm_at[i]) * Affine3A::from_quat(q))));
+        let shoulder = body * t(f.arm_at[i]);
+        // An aimed hand: the arm turned from hanging (-y) toward the point,
+        // in the body's own space (the mockup's `aimArm`).
+        let q = match pose.hands[i] {
+            Some(hand) => {
+                let to = shoulder
+                    .inverse()
+                    .transform_vector3(Vec3::from(hand) - Vec3::from(shoulder.translation));
+                Quat::from_rotation_arc(Vec3::NEG_Y, to.normalize_or(Vec3::NEG_Y))
+            }
+            None => Quat::from_euler(EulerRot::XYZ, x, 0.0, z),
+        };
+        out.push((3 + i, Some(shoulder * Affine3A::from_quat(q))));
     }
     let hq = Quat::from_euler(
         EulerRot::YXZ,
@@ -1500,6 +1550,8 @@ fn step(
             Some(Posture::Sit { seat_m }) => {
                 Doing::Sitting((slot.figure.leg_len - seat_m).max(0.0))
             }
+            // The hips on the seat, where they are driven.
+            Some(Posture::Ride(_)) => Doing::Sitting(slot.figure.leg_len),
             Some(Posture::Lie { .. }) => Doing::Lying,
             None if l.placed.walking => Doing::Walking(l.person.pace().unwrap_or(1.0)),
             None => match l.person.work() {
@@ -1508,7 +1560,18 @@ fn step(
                 _ => Doing::Standing,
             },
         };
-        let pose = l.body.step(dt, doing, face_pose.tilt);
+        let mut pose = l.body.step(dt, doing, face_pose.tilt);
+        if let Some(Posture::Ride(ride)) = l.posture {
+            pose.legs = ride.legs;
+            pose.leg_spread = ride.spread;
+            pose.lean = ride.lean;
+            pose.roll = 0.0;
+            // The hands are given from the hips; the figure's space is from
+            // its feet, and the hips are on the seat a leg's length down.
+            pose.hands = ride.hands.map(|h| {
+                h.map(|h| (h + Vec3::new(0.0, pose.body_y + slot.figure.leg_len, 0.0)).to_array())
+            });
+        }
         // Lying: the figure laid on its back along the bed, its head on the
         // pillow where it is driven, its feet toward the bed's foot.
         let (feet, rot) = match l.posture {
@@ -1578,6 +1641,11 @@ fn step(
     }
 }
 
+/// Where the figures are posed each frame: anything that drives a figure
+/// this frame runs before it (`vehicles::rider`).
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FolkPosed;
+
 /// The townspeople.
 pub struct TownsfolkPlugin;
 
@@ -1590,7 +1658,7 @@ impl Plugin for TownsfolkPlugin {
                 Update,
                 (
                     prewarm.run_if(resource_exists::<crate::loading::Warming>),
-                    step.after(crate::towns::stand_in_range),
+                    step.after(crate::towns::stand_in_range).in_set(FolkPosed),
                 ),
             );
     }

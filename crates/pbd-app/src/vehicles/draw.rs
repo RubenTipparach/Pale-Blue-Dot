@@ -663,10 +663,10 @@ pub fn place(
                 transform.translation = Vec3::from(craft.seat().eye);
             }
             (Moving::Rower, _) => {
-                // Each part in exactly one view (the owner: "why is fps arm
-                // in third person"): the body from the chase view only.
-                let chase = !(view.seat && aboard.0 == Some(entity));
-                *visibility = visible(craft.occupied && chase);
+                // The rower is the player's own figure now
+                // (`player-character` design 8, `rider::seat`); these boxes
+                // are not drawn.
+                *visibility = visible(false);
             }
             (Moving::Hand(side), _) => {
                 // The hands on the handles in the seat view, unless a tool

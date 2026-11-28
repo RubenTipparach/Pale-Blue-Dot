@@ -67,6 +67,39 @@ it too. M40 version 2 shows the other player as that figure (owner,
      the townsfolk's parts have one hat (decision 1). Hair has HAT as one of
      its styles, and the hat's colour is its own row.
 
+8. **Seats in the game (tasks 4.1 and 4.2).** M40's Character tab poses
+   the figure by aiming each arm, from its shoulder, straight at where its
+   hand goes, and by turning the legs and leaning the body. The game does the
+   same with the townsfolk's own figure:
+   - the townsfolk get a posture `Ride`: the figure's hips on a seat, its
+     legs turned forward by the seat's angles and spread apart (astride), its
+     body leaned forward, and each hand aimed at a point in the figure's own
+     space. The pose gains a lean, a leg spread and two optional aimed hands.
+     A figure with none of them is posed exactly as today;
+   - the player's own figure is a visitor of [`PLAYERS_SITE`], as the
+     preview is. It stands while the player is in a craft's seat and the view
+     is from outside, and goes when the view is first person, so first person
+     stays hands only (decision 4);
+   - each craft names its seat in its own space: the hip point, the facing,
+     the legs' angles and spread, the lean, and where the hands go. The
+     rower's hands go to the oar grips, which move with the stroke. The cart
+     and the horse's hands go to the shafts or the reins, the car's to the
+     wheel's rim, the plane's to the stick;
+   - the rower's boxes in `vehicles/draw.rs` are no longer drawn. The
+     first-person hands on the oars stay as they are.
+   The seat values are the mockup's (`character.js`, `POSE`).
+   - **Seen by the others (protocol 3).** A pose names its seat: standing,
+     at a raft's oars, on a cart's bench or astride a mount. Seated, its
+     place is the hips: the raft's seat facing the bow, or under the rider's
+     eye on a bench or a mount. The other games draw the player sitting
+     there in that seat's pose, the hands held at rest on the controls, since
+     the live oar strokes are not sent. The craft or animal is drawn by its
+     own record, as today.
+   - **What waits.** Carts and mounts have no view from outside in the
+     player's own game yet, so there the seat is seen only by the others.
+     The car and the plane are not in the game (phase 5); their seats come
+     with them, from the same mockup values.
+
 ## Open questions (recommendations taken, ask only with screenshots)
 
 - Where the screen opens on a new world: before the world loads

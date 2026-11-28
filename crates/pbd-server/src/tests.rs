@@ -917,6 +917,7 @@ fn a_pose_goes_to_the_others_and_a_leaver_is_gone() {
     let pose = Pose {
         at: WorldPos::new(FrameId(0), glam::DVec3::new(0.0, 4800.0, 0.0)),
         yaw: 0.5,
+        seat: Default::default(),
         pitch: -0.1,
     };
     s.handle(&mut st, players[1], ToServer::Presence { pose });
@@ -1159,6 +1160,7 @@ fn the_cheat_checks_flag_a_teleport_and_a_reach_and_are_off_by_default() {
     let pose = |at: glam::DVec3| Pose {
         at: WorldPos::new(FrameId(0), at),
         yaw: 0.0,
+        seat: Default::default(),
         pitch: 0.0,
     };
     let far = ground + glam::DVec3::new(500.0, 0.0, 0.0);
