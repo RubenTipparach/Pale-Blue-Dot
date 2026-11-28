@@ -3478,14 +3478,14 @@
  },
  "eat_soft": {
   "group": "Body",
-  "what": "Eating a cooked dish: two or three soft, closed-mouth chews.",
+  "what": "Eating a cooked dish, or soft raw food: two or three full, wet chews.",
   "takes": [
    {
     "layers": [
      {
-      "src": "freesound/707806:707806.mp3",
-      "start": 0.0,
-      "dur": 1.25,
+      "src": "freesound/593596:593596.mp3",
+      "start": 3.0,
+      "dur": 1.2,
       "fadein": 0.005,
       "fadeout": 0.25
      }
@@ -3494,8 +3494,8 @@
    {
     "layers": [
      {
-      "src": "freesound/707806:707806.mp3",
-      "start": 1.45,
+      "src": "freesound/798398:798398.mp3",
+      "start": 129.5,
       "dur": 1.2,
       "fadein": 0.005,
       "fadeout": 0.25
@@ -3506,19 +3506,18 @@
     "layers": [
      {
       "src": "freesound/707807:707807.mp3",
-      "start": 1.0,
-      "dur": 1.25,
+      "start": 0.0,
+      "dur": 1.2,
       "fadein": 0.005,
       "fadeout": 0.25
      }
-    ],
-    "peak_db": -9.0
+    ]
    },
    {
     "layers": [
      {
-      "src": "freesound/707808:707808.mp3",
-      "start": 0.0,
+      "src": "freesound/593596:593596.mp3",
+      "start": 1.3,
       "dur": 1.2,
       "fadein": 0.005,
       "fadeout": 0.25
@@ -3528,17 +3527,18 @@
   ],
   "layers": [
    {
-    "src": "freesound/707806:707806.mp3",
-    "start": 0.0,
-    "dur": 1.25,
+    "src": "freesound/593596:593596.mp3",
+    "start": 3.0,
+    "dur": 1.2,
     "fadein": 0.005,
     "fadeout": 0.25
    }
   ],
-  "len": 1.25,
-  "hp": 90,
+  "len": 1.2,
+  "hp": 150,
   "peak_db": -3.0,
-  "edits": "four windows of two or three chews, about 1.2 s each, from a set of close chewing recordings (707806 twice, 707807, 707808); 90 Hz high pass for handling rumble; faded out over 0.25 s; the third take written 6 dB lower so its louder chewing sits with the others"
+  "edits": "four 1.2 s windows of chewing picked by measurement for their energy between 500 Hz and 4 kHz, centred 1 to 1.8 kHz with under 10% above 4 kHz (593596 at 3.0 and 1.3 s, 798398 at 129.5 s, 707807 at 0.0 s, the mellowest of the old set); 150 Hz high pass for handling rumble, 6 kHz low pass for breath hiss; faded out over 0.25 s",
+  "lp": 6000
  },
  "tool_break": {
   "group": "Body",

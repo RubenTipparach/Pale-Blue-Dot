@@ -384,6 +384,12 @@ pub enum MapMarker {
     /// A taken escort job's trader, by its place in the taken jobs
     /// (`townsfolk` design 42o).
     Trader(usize),
+    /// A taken repair job's broken wall, and a taken rockfall job's road
+    /// (`job-waypoints`).
+    Repair(usize),
+    Rockfall(usize),
+    /// The near town's job giver (`job-waypoints` design 7).
+    Giver,
     /// A dropped pack lying in the world, newest first (`survival-mode`
     /// design 8).
     Bag(usize),
@@ -397,6 +403,9 @@ pub const PARCEL_MARKERS: usize = 2;
 pub const BAG_MARKERS: usize = 2;
 /// How many escort jobs' traders the map marks at once.
 pub const TRADER_MARKERS: usize = 2;
+/// How many repairs' walls and rockfalls the map marks at once.
+pub const REPAIR_MARKERS: usize = 2;
+pub const ROCKFALL_MARKERS: usize = 2;
 /// The label beside a waypoint's pin, "W1" ..., by the pin's place in the
 /// list (`waypoints` decision 5).
 #[derive(Component)]
@@ -974,7 +983,17 @@ pub fn spawn(
                             .map(|k| (MapMarker::Trader(k), "jobs.escort_marker"));
                         let parcels = (0..PARCEL_MARKERS)
                             .map(|k| (MapMarker::Parcel(k), "jobs.parcel_marker"));
-                        for (marker, label) in lost.chain(traders).chain(parcels) {
+                        let repairs = (0..REPAIR_MARKERS)
+                            .map(|k| (MapMarker::Repair(k), "jobs.repair_marker"));
+                        let rockfalls = (0..ROCKFALL_MARKERS)
+                            .map(|k| (MapMarker::Rockfall(k), "jobs.rockfall_marker"));
+                        for (marker, label) in lost
+                            .chain(traders)
+                            .chain(parcels)
+                            .chain(repairs)
+                            .chain(rockfalls)
+                            .chain(std::iter::once((MapMarker::Giver, "jobs.giver_marker")))
+                        {
                             markers
                                 .spawn((
                                     marker,
@@ -1974,10 +1993,12 @@ pub fn markers(
     mut readout: Query<&mut Text, With<MapReadout>>,
     mut labels: Query<(&MapPinLabel, &mut KitText)>,
     ui_scale: Option<Res<UiScale>>,
-    (save, eco, towns): (
+    (save, eco, towns, eco_cfg, folk): (
         Option<Res<WorldSave>>,
         Option<Res<pbd_app::economy::Economy>>,
         Option<Res<pbd_app::towns::Towns>>,
+        Option<Res<pbd_app::economy::EconomyConfig>>,
+        Option<Res<pbd_app::townsfolk::Townsfolk>>,
     ),
 ) {
     if *screen != Screen::Map {
@@ -2007,6 +2028,31 @@ pub fn markers(
     let parcels = match (eco.as_deref(), towns.as_deref()) {
         (Some(eco), Some(towns)) => pbd_app::economy::parcel_directions(eco, towns),
         _ => Vec::new(),
+    };
+    let (repairs, rockfalls) = match (eco.as_deref(), save.as_deref()) {
+        (Some(eco), Some(save)) => (
+            towns
+                .as_deref()
+                .map(|t| pbd_app::economy::special::repair_directions(eco, save, t))
+                .unwrap_or_default(),
+            pbd_app::economy::road_jobs::rockfall_directions(eco, save),
+        ),
+        _ => (Vec::new(), Vec::new()),
+    };
+    let giver: Option<Vec3> = match (
+        eco_cfg.as_deref(),
+        folk.as_deref(),
+        towns.as_deref(),
+        player,
+    ) {
+        (Some(cfg), Some(folk), Some(towns), Some(at)) => pbd_app::economy::near_giver(
+            cfg,
+            folk,
+            towns,
+            at.normalize_or(Vec3::Y),
+            super::compass_bar::GIVER_NEAR_M,
+        ),
+        _ => None,
     };
     // The dropped packs, newest first, as planet points.
     let bags: Vec<Vec3> = save
@@ -2063,6 +2109,17 @@ pub fn markers(
                 parcels.get(k).map(|d| *d * pbd_app::planet::PLANET_RADIUS),
                 None,
             ),
+            MapMarker::Repair(k) => (
+                repairs.get(k).map(|d| *d * pbd_app::planet::PLANET_RADIUS),
+                None,
+            ),
+            MapMarker::Rockfall(k) => (
+                rockfalls
+                    .get(k)
+                    .map(|d| *d * pbd_app::planet::PLANET_RADIUS),
+                None,
+            ),
+            MapMarker::Giver => (giver.map(|d| d * pbd_app::planet::PLANET_RADIUS), None),
             MapMarker::Bag(k) => (bags.get(k).copied(), None),
             MapMarker::Craft(craft) => {
                 seen_crafts.push(craft);
@@ -2092,6 +2149,9 @@ pub fn markers(
                 | MapMarker::Lost(_)
                 | MapMarker::Trader(_)
                 | MapMarker::Parcel(_)
+                | MapMarker::Repair(_)
+                | MapMarker::Rockfall(_)
+                | MapMarker::Giver
                 | MapMarker::Bag(_)
         ) {
             h / 2.0

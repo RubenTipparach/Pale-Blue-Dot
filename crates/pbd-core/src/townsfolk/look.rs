@@ -360,6 +360,7 @@ pub fn swatches(tunics: impl IntoIterator<Item = u32>) -> Vec<u32> {
         }
     }
     out.extend(super::figure::FACE_COLOURS);
+    out.extend(super::face::MOUTH_COLOURS);
     out.sort_unstable();
     out.dedup();
     out

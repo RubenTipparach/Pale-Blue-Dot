@@ -11,6 +11,7 @@
 
 pub mod character;
 pub mod face;
+pub mod face_card;
 pub mod figure;
 pub mod look;
 pub mod motion;

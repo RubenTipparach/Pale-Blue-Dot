@@ -30,7 +30,7 @@ WANT="$*"
 DAY="--time 16"
 NIGHT="--time 3.8 --lamps 6 2"
 want combat-fox-stalk-day && shot combat-fox-stalk-day --world cb-1 $AT --combat fox-stalk $DAY --pitch -10 --frames ${STALK_F:-100}
-want combat-fox-stalk-night && shot combat-fox-stalk-night --world cb-2 $AT --combat fox-stalk $NIGHT --pitch -10 --frames ${STALK_F:-100}
+want combat-fox-stalk-night && shot combat-fox-stalk-night --world cb-sn-fresh $AT --combat fox-stalk $NIGHT --pitch -10 --frames ${STALK_F:-100}
 want combat-fox-warn-day && shot combat-fox-warn-day --world cb-3 $AT --combat fox-warn $DAY --pitch -14 --frames ${WARN_F:-130}
 want combat-fox-warn-night && shot combat-fox-warn-night --world cb-4 $AT --combat fox-warn $NIGHT --pitch -14 --frames ${WARN_F:-130}
 want combat-hound-warn-day && shot combat-hound-warn-day --world cb-5 $AT --combat hound-warn $DAY --pitch -14 --frames ${WARN_F:-130}

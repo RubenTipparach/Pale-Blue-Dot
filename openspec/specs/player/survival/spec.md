@@ -4,8 +4,8 @@
 What it takes to stay alive in a Survival world, as the game does it today
 (`openspec/changes/survival-mode`, moved requirement by requirement as each
 is built and tested): the world's mode, health and death with the dropped
-pack, falls, hunger, stamina with its winded limits, body temperature, tool
-wear, the predators' hunt, hunting, townsfolk who fight back, and weapons
+pack, falls, hunger, water, breath, stamina with its winded limits, body
+temperature, tool wear, the predators' hunt, hunting, townsfolk who fight back, and weapons
 that hit on the swing. The rest of the capability is
 still the change's.
 
@@ -179,7 +179,7 @@ In Survival, hunger SHALL empty slowly with play time only, never while the
 game is closed. A meal SHALL refill it as well as giving its buff. While
 hunger is empty, health SHALL NOT refill and SHALL drain slowly.
 
-Pinned by `pbd_core::survival::hunger::tests::{standing_about_a_full_bar_lasts_75_minutes_and_shivering_burns_faster, a_one_star_meal_fills_its_own_amount, a_two_star_meal_fills_115_percent, a_three_star_meal_fills_130_percent}` and `pbd_core::survival::body::tests::{time_with_the_game_closed_changes_nothing, hunger_drains_at_the_idle_rate_and_health_refills, starving_drains_health_a_point_every_ten_seconds, meals_fill_food_and_stew_fills_water}`.
+Pinned by `pbd_core::survival::hunger::tests::{standing_about_a_full_bar_lasts_75_minutes_and_shivering_burns_faster, a_one_star_meal_fills_its_own_amount, a_two_star_meal_fills_115_percent, a_three_star_meal_fills_130_percent}` and `pbd_core::survival::body::tests::{time_with_the_game_closed_changes_nothing, hunger_drains_at_the_idle_rate_and_health_refills, starving_drains_health_a_point_every_ten_seconds, meals_fill_food_and_stew_fills_water}`, and in the game `pbd_app::survival::tests::{a_dish_eaten_in_survival_fills_food, raw_meat_is_eaten_only_in_survival_and_a_stone_never}`.
 
 #### Scenario: Closing the game hungry
 - **WHEN** a player quits with hunger nearly empty and returns a day later
@@ -265,3 +265,78 @@ Pinned by `pbd_core::survival::hunting::tests::{a_woolback_hunted_and_dressed, a
 #### Scenario: A protected otter
 - **WHEN** a Survival player strikes a river otter
 - **THEN** it takes no damage
+
+### Requirement: Breath under water and air high up
+In Survival, while the player's head is under water, breath SHALL empty,
+then health SHALL drain until they surface. On foot more than
+`suit_air.thin_above_m` (600 m) above the body's mean radius, where the air
+is too thin, a suit air reserve SHALL do the same. Inside a sealed craft
+cabin, the player SHALL breathe the craft's air and the reserve SHALL
+refill.
+
+Pinned by `pbd_core::survival::breath::tests::*`,
+`pbd_core::survival::body::tests::a_long_dive_drains_health_and_surfacing_refills_breath`,
+`pbd_app::survival::tests::{a_long_dive_drains_health_and_surfacing_refills_breath, high_up_the_air_is_thin, thin_air_spends_the_suit_then_health}`.
+
+#### Scenario: A long dive
+- **WHEN** the player stays under water past their breath
+- **THEN** health drains until they surface, and breath refills once they do
+
+#### Scenario: High above the summits
+- **WHEN** the player stands on foot 700 m above the body's mean radius
+- **THEN** the suit's air reserve empties, then health drains, and the
+  reserve refills in a craft's cabin
+
+### Requirement: Water is drunk, and heat uses it faster
+In Survival, the player SHALL have a water bar that empties with play time,
+faster in heat and with effort. Fresh water, a water bucket, milk, fruit and
+meat stew SHALL refill it; sea water SHALL NOT. A straw SHALL drink juice
+from a standing desert cactus, a few sips a cactus, which come back over
+world days and are kept in the save. An empty bar SHALL drain health slowly.
+
+Pinned by `pbd_core::survival::water::tests::*`,
+`pbd_core::survival::hunger::tests::{stew_and_milk_give_water, every_tree_fruit_is_eaten_as_fruit}`,
+`pbd_core::survival::body::tests::an_empty_water_bar_drains_health_slowly`,
+`pbd_app::survival::tests::{a_cactus_gives_three_sips_through_a_straw_and_is_dry_after, a_bucket_filled_at_the_sea_says_salt_water_and_a_fresh_one_empties_in_four_sips, a_dish_eaten_in_survival_fills_food, an_apple_eaten_in_survival_fills_food_and_water_and_survives_a_reload, raw_meat_is_eaten_only_in_survival_and_a_stone_never}`.
+
+#### Scenario: A cactus with a straw
+- **WHEN** a Survival player holding a straw drinks from a desert cactus
+  until it is dry, closes the world and reopens it the same day
+- **THEN** each sip raised water, the cactus is still dry, and it gives a sip
+  again a world day later
+
+#### Scenario: Sea water
+- **WHEN** a Survival player tries to drink from the sea
+- **THEN** water does not rise
+
+#### Scenario: An apple
+- **WHEN** a hungry, thirsty Survival player eats an apple from their hand
+- **THEN** food and water both rise, and the apple is gone from the hand
+  across a reload
+
+### Requirement: The survival HUD shows a stat only when it matters
+In Survival, health, stamina, hunger and water SHALL be shown as bars
+stacked at the left edge of the screen. A full bar SHALL be hidden, and
+hunger and water SHALL be shown only at half or lower. Every stat SHALL be
+shown, full or not, in the pack. While the body is in heat exhaustion or
+heat stroke, a short warning SHALL be shown above the hotbar. In Explorer
+none of it SHALL be shown.
+
+Pinned by `pbd_core::survival::body::tests::the_hud_hides_full_bars_and_shows_food_and_water_from_half`,
+`desktop::survival_panels::tests::{the_pack_shows_all_four_bars_full_or_not, an_explorer_pack_has_no_stats_panel}`
+and `desktop::survival_play::tests::the_heat_warning_shows_past_39_5_c_and_goes_below_it`.
+
+#### Scenario: Fed, watered and rested
+- **WHEN** a Survival player is at full health and stamina with hunger and
+  water above half
+- **THEN** no survival bar is on the screen, and opening the pack shows all
+  four with their values
+
+#### Scenario: Getting hungry
+- **WHEN** hunger falls from 60 to 40
+- **THEN** the hunger bar appears on the left stack as it passes half
+
+#### Scenario: Heading for heat stroke
+- **WHEN** a Survival player's body passes 39.5 C
+- **THEN** the heat stroke warning appears above the hotbar, and goes once
+  the body is back under 39.5 C

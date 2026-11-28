@@ -192,6 +192,9 @@
     suit_air: (
         reserve_s: 60.0,
         refill_s: 5.0,
+        // On foot this far above the body's mean radius the air is thin,
+        // m (design "Thin air on foot"; summits stand about 150 m).
+        thin_above_m: 600.0,
     ),
     // Design 15: what a sip gives. Every drink here is fresh; salt water
     // (the sea, a brackish river mouth, a bucket filled at the sea) gives

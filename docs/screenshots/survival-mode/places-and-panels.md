@@ -30,5 +30,6 @@ What is wrong in them, honestly:
   between it and the pack.
 - The break's crack (`tool_break`) is judged by measurement only (Claude
   cannot listen); only the owner's ears approve it.
-- `bedroll-*.jpg` and `bag-day.jpg` are round 1's and still carry the debug
-  readout.
+- `bedroll-*.jpg` and `bag-day.jpg` were retaken on 2026-11-27 without the
+  readout (`tools/capture_survival_hud.sh`); at night the bedroll is lit by
+  the capture's lamps, the torch in the hotbar but not in hand.

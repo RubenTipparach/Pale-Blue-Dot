@@ -19,6 +19,12 @@ pub enum Air {
     Cabin,
 }
 
+/// Whether the air on foot `height_m` above the body's mean radius is too
+/// thin to breathe (design "Thin air on foot").
+pub fn thin_at(cfg: &SurvivalConfig, height_m: f32) -> bool {
+    height_m > cfg.suit_air.thin_above_m
+}
+
 /// The two reserves, as saved in the player's record.
 #[derive(Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
 pub struct Breath {
@@ -84,6 +90,14 @@ pub fn head_air(head_in_water: bool, floats_head_out: bool) -> Air {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thin_above_the_ceiling_only() {
+        let cfg = SurvivalConfig::shipped();
+        assert!(!thin_at(&cfg, 150.0), "a summit breathes");
+        assert!(!thin_at(&cfg, 600.0));
+        assert!(thin_at(&cfg, 601.0));
+    }
 
     #[test]
     fn a_long_dive_drains_health_and_surfacing_refills_breath() {

@@ -2074,6 +2074,7 @@ pub fn run(args: &[String]) {
     .init_resource::<pbd_app::kitchen::MealEffects>()
     .add_message::<pbd_app::kitchen::Cooked>()
     .add_message::<pbd_app::kitchen::Ate>()
+    .add_message::<pbd_app::kitchen::Munched>()
     // The starter missions (`starter-missions`): the chain, its counting
     // and the player's record; the HUD line and the tab are `missions`.
     .add_plugins(pbd_app::missions::MissionsPlugin)

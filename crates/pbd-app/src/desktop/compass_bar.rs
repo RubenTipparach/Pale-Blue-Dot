@@ -66,6 +66,14 @@ pub const TRADER_PINS: usize = 2;
 /// Pins for picked-up parcels' towns, after the traders' (`townsfolk`
 /// design 47).
 pub const PARCEL_PINS: usize = 2;
+/// Pins for repair jobs' broken walls and rockfalls on the road, after the
+/// parcels' (`job-waypoints`).
+pub const REPAIR_PINS: usize = 2;
+pub const ROCKFALL_PINS: usize = 2;
+/// The near town's job giver (`job-waypoints` design 7).
+pub const GIVER_PINS: usize = 1;
+/// How near a town its job giver is pinned, m.
+pub const GIVER_NEAR_M: f32 = 600.0;
 /// Pins for the building site's next piece and the next cell to pave.
 const TICK_PINS: usize = 2;
 
@@ -192,7 +200,15 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>, mut images: ResMut<Assets<
                         ));
                     }
                     // Spawned after the studs, so a pin stands over a town.
-                    for k in 0..MARKS_MAX + LOST_PINS + TRADER_PINS + PARCEL_PINS + TICK_PINS {
+                    for k in 0..MARKS_MAX
+                        + LOST_PINS
+                        + TRADER_PINS
+                        + PARCEL_PINS
+                        + REPAIR_PINS
+                        + ROCKFALL_PINS
+                        + GIVER_PINS
+                        + TICK_PINS
+                    {
                         inner.spawn((
                             CompassWaypoint(k),
                             ImageNode::new(pin.clone()),
@@ -275,11 +291,13 @@ pub fn update(
     >,
     mut name: Query<&mut KitText, (With<CompassName>, Without<CompassMark>)>,
     mut read: Local<(String, Vec<Mark>)>,
-    (eco, site_tick, pave_tick, held_towns): (
+    (eco, site_tick, pave_tick, held_towns, eco_cfg, folk): (
         Option<Res<pbd_app::economy::Economy>>,
         Option<Res<super::construction::SiteTick>>,
         Option<Res<pbd_app::roads::paving::PaveTick>>,
         Option<Res<pbd_app::towns::Towns>>,
+        Option<Res<pbd_app::economy::EconomyConfig>>,
+        Option<Res<pbd_app::townsfolk::Townsfolk>>,
     ),
 ) {
     let Ok(mut visibility) = root.single_mut() else {
@@ -394,9 +412,32 @@ pub fn update(
         _ => Vec::new(),
     };
     let parcels = &parcels[..parcels.len().min(PARCEL_PINS)];
+    // Then a repair's broken wall and a rockfall's road (`job-waypoints`).
+    let repairs: Vec<Vec3> = match (eco.as_deref(), save.as_deref(), held_towns.as_deref()) {
+        (Some(eco), Some(save), Some(towns)) => {
+            pbd_app::economy::special::repair_directions(eco, save, towns)
+        }
+        _ => Vec::new(),
+    };
+    let repairs = &repairs[..repairs.len().min(REPAIR_PINS)];
+    let rockfalls: Vec<Vec3> = match (eco.as_deref(), save.as_deref()) {
+        (Some(eco), Some(save)) => pbd_app::economy::road_jobs::rockfall_directions(eco, save),
+        _ => Vec::new(),
+    };
+    let rockfalls = &rockfalls[..rockfalls.len().min(ROCKFALL_PINS)];
     let lost_n = lost.len();
     let traders_n = lost_n + traders.len();
-    let jobs_n = traders_n + parcels.len();
+    let parcels_n = traders_n + parcels.len();
+    let repairs_n = parcels_n + repairs.len();
+    let rockfalls_n = repairs_n + rockfalls.len();
+    // The near town's job giver (`job-waypoints` design 7).
+    let giver: Option<Vec3> = match (eco_cfg.as_deref(), folk.as_deref(), held_towns.as_deref()) {
+        (Some(cfg), Some(folk), Some(towns)) => {
+            pbd_app::economy::near_giver(cfg, folk, towns, view.up, GIVER_NEAR_M)
+        }
+        _ => None,
+    };
+    let jobs_n = rockfalls_n + usize::from(giver.is_some());
     // The site's next piece (`building-planner` design 6), after the lost.
     let tick: Option<Vec3> = site_tick
         .as_deref()
@@ -414,6 +455,9 @@ pub fn update(
         .copied()
         .chain(traders.iter().copied())
         .chain(parcels.iter().copied())
+        .chain(repairs.iter().copied())
+        .chain(rockfalls.iter().copied())
+        .chain(giver)
         .chain(tick)
         .chain(pave)
         .chain(read.1.iter().map(|m| m.direction()))
@@ -440,8 +484,20 @@ pub fn update(
                 &pbd_app::ui_kit::tr("jobs.escort_marker"),
                 waypoints[i].distance_m,
             ),
-            Some(Named::Waypoint(i)) if i < jobs_n => compass::name_line(
+            Some(Named::Waypoint(i)) if i < parcels_n => compass::name_line(
                 &pbd_app::ui_kit::tr("jobs.parcel_marker"),
+                waypoints[i].distance_m,
+            ),
+            Some(Named::Waypoint(i)) if i < repairs_n => compass::name_line(
+                &pbd_app::ui_kit::tr("jobs.repair_marker"),
+                waypoints[i].distance_m,
+            ),
+            Some(Named::Waypoint(i)) if i < rockfalls_n => compass::name_line(
+                &pbd_app::ui_kit::tr("jobs.rockfall_marker"),
+                waypoints[i].distance_m,
+            ),
+            Some(Named::Waypoint(i)) if i < jobs_n => compass::name_line(
+                &pbd_app::ui_kit::tr("jobs.giver_marker"),
                 waypoints[i].distance_m,
             ),
             Some(Named::Waypoint(i)) if i < jobs_n + ticks => {

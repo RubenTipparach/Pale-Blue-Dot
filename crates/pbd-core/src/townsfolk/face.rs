@@ -542,6 +542,10 @@ const IN: u32 = 0x3e1219;
 const TNG: u32 = 0xd8707a;
 const TTH: u32 = 0xf4efe6;
 const INK: u32 = 0x23203a;
+const M_LIP: u32 = 0x8a3a42;
+/// Every colour the mouth atlas draws, so a baked face card
+/// (`face_card`) can wear them as swatches.
+pub const MOUTH_COLOURS: [u32; 6] = [LIP, IN, TNG, TTH, INK, M_LIP];
 
 /// The atlas as RGBA, sRGB, transparent where nothing is drawn, rows from
 /// the top: the mockup's `curve`, `oval` and hand-set pixels.
@@ -632,7 +636,7 @@ pub fn mouth_atlas() -> Vec<[u8; 4]> {
     oval(&mut put, Mouth::OpenO, 12.0, 6.0, 2.8, 3.0, false, true);
     for x in 7..=16 {
         put(Mouth::M, x, 5, LIP);
-        put(Mouth::M, x, 6, 0x8a3a42);
+        put(Mouth::M, x, 6, M_LIP);
     }
     curve(&mut put, Mouth::Happy, 3, 20, 9.0, 2.0, 3, INK);
     curve(&mut put, Mouth::Closed, 4, 19, 3.0, 7.0, 2, INK);

@@ -42,6 +42,11 @@ pub struct TrackerCheck(pub usize);
 #[derive(Component)]
 pub struct TrackerText(pub usize);
 
+/// The line under an objective that says where to go (`job-waypoints`
+/// design 8): dim and indented under its row.
+#[derive(Component)]
+pub struct TrackerHint(pub usize);
+
 /// The most objectives a mission has (the shipped tree's most is three).
 const TRACKER_ROWS: usize = 4;
 /// An icon in the tracker, UI pixels.
@@ -98,7 +103,14 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::FlexStart,
                 row_gap: px(3),
-                padding: UiRect::axes(px(10), px(8)),
+                // The frame's bottom edge is thicker than its top, so the
+                // last line (often the dim hint) needs more room under it.
+                padding: UiRect {
+                    left: px(10),
+                    right: px(10),
+                    top: px(8),
+                    bottom: px(13),
+                },
                 min_width: px(150),
                 ..default()
             },
@@ -148,6 +160,15 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                         TrackerText(k),
                     ));
                 });
+                tracker.spawn((
+                    KitText::new(Localized::empty(), ui_kit::TEXT_DIM).shadow(ui_kit::INK),
+                    Node {
+                        display: Display::None,
+                        margin: UiRect::left(px(22)),
+                        ..default()
+                    },
+                    TrackerHint(k),
+                ));
             }
         });
     // The tabs, over whichever of the two panels is open.
@@ -235,7 +256,19 @@ pub fn show_line(
     ),
     mut title_icon: Query<&mut ImageNode, (With<TrackerTitleIcon>, Without<TrackerIcon>)>,
     mut rows: Query<(&TrackerRow, &mut Node), Without<TrackerIcon>>,
-    mut texts: Query<(&TrackerText, &mut KitText), Without<TrackerTitle>>,
+    (mut texts, mut hints): (
+        Query<(&TrackerText, &mut KitText), (Without<TrackerTitle>, Without<TrackerHint>)>,
+        Query<
+            (&TrackerHint, &mut KitText, &mut Node),
+            (
+                Without<TrackerTitle>,
+                Without<TrackerText>,
+                Without<TrackerRow>,
+                Without<TrackerIcon>,
+                Without<TrackerPath>,
+            ),
+        >,
+    ),
     mut icons: Query<
         (&TrackerIcon, &mut ImageNode, &mut Node),
         (Without<TrackerTitleIcon>, Without<TrackerRow>),
@@ -245,11 +278,46 @@ pub fn show_line(
         Option<Res<pbd_app::town_missions::TownMissions>>,
         Option<Res<pbd_app::town_missions::TownChain>>,
     ),
-    (eco, towns): (
+    (eco, towns, view): (
         Option<Res<pbd_app::economy::Economy>>,
         Option<Res<pbd_app::towns::Towns>>,
+        Option<Res<pbd_app::compass::CompassView>>,
     ),
 ) {
+    // The nearest carried parcel's town and how far, for a deliver line
+    // (`job-waypoints` design 4).
+    let parcel_to: Option<(String, f32)> = eco
+        .as_deref()
+        .zip(towns.as_deref())
+        .zip(view.as_deref().filter(|v| v.up != Vec3::ZERO))
+        .and_then(|((eco, towns), view)| {
+            eco.jobs
+                .carried()
+                .filter_map(|j| j.to)
+                .filter_map(|to| towns.held.iter().find(|h| h.site.id == to))
+                .map(|h| {
+                    let d =
+                        h.site.direction.angle_between(view.up) * pbd_app::planet::PLANET_RADIUS;
+                    (h.site.name.clone(), d)
+                })
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+        });
+    // With no parcel carried, the nearest town and how far: where a
+    // delivery job is taken (`job-waypoints` design 5).
+    let parcel_from: Option<(String, f32)> = towns
+        .as_deref()
+        .zip(view.as_deref().filter(|v| v.up != Vec3::ZERO))
+        .and_then(|(towns, view)| {
+            towns
+                .held
+                .iter()
+                .map(|h| {
+                    let d =
+                        h.site.direction.angle_between(view.up) * pbd_app::planet::PLANET_RADIUS;
+                    (h.site.name.clone(), d)
+                })
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+        });
     // A tracked job first (playtest-fixes design 2): its mission row named
     // for the tracker, since a job's own has no title or labels.
     let job = eco
@@ -420,6 +488,59 @@ pub fn show_line(
                 },
                 c,
             );
+        }
+    }
+    // Where to go, under the line (`job-waypoints` design 8).
+    for (which, mut words, mut node) in &mut hints {
+        let hint = objective(which.0).and_then(|o| {
+            let n = counts.get(which.0).copied().unwrap_or(0);
+            if n >= o.count {
+                return None;
+            }
+            use pbd_core::missions::Kind;
+            if o.kind == Kind::Deliver
+                && let Some((town, d)) = &parcel_to
+            {
+                return Some(tr_with(
+                    "missions.parcel_to",
+                    &[
+                        ("town", town),
+                        ("distance", &pbd_app::compass::distance_text(*d)),
+                    ],
+                ));
+            }
+            if matches!(
+                o.kind,
+                Kind::Deliver
+                    | Kind::Job
+                    | Kind::Escort
+                    | Kind::Repair
+                    | Kind::Light
+                    | Kind::Goodwill
+            ) && let Some((town, d)) = &parcel_from
+            {
+                return Some(tr_with(
+                    "missions.parcel_from",
+                    &[
+                        ("town", town),
+                        ("distance", &pbd_app::compass::distance_text(*d)),
+                    ],
+                ));
+            }
+            None
+        });
+        let display = if hint.is_some() {
+            Display::Flex
+        } else {
+            Display::None
+        };
+        if node.display != display {
+            node.display = display;
+        }
+        if let Some(hint) = hint
+            && words.text != hint
+        {
+            words.text = hint;
         }
     }
     for (which, mut image) in &mut checks {
