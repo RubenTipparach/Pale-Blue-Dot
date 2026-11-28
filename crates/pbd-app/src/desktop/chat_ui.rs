@@ -10,7 +10,7 @@ use pbd_app::net_play::{NetPlay, Others};
 use pbd_app::saves::WorldSave;
 use pbd_app::ui_kit;
 use pbd_core::locale::tr_with;
-use pbd_core::net::protocol::ToServer;
+use pbd_core::net::protocol::{ToClient, ToServer};
 
 /// How long a line stays up after it is heard, s.
 pub const SHOWN_S: f64 = 12.0;
@@ -73,7 +73,10 @@ pub fn spawn(mut commands: Commands) {
             for i in 0..pbd_app::net_play::CHAT_KEPT {
                 log.spawn((
                     super::menu::body(String::new(), 9.0, ui_kit::TEXT),
-                    TextShadow::default(),
+                    TextShadow {
+                        offset: Vec2::splat(1.0),
+                        color: ui_kit::INK,
+                    },
                     ChatShown(i),
                     Node {
                         display: Display::None,
@@ -83,7 +86,10 @@ pub fn spawn(mut commands: Commands) {
             }
             log.spawn((
                 super::menu::body(String::new(), 9.0, ui_kit::TITLE),
-                TextShadow::default(),
+                TextShadow {
+                    offset: Vec2::splat(1.0),
+                    color: ui_kit::INK,
+                },
                 ChatTyping,
                 Node {
                     display: Display::None,
@@ -104,7 +110,10 @@ pub fn input(
     mut line: ResMut<ChatLine>,
     net: Option<Res<NetPlay>>,
     mut save: ResMut<WorldSave>,
+    mut others: ResMut<Others>,
+    time: Res<Time>,
 ) {
+    let now = time.elapsed_secs_f64();
     let enter = keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::NumpadEnter);
     match *screen {
         Screen::Playing if enter && net.is_some() => {
@@ -127,7 +136,13 @@ pub fn input(
                 if !text.trim().is_empty() {
                     match net.as_deref() {
                         Some(NetPlay::Host { .. }) => {
-                            save.bypass_change_detection().serve_chat(&text)
+                            // No server yet: nobody else is on, and the
+                            // host's own line is heard here at once.
+                            if !save.bypass_change_detection().serve_chat(&text)
+                                && let Some(text) = pbd_server::clean_chat(&text)
+                            {
+                                others.hear(now, &ToClient::Chat { from: 0, text });
+                            }
                         }
                         Some(NetPlay::Joined { client, .. }) => {
                             client.send(&ToServer::Chat { text })

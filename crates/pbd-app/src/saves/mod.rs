@@ -849,10 +849,15 @@ impl WorldSave {
     }
 
     /// The host's own chat line (`multiplayer` design 31), through the
-    /// server like anyone's.
-    pub fn serve_chat(&mut self, text: &str) {
-        if let Some(server) = self.local.as_mut() {
-            server.chat(0, text);
+    /// server like anyone's. `false` if the server is not made yet (nothing
+    /// has been asked of it), so nobody else is on to hear it.
+    pub fn serve_chat(&mut self, text: &str) -> bool {
+        match self.local.as_mut() {
+            Some(server) => {
+                server.chat(0, text);
+                true
+            }
+            None => false,
         }
     }
 
