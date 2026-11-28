@@ -2714,8 +2714,10 @@ mod tests {
         app.update();
         app.update();
         let world = app.world_mut();
-        assert_eq!(world.query::<&InputTabButton>().iter(world).count(), 5);
-        assert_eq!(world.query::<&InputList>().iter(world).count(), 5);
+        // A sub-tab and a list for each of `Tab::ALL`.
+        let tabs = controls::Tab::ALL.len();
+        assert_eq!(world.query::<&InputTabButton>().iter(world).count(), tabs);
+        assert_eq!(world.query::<&InputList>().iter(world).count(), tabs);
         let caps = world.query::<&RebindCap>().iter(world).count();
         assert_eq!(caps, controls::slots().count());
         let also = |world: &mut World| {
