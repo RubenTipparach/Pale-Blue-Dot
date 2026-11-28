@@ -222,7 +222,7 @@ section.tabpanel,.tabpanel section{padding-block:12px 8px}
 </header>
 
 <nav class="tabs wrap" role="tablist" aria-label="Parts of the mockup">
-  <button role="tab" data-tab="system">Orbit view</button><button role="tab" data-tab="body">Selected body</button><button role="tab" data-tab="surface">Surface</button><button role="tab" data-tab="starmap">Star map</button><button role="tab" data-tab="tallow">Tallow</button><button role="tab" data-tab="gemel">Gemel</button><button role="tab" data-tab="tenworlds">Tenebris and Sequoia</button><button role="tab" data-tab="descent">Gas giants</button><button role="tab" data-tab="bodies">The deck</button><button role="tab" data-tab="ladder">The ladder</button><button role="tab" data-tab="notes">Lighting and art</button><button role="tab" data-tab="decisions">Decisions</button>
+  <button role="tab" data-tab="system">Orbit view</button><button role="tab" data-tab="body">Selected body</button><button role="tab" data-tab="surface">Surface</button><button role="tab" data-tab="starmap">Star map</button><button role="tab" data-tab="tallow">Tallow</button><button role="tab" data-tab="gemel">Gemel</button><button role="tab" data-tab="chloe">Chloe</button><button role="tab" data-tab="tenworlds">Tenebris and Sequoia</button><button role="tab" data-tab="descent">Gas giants</button><button role="tab" data-tab="bodies">The deck</button><button role="tab" data-tab="ladder">The ladder</button><button role="tab" data-tab="notes">Lighting and art</button><button role="tab" data-tab="decisions">Decisions</button>
 </nav>
 
 <div id="tab-system" class="tabpanel" role="tabpanel">
@@ -485,6 +485,33 @@ section.tabpanel,.tabpanel section{padding-block:12px 8px}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<div id="tab-chloe" class="tabpanel" role="tabpanel" hidden>
+<section>
+  <div class="wrap">
+    <div class="phead"><div><div class="eyebrow">A gas giant and its moons &middot; new</div><h2>The Chloe System</h2></div><button class="btn" id="chInfoBtn" aria-haspopup="dialog">&#9432; About</button></div>
+    <div class="svgrid">
+      <div class="orbit" id="chHost" data-fit style="position:relative;touch-action:none">
+        <div id="chLabels" style="position:absolute;inset:0;pointer-events:none"></div>
+        <div class="ohud"><span class="day" id="chDay">Day 0</span><button class="btn chspd" data-s="0">Pause</button><button class="btn chspd" data-s="0.25" aria-pressed="true">&frac14; day/s</button><button class="btn chspd" data-s="2">2 days/s</button><button class="btn" id="chAll">Whole system</button></div>
+      </div>
+      <div class="facts svinfo" id="chFacts" data-fit="max"></div>
+    </div>
+  </div>
+</section>
+<dialog id="chDlg" style="max-width:min(560px,92vw);background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:18px 20px">
+  <button class="btn" id="chDlgX" style="float:right" aria-label="Close">&#10005;</button>
+  <h3 style="margin-top:0">The Chloe System</h3>
+  <p>The owner, 2026-11-27: &ldquo;Chloe - a blue gas giant, a multi system with some moons Walter, Boota, and Catsby. walter and boota are pluto like planets, ice surface thin atmos phere with some slight red dirt exposed. Catsby as a hazy green planet inspired by titan with methane lakes&rdquo;.</p>
+  <ul>
+    <li><b>Chloe</b>: a blue giant of pale and deep bands with a dark storm. No landing (star-systems design 6); worked from airships at the top of its cloud decks.</li>
+    <li><b>Walter</b> and <b>Boota</b>: Pluto-like. Nitrogen ice plains and ridges, a thin blue haze at the limb, and red-brown dirt showing through in patches. Boota is the smaller and redder.</li>
+    <li><b>Catsby</b>: after Titan. A thick green-gold haze hides the ground; <i>Under the haze</i> shows the dark methane lakes and seas toward its poles.</li>
+  </ul>
+  <p>Sizes are proposed on the gold-standard ladder (radius = 300 m &times; 2<sup>L&minus;7</sup>): Walter 600 m, Boota 300 m, Catsby 1,200 m. Orbits are proposed, and the view is not to scale. Which star Chloe orbits is still open.</p>
+  <p>Change: <code>star-systems</code>, &ldquo;Chloe and its moons&rdquo;. Drag to turn, scroll to zoom, click a body to look at it.</p>
+</dialog>
+</div>
+
 <script>
 "use strict";
 // =====================================================================
@@ -495,7 +522,7 @@ section.tabpanel,.tabpanel section{padding-block:12px 8px}
 // tab's renderer is made the first time the tab opens, and the one frame
 // loop runs only while a 3D tab is showing, drawing only that tab's view.
 // =====================================================================
-const TABS = ["system", "body", "surface", "starmap", "tallow", "gemel", "tenworlds", "descent", "bodies", "ladder", "notes", "decisions"];
+const TABS = ["system", "body", "surface", "starmap", "tallow", "gemel", "chloe", "tenworlds", "descent", "bodies", "ladder", "notes", "decisions"];
 const TAB_ALIAS = { orbit: "system", inspect: "body", vig: "surface", night: "notes", art: "notes", stars: "starmap", "tenebris-worlds": "tenworlds", sequoia: "tenworlds", giants: "descent" };
 const TAB_HOOKS = {};   // tab -> { show(), hide() }
 const tabOf = h => { h = String(h || "").replace(/^#/, ""); return TABS.includes(h) ? h : TAB_ALIAS[h] || null; };
@@ -2516,4 +2543,148 @@ function hudLine(b) {
   const el = document.getElementById("vDbg"); if (!el) return;
   el.textContent = `underfoot L${b.L}, column | ${b.name} | ${V ? V.cells.size : 0} columns`;
 }
+</script>
+<script>
+"use strict";
+// The Chloe system (owner, 2026-11-27): its own tab, renderer and loop,
+// made the first time the tab opens and stopped while it is hidden.
+(() => {
+  const CH = {
+    chloe:  { name: "Chloe", kind: "Gas giant, blue", air: "Hydrogen and helium, blue with methane",
+              one: "A blue giant of pale and deep bands, with a dark storm in its south.", res: ["helium-3", "methane"],
+              doing: ["No landing: skim its cloud decks from an airship", "Helium-3 for fusion pellets"], dR: 3.2 },
+    walter: { name: "Walter", kind: "Moon of Chloe, Pluto-like", parent: "chloe", a: 9, T: 6, R: 600, L: 8, g: 0.12, air: "Thin nitrogen, a faint blue haze",
+              one: "Nitrogen ice plains and ridges, red dirt showing through in patches.", res: ["ice", "regolith"],
+              doing: ["Cut ice; dig the red dirt under it", "Long jumps in low gravity"], dR: 0.55, red: 0.16 },
+    boota:  { name: "Boota", kind: "Moon of Chloe, Pluto-like", parent: "chloe", a: 13, T: 11, R: 300, L: 7, g: 0.06, air: "Thinner still, a faint blue haze",
+              one: "Smaller and redder than Walter: more dirt bared through cracked ice.", res: ["ice", "regolith"],
+              doing: ["Mine red dirt in the cracks", "A jump clears a house"], dR: 0.42, red: 0.3 },
+    catsby: { name: "Catsby", kind: "Moon of Chloe, Titan-like", parent: "chloe", a: 18, T: 18, R: 1200, L: 9, g: 0.14, air: "Thick nitrogen, green-gold methane haze",
+              one: "A hazy green moon with methane lakes and seas toward its poles.", res: ["methane", "ice"],
+              doing: ["Fly low under the haze: wings work in thick air", "Draw methane from the lakes", "Slow, heavy methane rain"], dR: 0.8 },
+  };
+  const ORDER = ["chloe", "walter", "boota", "catsby"];
+  const host = document.getElementById("chHost"), facts = document.getElementById("chFacts"), labels = document.getElementById("chLabels");
+  const dlg = document.getElementById("chDlg");
+  document.getElementById("chInfoBtn").onclick = () => dlg.showModal();
+  document.getElementById("chDlgX").onclick = () => dlg.close();
+  dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); });
+
+  // Value noise for the canvas textures, wrapping in u.
+  const hash = (x, y, s) => { let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(s + 1, 1442695041); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967295; };
+  const sm = t => t * t * (3 - 2 * t);
+  const mix = (a, b, t) => a + (b - a) * t;
+  function vnoise(x, y, s, wrap) {
+    const xi = Math.floor(x), yi = Math.floor(y), fx = sm(x - xi), fy = sm(y - yi), w = k => ((k % wrap) + wrap) % wrap;
+    const a = hash(w(xi), yi, s), b = hash(w(xi + 1), yi, s), c = hash(w(xi), yi + 1, s), d = hash(w(xi + 1), yi + 1, s);
+    return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+  }
+  function fbm(x, y, s, wrap, oct = 5) { let v = 0, amp = 0.5, f = 1; for (let i = 0; i < oct; i++) { v += amp * vnoise(x * f, y * f, s + i, wrap * f); amp *= 0.5; f *= 2; } return v; }
+  function canvasTex(w, h, px) {
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const g = c.getContext("2d"), im = g.createImageData(w, h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const [r, gg, b] = px(x / w, y / h), i = (y * w + x) * 4; im.data[i] = r; im.data[i + 1] = gg; im.data[i + 2] = b; im.data[i + 3] = 255; }
+    g.putImageData(im, 0, 0);
+    const t = new THREE.CanvasTexture(c); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; return t;
+  }
+  const giantTex = () => canvasTex(256, 128, (u, v) => {
+    const warp = (fbm(u * 8, v * 6, 3, 8) - 0.5) * 0.08;
+    const band = Math.max(0, Math.min(1, 0.5 + 0.3 * Math.sin((v + warp) * 31) + 0.2 * Math.sin((v + warp) * 11)));
+    let r = mix(28, 150, band), g = mix(78, 208, band), b = mix(165, 242, band);
+    const du = Math.min(Math.abs(u - 0.62), 1 - Math.abs(u - 0.62)), d = Math.hypot(du * 2.4, (v - 0.68) * 4.5);
+    if (d < 0.12) { const k = (1 - d / 0.12) * 0.8; r = mix(r, 16, k); g = mix(g, 38, k); b = mix(b, 105, k); }
+    return [r, g, b];
+  });
+  const plutoTex = (seed, red) => canvasTex(128, 64, (u, v) => {
+    const n = fbm(u * 6, v * 3, seed, 6), ridge = 1 - Math.abs(fbm(u * 10, v * 5, seed + 9, 10) * 2 - 1);
+    const ice = 0.8 + 0.14 * ridge - 0.08 * Math.abs(v - 0.5) * 2;
+    let r = 222 * ice, g = 228 * ice, b = 238 * ice;
+    const dirt = sm(Math.max(0, Math.min(1, (red + 0.32 - n) * 6)));
+    return [mix(r, 150, dirt), mix(g, 72, dirt), mix(b, 52, dirt)];
+  });
+  const catsbyGround = () => canvasTex(128, 64, (u, v) => {
+    const n = fbm(u * 6, v * 3, 41, 6), lat = Math.abs(v - 0.5) * 2;
+    if (n < 0.26 + 0.4 * lat * lat) return [22, 30, 34];
+    return [mix(120, 170, n), mix(95, 135, n), mix(60, 80, n)];
+  });
+
+  let made = false, running = false, raf = 0, last = 0, day = 0, speed = 0.25;
+  let renderer, scene, cam, sel = "chloe", yaw = 0.6, pitch = 0.35, dist = 34, wantDist = 34, catsbyHaze, hazeOn = true;
+  const look = new THREE.Vector3(), M = {}, pick = [], ray = new THREE.Raycaster();
+  const shell = (parent, r, color, op) => { const h = new THREE.Mesh(new THREE.SphereGeometry(r, 48, 24), new THREE.MeshLambertMaterial({ color, transparent: true, opacity: op, depthWrite: false })); parent.add(h); return h; };
+
+  function make() {
+    made = true;
+    renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    const el = renderer.domElement;
+    el.setAttribute("aria-label", "Three-dimensional view of the Chloe system. Drag to turn, scroll to zoom, click a body.");
+    el.style.cssText = "display:block;width:100%;height:100%"; host.prepend(el);
+    scene = new THREE.Scene(); scene.background = new THREE.Color(0x05060a);
+    cam = new THREE.PerspectiveCamera(40, 1, 0.05, 500);
+    scene.add(new THREE.AmbientLight(0x404858, 0.35));
+    const sun = new THREE.DirectionalLight(0xfff2dc, 1.15); sun.position.set(-40, 8, 20); scene.add(sun);
+    const sp = []; for (let i = 0; i < 900; i++) { const v = new THREE.Vector3(hash(i, 1, 5) - .5, hash(i, 2, 5) - .5, hash(i, 3, 5) - .5).normalize().multiplyScalar(200); sp.push(v.x, v.y, v.z); }
+    const sg = new THREE.BufferGeometry(); sg.setAttribute("position", new THREE.Float32BufferAttribute(sp, 3));
+    scene.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xaab4c8, size: 0.6 })));
+    for (const id of ORDER) {
+      const b = CH[id];
+      const tex = id === "chloe" ? giantTex() : id === "catsby" ? catsbyGround() : plutoTex(id === "walter" ? 11 : 23, b.red);
+      const m = new THREE.Mesh(new THREE.SphereGeometry(b.dR, 64, 32), new THREE.MeshLambertMaterial({ map: tex }));
+      m.userData.id = id; scene.add(m); M[id] = m; pick.push(m);
+      if (id === "chloe") { m.rotation.z = 0.12; shell(m, b.dR * 1.03, 0x9fd8ff, 0.16); }
+      if (id === "walter" || id === "boota") shell(m, b.dR * 1.04, 0x8fb4ff, 0.12);
+      if (id === "catsby") { catsbyHaze = shell(m, b.dR * 1.06, 0x9aab48, 0.93); shell(m, b.dR * 1.12, 0xb8c86a, 0.22); }
+      if (b.parent) {
+        const pts = []; for (let i = 0; i <= 128; i++) { const a = i / 128 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * b.a, 0, Math.sin(a) * b.a)); }
+        scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0x3a4660 })));
+        const lab = document.createElement("div"); lab.textContent = b.name;
+        lab.style.cssText = "position:absolute;font:600 12px var(--body);color:var(--muted);transform:translate(-50%,-170%);white-space:nowrap";
+        labels.appendChild(lab); b.lab = lab;
+      }
+    }
+    let drag = null, moved = 0;
+    el.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY }; moved = 0; el.setPointerCapture(e.pointerId); });
+    el.addEventListener("pointermove", e => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; moved += Math.abs(dx) + Math.abs(dy); yaw -= dx * 0.006; pitch = Math.max(-1.3, Math.min(1.3, pitch + dy * 0.006)); drag = { x: e.clientX, y: e.clientY }; });
+    el.addEventListener("pointerup", e => {
+      if (drag && moved < 5) { const r = el.getBoundingClientRect(); ray.setFromCamera({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1 }, cam); const hit = ray.intersectObjects(pick, false)[0]; if (hit) choose(hit.object.userData.id); }
+      drag = null;
+    });
+    el.addEventListener("wheel", e => { e.preventDefault(); wantDist = Math.max(CH[sel].dR * 2, Math.min(80, wantDist * Math.exp(e.deltaY * 0.001))); }, { passive: false });
+    document.querySelectorAll(".chspd").forEach(btn => btn.onclick = () => { speed = +btn.dataset.s; document.querySelectorAll(".chspd").forEach(o => o.setAttribute("aria-pressed", o === btn)); });
+    document.getElementById("chAll").onclick = () => choose("chloe", 34);
+    choose("chloe", 34);
+  }
+  function choose(id, d) {
+    sel = id; const b = CH[id]; wantDist = d || (id === "chloe" ? 14 : b.dR * 5);
+    const row = (k, v) => v == null ? "" : `<div class="row"><span>${k}</span> <b>${v}</b></div>`;
+    facts.innerHTML = `<h3 style="margin:0 0 4px">${b.name}</h3><div class="muted" style="margin-bottom:8px">${b.kind}</div><p style="margin:0 0 10px">${b.one}</p>`
+      + row("Radius (proposed)", b.R ? b.R.toLocaleString() + " m, level " + b.L : null) + row("Gravity", b.g ? b.g + " g" : null) + row("Air", b.air)
+      + row("Orbit (proposed)", b.a ? b.a * 5 + " km from Chloe" : null)
+      + `<div style="margin-top:10px"><b>Resources</b><div class="muted">${b.res.join(", ")}</div></div>`
+      + `<div style="margin-top:8px"><b>Doing there</b><ul style="margin:4px 0 0 18px;padding:0">${b.doing.map(x => `<li>${x}</li>`).join("")}</ul></div>`
+      + `<div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px">${ORDER.map(k => `<button class="btn" data-ch="${k}" aria-pressed="${k === id}">${CH[k].name}</button>`).join("")}`
+      + (id === "catsby" ? `<button class="btn" id="chHaze" aria-pressed="${!hazeOn}">Under the haze</button>` : "") + `</div>`;
+    facts.querySelectorAll("[data-ch]").forEach(x => x.onclick = () => choose(x.dataset.ch));
+    const hz = document.getElementById("chHaze");
+    if (hz) hz.onclick = () => { hazeOn = !hazeOn; catsbyHaze.visible = hazeOn; hz.setAttribute("aria-pressed", !hazeOn); };
+  }
+  function frame(t) {
+    if (!running) return; raf = requestAnimationFrame(frame);
+    const dt = Math.max(0, Math.min(0.1, (t - last) / 1000)); last = t; day += dt * speed;
+    document.getElementById("chDay").textContent = "Day " + Math.floor(day);
+    M.chloe.rotation.y += dt * speed * 2.5;
+    for (const id of ORDER.slice(1)) { const b = CH[id], a = day / b.T * Math.PI * 2 + b.a; M[id].position.set(Math.cos(a) * b.a, 0, Math.sin(a) * b.a); M[id].rotation.y = -a; }
+    const w = host.clientWidth, h = host.clientHeight;
+    if (renderer.domElement.width !== Math.round(w * renderer.getPixelRatio())) { renderer.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); }
+    look.lerp(M[sel].position, 0.12); dist += (wantDist - dist) * 0.12;
+    cam.position.set(look.x + dist * Math.cos(pitch) * Math.sin(yaw), look.y + dist * Math.sin(pitch), look.z + dist * Math.cos(pitch) * Math.cos(yaw)); cam.lookAt(look);
+    renderer.render(scene, cam);
+    for (const id of ORDER.slice(1)) { const v = M[id].position.clone().project(cam), l = CH[id].lab; l.style.display = v.z < 1 ? "" : "none"; l.style.left = (v.x + 1) / 2 * w + "px"; l.style.top = (1 - v.y) / 2 * h + "px"; }
+  }
+  TAB_HOOKS.chloe = {
+    show() { if (!made) make(); if (!running) { running = true; last = performance.now(); raf = requestAnimationFrame(frame); } },
+    hide() { running = false; cancelAnimationFrame(raf); },
+  };
+  if (TAB === "chloe") TAB_HOOKS.chloe.show();
+})();
 </script>

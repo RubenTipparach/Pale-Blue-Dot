@@ -312,7 +312,7 @@ multi system with some moons Walter, Boota, and Catsby. walter and boota are
 pluto like planets, ice surface thin atmos phere with some slight red dirt
 exposed. Catsby as a hazy green planet inspired by titan with methane lakes".
 
-A note only; nothing is designed or built yet. When it is:
+Mocked up in M1's Chloe tab (https://claude.ai/artifact/886HVbdaYBJkuBBhaWX3zs#chloe, 2026-11-28); nothing is built.
 
 - **Chloe**: a blue gas giant. No landing (section 6); its moons make a
   system of their own (section 7).

@@ -132,7 +132,7 @@ Stages: **Listed** (not built), **Drafted** (published, waiting on the owner), *
 
 | Id | Mockup | Page | OpenSpec | Stage | Link |
 | --- | --- | --- | --- | --- | --- |
-| M1 | The Aubade System | `planets.html` | `star-systems` | Drafted (2026-11-12) | https://claude.ai/artifact/886HVbdaYBJkuBBhaWX3zs |
+| M1 | The Aubade System | `planets.html` | `star-systems` | Drafted (2026-11-12); Chloe tab added 2026-11-28 | https://claude.ai/artifact/886HVbdaYBJkuBBhaWX3zs |
 | M2 | Aubade Transit | `travel.html` | `interplanetary-travel`, `star-systems` (star lanes) | Drafted (2026-11-12); reworked 2026-11-14 after the owner's "you just lifted off with a vtol to another planet that makes no fucking sense": travel by M21 rockets, the lift and transit drives struck | https://claude.ai/artifact/TX9xkpGP3yCVbi1oNQW3hL |
 | M3 | Forge and Fabricator | `crafting.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/VMAfuKJKRa3oVTsqLUf6QJ |
 | M4 | Shipyard and Ship Builder | `ship-crafting.html` | none yet | Drafted (2026-11-12) | https://claude.ai/artifact/2BvFnY8FrTMSpaVhTy7mYi |
