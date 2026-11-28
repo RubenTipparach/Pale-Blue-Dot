@@ -4930,8 +4930,7 @@ fn hunt(bot: &mut Bot, species: &str, until: &Until, s: &Sight, out: &mut Intent
         .filter(|a| {
             a.wild
                 && !a.dressed
-                && s
-                    .land
+                && s.land
                     .get(a.species as usize)
                     .is_some_and(|sp| wanted.contains(&sp.id.as_str()))
         })
@@ -4979,7 +4978,10 @@ fn hunt(bot: &mut Bot, species: &str, until: &Until, s: &Sight, out: &mut Intent
     } else {
         bot.aim_at(s, out, centre);
         out.lmb = true;
-        if bot.stilled.insert(if animal.dead { "dress" } else { "hunt" }) {
+        if bot
+            .stilled
+            .insert(if animal.dead { "dress" } else { "hunt" })
+        {
             bot.want_still = true;
         }
     }

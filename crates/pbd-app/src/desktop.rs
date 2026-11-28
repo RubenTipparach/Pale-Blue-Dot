@@ -2,6 +2,7 @@ mod arrival;
 mod boat;
 mod breeding;
 mod build_mode;
+mod character_ui;
 mod compass_bar;
 mod construction;
 mod cpu_times;
@@ -1143,7 +1144,7 @@ impl Launch {
                     result.settings_tab = menu::SETTINGS_TABS
                         .iter()
                         .position(|t| t.eq_ignore_ascii_case(name))
-                        .expect("--settings-tab takes picture, weather, world, movement, input or sound")
+                        .expect("--settings-tab takes picture, weather, world, movement, input, sound, debug or character")
                         as u8;
                 }
                 "--input-tab" => {
@@ -2225,7 +2226,10 @@ pub fn run(args: &[String]) {
         (
             fruit::offer.in_set(pbd_app::interact::InteractSet::Offer),
             glow_plants::offer.in_set(pbd_app::interact::InteractSet::Offer),
-            sea_gather::offer.in_set(pbd_app::interact::InteractSet::Offer),
+            // A photograph has no walker and no sea places (`photo`).
+            sea_gather::offer
+                .in_set(pbd_app::interact::InteractSet::Offer)
+                .run_if(resource_exists::<pbd_app::fish::places::SeaAim>),
             farm::offer
                 .in_set(pbd_app::interact::InteractSet::Offer)
                 .run_if(resource_exists::<pbd_app::planet::PlanetFine>)
@@ -2318,6 +2322,17 @@ pub fn run(args: &[String]) {
         (repro::scripted_press, repro::scripted_keys).run_if(resource_exists::<CaptureState>),
     )
     .add_systems(Update, (breeding::press, breeding::paint).chain())
+    // The Character page (`player-character` design 7).
+    .add_systems(
+        Update,
+        (
+            character_ui::offer,
+            character_ui::press,
+            character_ui::show,
+            character_ui::preview,
+        )
+            .chain(),
+    )
     .add_systems(Update, (boat::press, boat::paint).chain())
     .add_systems(
         Update,

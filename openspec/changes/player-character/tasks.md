@@ -10,7 +10,7 @@
 
 ## 3. The screen
 
-- [ ] 3.1 The Character page of the Options menu in the UI kit (title and pause menu), offered once on a new world, every word from the locale file. Verify: `--capture` shots by day and at night.
+- [x] 3.1 (Built 2026-11-28: `desktop/character_ui.rs`, the CHARACTER tab of the settings screen, two columns of `<` value `>` rows and RANDOM; `character::step` in core, test `every_row_steps_through_looks_the_townsfolk_can_draw`; the preview is the player's own figure in the world, design 7; offered once on the first world entered with no look kept. Shots by day and at night in `docs/screenshots/player-character/`.) The Character page of the Options menu in the UI kit (title and pause menu), offered once on a new world, every word from the locale file. Verify: `--capture` shots by day and at night.
 
 ## 4. Seen
 

@@ -35,6 +35,12 @@ impl PlayerLook {
         }
         pbd_save::writer::replace_durably(&path, Character::of(look).to_ron().as_bytes()).is_ok()
     }
+
+    /// Whether the player has a look of their own on disk (chosen, or kept
+    /// when the page was first offered).
+    pub fn kept() -> bool {
+        path().is_file()
+    }
 }
 
 fn path() -> PathBuf {

@@ -222,6 +222,45 @@ build:
     roof_overlap: "Another roof is in the way"
     slot: "Something is already here"
     stair_cut: "A wall would cut the stair"
+character:
+  beard: Beard
+  build: Build
+  ears: Ears
+  face: Face
+  hair: Hair
+  hair_colour: Hair colour
+  hat_colour: Hat colour
+  height: Height
+  metres: "{metres} m"
+  next: ">"
+  nose: Nose
+  previous: "<"
+  random: RANDOM
+  shirt: Shirt
+  shoes: Shoes
+  skin: Skin
+  trousers: Trousers
+  value:
+    bald: Bald
+    braid: Braid
+    bun: Bun
+    button: Button
+    crop: Crop
+    full: Full
+    goatee: Goatee
+    happy: Happy
+    hat: Hat
+    long: Long
+    neutral: Calm
+    no: "No"
+    none: None
+    pear: Pear
+    round: Round
+    sleepy: Sleepy
+    stout: Stout
+    tall: Tall
+    thinking: Thinking
+    yes: "Yes"
 compass:
   dir:
     e: E
@@ -1178,6 +1217,7 @@ menu:
     menus: Menus
     music: Music
   tab:
+    character: CHARACTER
     debug: DEBUG
     input: INPUT
     movement: MOVEMENT
