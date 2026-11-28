@@ -60,7 +60,13 @@ pub struct Others {
     pub looks: BTreeMap<u32, pbd_core::townsfolk::look::Look>,
     /// When this game last sent its own pose, s.
     sent_s: f64,
+    /// The chat's last lines, oldest first (design 31): when each was heard
+    /// (this game's clock, s), who said it, and what.
+    pub chat: std::collections::VecDeque<(f64, u32, String)>,
 }
+
+/// How many chat lines are kept (design 31).
+pub const CHAT_KEPT: usize = 8;
 
 /// One other player's last two poses, newest last.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -83,6 +89,13 @@ pub struct Drawn {
 impl Others {
     /// Take a message about another player; `true` if it was one.
     pub fn hear(&mut self, now_s: f64, message: &ToClient) -> bool {
+        if let ToClient::Chat { from, text } = message {
+            self.chat.push_back((now_s, *from, text.clone()));
+            while self.chat.len() > CHAT_KEPT {
+                self.chat.pop_front();
+            }
+            return true;
+        }
         match *message {
             ToClient::Presence { player, pose } => {
                 let before = self.seen.get(&player).map(|h| h.last);

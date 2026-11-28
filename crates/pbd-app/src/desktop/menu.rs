@@ -41,6 +41,8 @@ pub enum Screen {
     /// The title's MULTIPLAYER: the hosted server and a game by its
     /// address (`multiplayer` design 28).
     Multiplayer,
+    /// The chat line, open over play (`multiplayer` design 31).
+    Chat,
     /// The field guide, opened with J.
     Guide,
     /// The pack, opened with I (`inventory-grid`).
@@ -88,7 +90,7 @@ impl Screen {
         }
         match self {
             Screen::Playing => Screen::Pause,
-            Screen::Title => Screen::Playing,
+            Screen::Title | Screen::Chat => Screen::Playing,
             Screen::Pause
             | Screen::Guide
             | Screen::Pack

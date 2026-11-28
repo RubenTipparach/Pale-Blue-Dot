@@ -1283,3 +1283,60 @@ fn a_players_look_reaches_everyone_and_a_late_joiner() {
     assert!(s.drain().is_empty());
     assert_eq!(s.player(players[0]).unwrap().look, None);
 }
+
+/// Design 31: a chat line is cleaned and sent to everyone, the speaker
+/// too; a second line sooner than `CHAT_EVERY_S` is dropped, and an empty
+/// one is never sent.
+#[test]
+fn a_chat_line_is_cleaned_and_sent_to_everyone_once_in_a_while() {
+    use crate::{CHAT_EVERY_S, CHAT_MAX_CHARS, clean_chat};
+    assert_eq!(clean_chat("  hello \t there\n"), Some("hello there".into()));
+    assert_eq!(clean_chat(" \u{7} "), None);
+    assert_eq!(
+        clean_chat(&"x".repeat(CHAT_MAX_CHARS + 50)).map(|t| t.chars().count()),
+        Some(CHAT_MAX_CHARS)
+    );
+    let (mut s, mut st) = server();
+    let players = joined(&mut s, &[1, 2], Slots::default());
+    let chats = |sent: Vec<(To, ToClient)>| -> Vec<(u32, String)> {
+        sent.into_iter()
+            .filter_map(|(_, m)| match m {
+                ToClient::Chat { from, text } => Some((from, text)),
+                _ => None,
+            })
+            .collect()
+    };
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Chat {
+            text: " hi  all ".into(),
+        },
+    );
+    let heard = chats(s.drain());
+    assert!(!heard.is_empty());
+    assert!(
+        heard
+            .iter()
+            .all(|(from, text)| *from == players[1] && text == "hi all")
+    );
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Chat {
+            text: "again".into(),
+        },
+    );
+    assert!(chats(s.drain()).is_empty(), "too soon");
+    s.tick(CHAT_EVERY_S + 0.01);
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Chat {
+            text: "again".into(),
+        },
+    );
+    assert!(!chats(s.drain()).is_empty());
+    s.handle(&mut st, players[0], ToServer::Chat { text: "   ".into() });
+    assert!(chats(s.drain()).is_empty(), "nothing to say");
+}

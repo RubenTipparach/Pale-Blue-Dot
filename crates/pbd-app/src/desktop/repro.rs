@@ -183,11 +183,24 @@ pub fn scripted_press(
     };
     let window = windows.iter().next().unwrap_or(Entity::PLACEHOLDER);
     let send = |keys: &mut MessageWriter<KeyboardInput>, key: KeyCode, down: bool| {
+        // A letter is typed as itself, so a script can type into a text
+        // box (the chat's shot, `multiplayer` design 31).
+        let name = format!("{key:?}");
+        let letter = match name.as_bytes() {
+            [b'K', b'e', b'y', c] if c.is_ascii_alphabetic() => {
+                Some((c.to_ascii_lowercase() as char).to_string())
+            }
+            _ => None,
+        };
         keys.write(KeyboardInput {
             key_code: key,
-            logical_key: bevy::input::keyboard::Key::Unidentified(
-                bevy::input::keyboard::NativeKey::Unidentified,
-            ),
+            logical_key: match letter {
+                Some(l) => bevy::input::keyboard::Key::Character(l.into()),
+                None if key == KeyCode::Space => bevy::input::keyboard::Key::Space,
+                None => bevy::input::keyboard::Key::Unidentified(
+                    bevy::input::keyboard::NativeKey::Unidentified,
+                ),
+            },
             state: if down {
                 ButtonState::Pressed
             } else {

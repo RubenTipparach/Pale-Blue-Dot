@@ -1183,6 +1183,28 @@ the dedicated server's log and a later admin page.
 reach is refused as `Cheat`, one within it is taken; with no flags set,
 nothing is checked.
 
+### 31. Chat (task 8.5, its first part; 2026-11-28)
+
+The owner listed "trade and chat" among the work left (2026-11-28). Chat
+first, because it needs no change to anyone's pack and no new rule:
+
+- **The server relays.** `ToServer::Chat` from a player is cleaned and sent
+  as `ToClient::Chat { from, text }` to everyone, the speaker included, so
+  every game shows the lines in the server's order. Cleaning: control
+  characters go, runs of spaces close up, the line is cut to
+  `CHAT_MAX_CHARS` (200), and an empty line is dropped. A player gets one
+  line per `CHAT_EVERY_S` (0.5 s); a faster line is dropped, not queued.
+  Nothing is journaled: chat is not world state (design 12).
+- **The game.** Enter opens a line at the bottom left, typed in the game's
+  own box. Enter sends it and Escape closes it; while it is open, the
+  world's keys stand down as for any menu. The last 8 lines are shown above
+  it, each for 12 s, and all of them while the line is open. A line reads
+  "Player 3: hello", and the host's own lines are player 0's. The words
+  around the text come from the locale file; what a player typed is shown
+  as typed.
+- **Single player** has no chat: the line does not open without a host or
+  a join.
+
 ## Risks / Trade-offs
 
 - **Every stateful rule moves to the server path.** This is most of the work,

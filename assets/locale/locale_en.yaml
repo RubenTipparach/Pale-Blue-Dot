@@ -261,6 +261,9 @@ character:
     tall: Tall
     thinking: Thinking
     yes: "Yes"
+chat:
+  line: "Player {player}: {text}"
+  typing: "> {text}_"
 compass:
   dir:
     e: E

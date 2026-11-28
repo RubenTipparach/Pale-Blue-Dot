@@ -43,6 +43,25 @@ use std::collections::BTreeMap;
 pub const TICK_S: f64 = 1.0 / 20.0;
 /// How often the clock is sent, s (design 15.8).
 pub const CLOCK_EVERY_S: f64 = 5.0;
+/// The longest chat line, in characters (design 31).
+pub const CHAT_MAX_CHARS: usize = 200;
+/// The least time between one player's chat lines, s (design 31).
+pub const CHAT_EVERY_S: f64 = 0.5;
+
+/// A chat line as the server passes it on (design 31): control characters
+/// gone, runs of white space closed to one space, trimmed, cut to
+/// [`CHAT_MAX_CHARS`]. `None` if nothing is left.
+pub fn clean_chat(text: &str) -> Option<String> {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let joined = words.join(" ");
+    let line: String = joined
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(CHAT_MAX_CHARS)
+        .collect();
+    let line = line.trim().to_string();
+    (!line.is_empty()).then_some(line)
+}
 /// How often one region's digest is sent to every player, s (design 29).
 pub const DIGEST_EVERY_S: f64 = 2.0;
 /// Players at most (design 14.2).
@@ -297,6 +316,8 @@ pub struct Player {
     pub pose_s: f64,
     /// Their own character (`player-character` 4.3), once sent.
     pub look: Option<pbd_core::townsfolk::look::Look>,
+    /// The server's clock at their last chat line (design 31).
+    pub chat_s: Option<f64>,
 }
 
 /// A failed cheat check (design 30): what was seen, and the limit.
@@ -541,6 +562,7 @@ impl Server {
                 pose: None,
                 pose_s: 0.0,
                 look: None,
+                chat_s: None,
             },
         );
         self.send(
@@ -661,6 +683,25 @@ impl Server {
         }
     }
 
+    /// A chat line from `player` (design 31): cleaned and passed to
+    /// everyone, the speaker too, in the server's order; one a player sends
+    /// sooner than [`CHAT_EVERY_S`] after their last is dropped. Not
+    /// journaled.
+    pub fn chat(&mut self, player: u32, text: &str) {
+        let now_s = self.clock_s;
+        let Some(p) = self.players.get_mut(&player) else {
+            return;
+        };
+        if p.chat_s.is_some_and(|last| now_s - last < CHAT_EVERY_S) {
+            return;
+        }
+        let Some(text) = clean_chat(text) else {
+            return;
+        };
+        p.chat_s = Some(now_s);
+        self.broadcast(ToClient::Chat { from: player, text });
+    }
+
     /// One message from a joined player.
     pub fn handle(&mut self, store: &mut impl Store, player: u32, message: ToServer) {
         if !self.players.contains_key(&player) {
@@ -690,6 +731,7 @@ impl Server {
             // tasks (6.3, 8.1, 8.5).
             ToServer::Presence { pose } => self.presence(player, pose),
             ToServer::Look { look } => self.look(player, look),
+            ToServer::Chat { text } => self.chat(player, &text),
             _ => {}
         }
     }
