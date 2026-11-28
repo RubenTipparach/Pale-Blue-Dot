@@ -31,18 +31,152 @@ pub struct SpanClock;
 
 struct Entered(Instant);
 
+/// A system span's `name` field (`play-slowdown`, the `system-times`
+/// instrument).
+#[cfg(feature = "system-times")]
+struct SysName(String);
+
+#[cfg(feature = "system-times")]
+impl bevy::log::tracing::field::Visit for SysName {
+    fn record_debug(
+        &mut self,
+        field: &bevy::log::tracing::field::Field,
+        value: &dyn std::fmt::Debug,
+    ) {
+        if field.name() == "name" {
+            self.0 = format!("{value:?}");
+        }
+    }
+    fn record_str(&mut self, field: &bevy::log::tracing::field::Field, value: &str) {
+        if field.name() == "name" {
+            self.0 = value.to_string();
+        }
+    }
+}
+
+/// The `system-times` instrument (`play-slowdown`): every system's time,
+/// summed by its span, logged every 30 s as `SYSTEM_TIMES` with the
+/// entity count. Built only with the feature.
+#[cfg(feature = "system-times")]
+pub mod system_times {
+    use bevy::prelude::*;
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+    use std::time::Instant;
+
+    /// Microseconds and calls by system name since the last report.
+    /// Microseconds, calls and the slowest call's microseconds.
+    type Times = HashMap<String, (u64, u64, u64)>;
+
+    pub static TIMES: LazyLock<Mutex<Times>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+    /// Mesh assets modified, and those of them over 64 K vertices, since
+    /// the last report.
+    pub static MESH_CHANGES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    pub static BIG_CHANGES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+    pub fn count_mesh_changes(
+        mut events: MessageReader<AssetEvent<Mesh>>,
+        meshes: Res<Assets<Mesh>>,
+    ) {
+        for e in events.read() {
+            if let AssetEvent::Modified { id } = e {
+                MESH_CHANGES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if meshes.get(*id).is_some_and(|m| m.count_vertices() > 65_536) {
+                    BIG_CHANGES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+        }
+    }
+
+    pub fn report(world: &mut World, mut last: Local<Option<Instant>>, mut frames: Local<u64>) {
+        *frames += 1;
+        let now = Instant::now();
+        let since = *last.get_or_insert(now);
+        if now.duration_since(since).as_secs_f32() < 30.0 {
+            return;
+        }
+        *last = Some(now);
+        let n = (*frames).max(1) as f64;
+        *frames = 0;
+        let taken = TIMES
+            .lock()
+            .map(|mut m| std::mem::take(&mut *m))
+            .unwrap_or_default();
+        let mut rows: Vec<_> = taken.into_iter().collect();
+        rows.sort_by_key(|r| std::cmp::Reverse(r.1.0));
+        let top: Vec<String> = rows
+            .iter()
+            .filter(|(k, _)| !k.ends_with("run_main_gated"))
+            .take(40)
+            .map(|(k, (us, calls, _))| {
+                format!(
+                    "{k}={:.3}ms/{:.1}x",
+                    *us as f64 / 1000.0 / n,
+                    *calls as f64 / n
+                )
+            })
+            .collect();
+        let meshes = world.get_resource::<Assets<Mesh>>().map_or(0, |a| a.len());
+        let mats = world
+            .get_resource::<Assets<StandardMaterial>>()
+            .map_or(0, |a| a.len());
+        let images = world.get_resource::<Assets<Image>>().map_or(0, |a| a.len());
+        let live = world.query::<Entity>().iter(world).count();
+        let changed = MESH_CHANGES.swap(0, std::sync::atomic::Ordering::Relaxed) as f64 / n;
+        let biggest = BIG_CHANGES.swap(0, std::sync::atomic::Ordering::Relaxed) as f64 / n;
+        let mut worst: Vec<_> = rows.iter().filter(|(_, v)| v.2 > 50_000).collect();
+        worst.sort_by_key(|r| std::cmp::Reverse(r.1.2));
+        let worst: Vec<String> = worst
+            .iter()
+            .take(12)
+            .map(|(k, v)| format!("{k}={:.0}", v.2 as f64 / 1000.0))
+            .collect();
+        info!("SYSTEM_WORST {}", worst.join(" "));
+        info!(
+            "SYSTEM_TIMES frames={} entities={} meshes={} changed={changed:.1}/frame big={biggest:.1}/frame materials={} images={} {}",
+            n,
+            live,
+            meshes,
+            mats,
+            images,
+            top.join(" ")
+        );
+    }
+}
+
 impl<S> bevy::log::tracing_subscriber::Layer<S> for SpanClock
 where
     S: bevy::log::tracing::Subscriber
         + for<'a> bevy::log::tracing_subscriber::registry::LookupSpan<'a>,
 {
+    #[cfg(feature = "system-times")]
+    fn on_new_span(
+        &self,
+        attrs: &bevy::log::tracing::span::Attributes<'_>,
+        id: &bevy::log::tracing::span::Id,
+        ctx: bevy::log::tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        if attrs.metadata().name() != "system" {
+            return;
+        }
+        let mut name = SysName(String::new());
+        attrs.record(&mut name);
+        if let Some(span) = ctx.span(id) {
+            span.extensions_mut().replace(name);
+        }
+    }
+
     fn on_enter(
         &self,
         id: &bevy::log::tracing::span::Id,
         ctx: bevy::log::tracing_subscriber::layer::Context<'_, S>,
     ) {
         if let Some(span) = ctx.span(id)
-            && matches!(span.name(), "submit_graph_commands" | "present_frames")
+            && matches!(
+                span.name(),
+                "submit_graph_commands" | "present_frames" | "system"
+            )
         {
             span.extensions_mut().replace(Entered(Instant::now()));
         }
@@ -56,6 +190,22 @@ where
         let Some(span) = ctx.span(id) else {
             return;
         };
+        #[cfg(feature = "system-times")]
+        if span.name() == "system" {
+            let mut ext = span.extensions_mut();
+            if let Some(Entered(at)) = ext.remove::<Entered>()
+                && let Some(SysName(name)) = ext.get_mut::<SysName>()
+            {
+                let us = at.elapsed().as_micros() as u64;
+                if let Ok(mut map) = system_times::TIMES.lock() {
+                    let e = map.entry(name.clone()).or_default();
+                    e.0 += us;
+                    e.1 += 1;
+                    e.2 = e.2.max(us);
+                }
+            }
+            return;
+        }
         let counter = match span.name() {
             "submit_graph_commands" => &SUBMIT_US,
             "present_frames" => &PRESENT_US,
@@ -118,6 +268,11 @@ struct RenderClock {
 pub fn add(app: &mut App) {
     app.init_resource::<CpuTimes>()
         .add_systems(First, main_start);
+    #[cfg(feature = "system-times")]
+    app.add_systems(
+        Last,
+        (system_times::count_mesh_changes, system_times::report).chain(),
+    );
     if let Some(render) = app.get_sub_app_mut(RenderApp) {
         render.init_resource::<RenderClock>().add_systems(
             Render,

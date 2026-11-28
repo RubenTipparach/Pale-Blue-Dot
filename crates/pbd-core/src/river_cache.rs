@@ -66,56 +66,91 @@ pub fn thread_lookups() -> u64 {
 /// two threads rarely wait on one lock.
 /// Read-write locks: once warm nearly every access is a read, and reads on
 /// one shard from the job's threads and the main thread go side by side.
+///
+/// Each shard keeps two generations (`play-slowdown`): a value goes into
+/// the young one, and when that reaches the shard's half of the cap the old
+/// one is dropped and the young one becomes old. A read looks in both. Past
+/// the cap the memo forgets its oldest values instead of keeping nothing
+/// new: before, a memo filled by the first rivers played near missed on
+/// every value elsewhere for the rest of the save's life (12 % of lookups
+/// hit on the owner's World 19, 2026-11-28).
 pub struct Memo<Key, V> {
-    shards: Vec<RwLock<FxMap<Key, V>>>,
+    shards: Vec<RwLock<Gens<Key, V>>>,
     len: AtomicUsize,
-    /// The most values held: past it nothing more is kept, and a miss is
-    /// worked out (`river-cache` design 15: the point memo reached 16 M
-    /// values and 342 MB).
+    /// The most values held, about: each shard rolls its generations over
+    /// at its share of half of it (`river-cache` design 15: the point memo
+    /// reached 16 M values and 342 MB).
     cap: usize,
+}
+
+struct Gens<Key, V> {
+    young: FxMap<Key, V>,
+    old: FxMap<Key, V>,
+}
+
+impl<Key, V> Default for Gens<Key, V> {
+    fn default() -> Self {
+        Self {
+            young: FxMap::default(),
+            old: FxMap::default(),
+        }
+    }
 }
 
 impl<Key: Eq + Hash + Copy, V: Clone> Memo<Key, V> {
     fn new(cap: usize) -> Self {
         Self {
-            shards: (0..SHARDS).map(|_| RwLock::new(FxMap::default())).collect(),
+            shards: (0..SHARDS).map(|_| RwLock::new(Gens::default())).collect(),
             len: AtomicUsize::new(0),
             cap,
         }
     }
 
-    fn shard(&self, key: &Key) -> &RwLock<FxMap<Key, V>> {
+    fn shard(&self, key: &Key) -> &RwLock<Gens<Key, V>> {
         let mut h = Fx::default();
         key.hash(&mut h);
         &self.shards[(h.finish() >> 58) as usize % SHARDS]
     }
 
+    /// Values a shard's young generation holds before it rolls over.
+    fn young_cap(&self) -> usize {
+        (self.cap / SHARDS / 2).max(1)
+    }
+
     pub fn get(&self, key: &Key) -> Option<V> {
         LOOKUPS.with(|n| n.set(n.get() + 1));
-        self.shard(key).read().ok()?.get(key).cloned()
+        let shard = self.shard(key).read().ok()?;
+        shard.young.get(key).or_else(|| shard.old.get(key)).cloned()
     }
 
     pub fn put(&self, key: Key, value: V) {
-        if self.len() >= self.cap {
-            return;
-        }
         // Only if the shard is free this instant: a memo is a cache, and a
         // value not kept is worked out again on the next ask. A blocking
         // write waited behind the file's save reading the shard, and readers
         // queued behind the waiting write (2026-11-23: the main thread held
         // 1.7 s, a save took 55 s).
-        if let Ok(mut shard) = self.shard(&key).try_write()
-            && shard.insert(key, value).is_none()
-        {
+        let Ok(mut shard) = self.shard(&key).try_write() else {
+            return;
+        };
+        if shard.young.len() >= self.young_cap() {
+            let dropped = std::mem::take(&mut shard.young);
+            let gone = std::mem::replace(&mut shard.old, dropped);
+            self.len.fetch_sub(gone.len(), Ordering::Relaxed);
+        }
+        let had_old = shard.old.contains_key(&key);
+        if shard.young.insert(key, value).is_none() && !had_old {
             self.len.fetch_add(1, Ordering::Relaxed);
         }
     }
 
     pub fn remove(&self, key: &Key) {
-        if let Ok(mut shard) = self.shard(key).write()
-            && shard.remove(key).is_some()
-        {
-            self.len.fetch_sub(1, Ordering::Relaxed);
+        if let Ok(mut shard) = self.shard(key).write() {
+            let young = shard.young.remove(key).is_some();
+            let old = shard.old.remove(key).is_some();
+            let held = usize::from(young) + usize::from(old);
+            if held > 0 {
+                self.len.fetch_sub(held, Ordering::Relaxed);
+            }
         }
     }
 
@@ -127,12 +162,20 @@ impl<Key: Eq + Hash + Copy, V: Clone> Memo<Key, V> {
         self.len() == 0
     }
 
-    /// Every entry, in key order within each shard's turn: for the file.
+    /// Every entry, in key order within each shard's turn: for the file. A
+    /// key in both generations is written once, with its young value.
     fn entries(&self) -> Vec<(Key, V)> {
         let mut out = Vec::with_capacity(self.len());
         for shard in &self.shards {
             if let Ok(shard) = shard.read() {
-                out.extend(shard.iter().map(|(k, v)| (*k, v.clone())));
+                out.extend(shard.young.iter().map(|(k, v)| (*k, v.clone())));
+                out.extend(
+                    shard
+                        .old
+                        .iter()
+                        .filter(|(k, _)| !shard.young.contains_key(*k))
+                        .map(|(k, v)| (*k, v.clone())),
+                );
             }
         }
         out
@@ -528,4 +571,43 @@ pub(crate) fn grown_by(field: &RiverField, share: f64) -> bool {
     let total = field.total();
     let filed = field.filed.load(Ordering::Relaxed);
     total != filed && (filed == 0 || total as f64 >= filed as f64 * (1.0 + share))
+}
+
+#[cfg(test)]
+mod memo_tests {
+    use super::*;
+
+    /// Past its cap the memo keeps what was put last (`play-slowdown`):
+    /// before, it kept nothing new once full, so every later key missed.
+    #[test]
+    fn a_full_memo_keeps_the_newest_values() {
+        let memo: Memo<u32, u32> = Memo::new(SHARDS * 2 * 8);
+        for k in 0..100_000u32 {
+            memo.put(k, k * 3);
+        }
+        for k in 99_900..100_000u32 {
+            assert_eq!(memo.get(&k), Some(k * 3), "the newest key {k} is held");
+        }
+        assert!(memo.get(&0).is_none(), "the oldest key was forgotten");
+        assert!(
+            memo.len() <= SHARDS * 2 * 8,
+            "held {} past the cap",
+            memo.len()
+        );
+    }
+
+    /// A value is the same whichever generation holds it, and a key is
+    /// counted once.
+    #[test]
+    fn a_key_in_both_generations_counts_once() {
+        let memo: Memo<u32, u32> = Memo::new(SHARDS * 2 * 4);
+        memo.put(7, 70);
+        memo.put(7, 70);
+        assert_eq!(memo.len(), 1);
+        assert_eq!(memo.get(&7), Some(70));
+        memo.remove(&7);
+        assert_eq!(memo.len(), 0);
+        assert!(memo.get(&7).is_none());
+        assert_eq!(memo.entries().len(), 0);
+    }
 }

@@ -14,6 +14,9 @@ desktop = [
 # MEASUREMENT (`town-frame-time`): a span per system and render stage, written
 # to a Chrome trace file. Ranks where a frame's time goes; never for numbers.
 trace = ["bevy/trace_chrome", "bevy/debug"]
+# MEASUREMENT (`play-slowdown`): each system's main-thread time, summed by
+# its span and logged every 30 s as `SYSTEM_TIMES`.
+system-times = ["bevy/trace", "bevy/debug"]
 # MEASUREMENT (`memory-leak`): the allocator counts allocations of 256 KiB or
 # more by call stack (`src/alloc_trace.rs`, `PBD_ALLOC_TRACE`).
 alloc-trace = []

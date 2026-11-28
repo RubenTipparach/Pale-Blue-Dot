@@ -188,7 +188,10 @@ pub fn run_ticks(
     if fine.set.columns.water.queue.is_empty() || ticks == 0 {
         return 0;
     }
+    let t_clone = std::time::Instant::now();
     let mut set = (*fine.set).clone();
+    let clone_ms = t_clone.elapsed().as_secs_f64() * 1000.0;
+    let (mut rule_ms, mut save_ms) = (0.0, 0.0);
     let mut last_before: Option<Arc<FineSet>> = None;
     let mut ran = 0;
     let mut changed = 0;
@@ -201,7 +204,10 @@ pub fn run_ticks(
         if step.smooth && i > 0 && i + 1 == ticks {
             last_before = Some(Arc::new(set.clone()));
         }
+        let t_rule = std::time::Instant::now();
         let made = set.columns.tick_water(liquid::LOOP_MAX);
+        rule_ms += t_rule.elapsed().as_secs_f64() * 1000.0;
+        let t_save = std::time::Instant::now();
         let edits: Vec<Edit> = made
             .iter()
             .filter_map(|&(slot, layer, material)| {
@@ -233,11 +239,17 @@ pub fn run_ticks(
             error!("water BLOCKED: the save did not take {} cells", edits.len());
             return 0;
         }
+        save_ms += t_save.elapsed().as_secs_f64() * 1000.0;
         changed += made.len();
         ran += 1;
     }
+    let t_contact = std::time::Instant::now();
     let set = Arc::new(set);
     contact.set_fine(&set);
+    debug!(
+        "TICK_PARTS clone {clone_ms:.1} ms, rule {rule_ms:.1} ms, save {save_ms:.1} ms, contact {:.1} ms",
+        t_contact.elapsed().as_secs_f64() * 1000.0
+    );
     if changed == 0 {
         // Nothing moved (`cascade-perf`): the queue the ticks worked
         // through is kept, but no cell, light or record is different, so
