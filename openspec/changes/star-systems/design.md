@@ -304,3 +304,21 @@ on the low ground, `grass` over `dirt_grass` from 3 m up, `dirt` below and `rock
 game this is Verdance's block palette naming Tenebris's surface blocks; Verdance is not built, so no
 save is touched.
 
+
+## Chloe and its moons (owner, 2026-11-27)
+
+The owner: "We need a couple of extra planets: Chloe - a blue gas giant, a
+multi system with some moons Walter, Boota, and Catsby. walter and boota are
+pluto like planets, ice surface thin atmos phere with some slight red dirt
+exposed. Catsby as a hazy green planet inspired by titan with methane lakes".
+
+A note only; nothing is designed or built yet. When it is:
+
+- **Chloe**: a blue gas giant. No landing (section 6); its moons make a
+  system of their own (section 7).
+- **Walter** and **Boota**: Pluto-like moons. An ice surface, a thin
+  atmosphere, and a little red dirt showing through the ice.
+- **Catsby**: a hazy green moon after Titan, with methane lakes.
+- Radii go on the gold-standard ladder (CLAUDE.md, "Hex size is fixed").
+  Each world's life and biome roster is explicit planet data.
+- Which star Chloe orbits, and the moons' sizes and orbits, are still open.
