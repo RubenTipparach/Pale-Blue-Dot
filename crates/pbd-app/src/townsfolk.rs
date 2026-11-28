@@ -48,6 +48,9 @@ pub const MAX_DRAWN: usize = 32;
 pub const DRAW_M: f32 = 60.0;
 /// How long a figure takes to fade in or out, s.
 pub const FADE_S: f32 = 0.8;
+/// The site other players stand in (`multiplayer` design 24): one person
+/// each, numbered by the player, drawn as townsfolk are and nothing else.
+pub const PLAYERS_SITE: u32 = u32::MAX;
 /// How fast a person turns to the way they go, s (decision 23).
 const TURN_S: f64 = 0.12;
 /// The far face card's depth bias, in the depth buffer's own steps
@@ -161,7 +164,8 @@ impl Townsfolk {
             .iter_mut()
             .find(|t| t.site == id.site)?
             .live
-            .get_mut(id.index as usize)
+            .iter_mut()
+            .find(|l| l.person.id == id)
     }
 
     fn live(&self, id: PersonId) -> Option<&Live> {
@@ -169,7 +173,8 @@ impl Townsfolk {
             .iter()
             .find(|t| t.site == id.site)?
             .live
-            .get(id.index as usize)
+            .iter()
+            .find(|l| l.person.id == id)
     }
 
     /// A standing town's people, in its template's order.
@@ -180,11 +185,99 @@ impl Townsfolk {
             .flat_map(|t| t.live.iter().map(|l| &l.person))
     }
 
-    /// Every person of every standing town.
+    /// Every person of every standing town. Other players
+    /// ([`PLAYERS_SITE`]) are not townsfolk to anything that asks.
     pub fn everyone(&self) -> impl Iterator<Item = &Person> {
         self.towns
             .iter()
+            .filter(|t| t.site != PLAYERS_SITE)
             .flat_map(|t| t.live.iter().map(|l| &l.person))
+    }
+
+    /// Stand another player (`multiplayer` design 24) with their feet at
+    /// `feet` (the planet's frame, f64), facing `forward`, walking or not:
+    /// made the first time, with a look of their number in `tunic`, then
+    /// driven.
+    pub fn visit(
+        &mut self,
+        player: u32,
+        feet: DVec3,
+        forward: DVec3,
+        walking: bool,
+        chosen: Option<look::Look>,
+        tunic: u32,
+    ) {
+        let id = PersonId {
+            site: PLAYERS_SITE,
+            index: player,
+        };
+        // A look changed (the player chose another): drawn again with it.
+        if let (Some(chosen), Some(l)) = (chosen, self.live(id))
+            && l.person.look != chosen
+        {
+            self.unvisit(player);
+        }
+        if self.live(id).is_none() {
+            let seed = player.wrapping_mul(2_654_435_761).wrapping_add(17);
+            // Their own character (`player-character`), or one rolled from
+            // their number until it arrives.
+            let look = chosen.unwrap_or_else(|| {
+                look::generate(look::people_of_scene("fields"), seed, player, tunic)
+            });
+            let up = feet.normalize();
+            let at = up.as_vec3();
+            let person = Person {
+                id,
+                role: String::new(),
+                spear: false,
+                at,
+                altitude_m: 0.0,
+                facing: forward.as_vec3(),
+                activity: pbd_core::townsfolk::Activity::Post { work: Work::Idle },
+                look,
+                seed,
+            };
+            let resting = person.look.resting;
+            let placed = Placed {
+                feet,
+                forward,
+                walking,
+            };
+            let live = Live {
+                mood: Mood::new(resting),
+                face: Face::new(seed, resting),
+                body: Body::new(seed),
+                forward,
+                placed,
+                driven: Some(placed),
+                posture: None,
+                walk: None,
+                door: None,
+                chosen: Chosen {
+                    expression: resting,
+                    focus: false,
+                },
+                talking: false,
+                held: None,
+                behind: 0.0,
+                person,
+            };
+            match self.towns.iter_mut().find(|t| t.site == PLAYERS_SITE) {
+                Some(folk) => folk.live.push(live),
+                None => self.towns.push(Folk {
+                    site: PLAYERS_SITE,
+                    live: vec![live],
+                }),
+            }
+        }
+        self.drive(id, feet, forward, walking);
+    }
+
+    /// Another player gone: their figure fades out.
+    pub fn unvisit(&mut self, player: u32) {
+        if let Some(folk) = self.towns.iter_mut().find(|t| t.site == PLAYERS_SITE) {
+            folk.live.retain(|l| l.person.id.index != player);
+        }
     }
 
     /// Where a person is this frame: their feet in the planet's frame (f64)
@@ -888,7 +981,7 @@ fn spawn_figure(
         .id();
     if proxy {
         commands.entity(root).insert(crate::loading::PrewarmProxy);
-    } else {
+    } else if person.id.site != PLAYERS_SITE {
         // The interact key talks to them (`townsfolk` design 5 to 12).
         commands.entity(root).insert(crate::economy::Talker {
             site: person.id.site,
@@ -1345,7 +1438,8 @@ fn step(
                 .iter_mut()
                 .find(|t| t.site == id.site)?
                 .live
-                .get_mut(id.index as usize)
+                .iter_mut()
+                .find(|l| l.person.id == id)
         });
         let to = if live.is_some() { 1.0 } else { 0.0 };
         slot.shown = if to > slot.shown {

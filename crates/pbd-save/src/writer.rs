@@ -183,7 +183,7 @@ fn log_file(slot: &Path) -> std::io::Result<File> {
     OpenOptions::new()
         .create(true)
         .append(true)
-        .open(slot.join(super::LOG))
+        .open(slot.join(crate::LOG))
 }
 
 /// Replace a file whole: write a temporary beside it, sync it, and rename.
@@ -206,7 +206,7 @@ fn replace_file(path: &Path, body: &[u8]) -> std::io::Result<()> {
 /// directory so the rename itself is on disk before this returns. For the
 /// file a world is identified by (`identity.ron`), which is written once, on
 /// the calling thread, before anything else in the slot.
-pub(crate) fn replace_durably(path: &Path, body: &[u8]) -> std::io::Result<()> {
+pub fn replace_durably(path: &Path, body: &[u8]) -> std::io::Result<()> {
     replace_file(path, body)?;
     // A directory cannot be opened to sync on every platform; where it can,
     // the rename is not durable until it is.
@@ -316,7 +316,7 @@ mod tests {
         writer.drain();
         assert!(writer.committed() >= seq, "the mark reached the record");
         assert_eq!(writer.pending(), 0);
-        let written = std::fs::read_to_string(slot.join(super::super::LOG)).unwrap();
+        let written = std::fs::read_to_string(slot.join(crate::LOG)).unwrap();
         assert_eq!(written, "7 60 0\n");
         let _ = std::fs::remove_dir_all(&slot);
     }
@@ -334,7 +334,7 @@ mod tests {
         }
         writer.drain();
         assert!(writer.committed() >= last);
-        let written = std::fs::read_to_string(slot.join(super::super::LOG)).unwrap();
+        let written = std::fs::read_to_string(slot.join(crate::LOG)).unwrap();
         let cells: Vec<&str> = written
             .lines()
             .map(|line| line.split(' ').next().unwrap())

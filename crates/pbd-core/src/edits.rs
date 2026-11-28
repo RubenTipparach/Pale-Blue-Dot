@@ -143,6 +143,15 @@ impl Edits {
         }
     }
 
+    /// Forget every change to `cell`: the cell is as the seed made it. Only a
+    /// region replaced whole from the server's snapshot does this
+    /// (`multiplayer` design 29); a player's edit never takes one away.
+    pub fn clear_cell(&mut self, cell: u32) {
+        if self.cells.remove(&cell).is_some() {
+            self.revision += 1;
+        }
+    }
+
     /// The changes for one cell, in the order they must be applied.
     pub fn for_cell(&self, cell: u32) -> &[(u16, Material)] {
         self.cells.get(&cell).map_or(&[], Vec::as_slice)

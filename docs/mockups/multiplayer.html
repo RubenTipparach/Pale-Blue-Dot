@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multiplayer</title>
+<meta name="description" content="Pale Blue Dot's multiplayer screens and another player in the world: Host from the pause menu, the Join screen with games on the LAN and every refusal, and a second player on a patch of hex ground by day and lit at night, named when near.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=VT323&display=swap">
+<style>
+/* Tokens: the stone-and-carved-wood kit's colours (tools/art/ui_art.py, Sweaft-64; ui_kit.rs TEXT,
+   TEXT_DIM, TITLE, LABEL, LABEL_DIM, OAK_LABEL, INK). The game UI has one look by day and by night,
+   so both colour schemes share them. */
+:root {
+  --ink: #010000; --face: #1f3b52; --well: #011c34;
+  --text: #eab798; --text-dim: #cfaa81; --title: #faaf5c; --label: #fffefe; --label-dim: #92a3b2;
+  --oak-label: #010000; --stone-0: #011c34; --stone-1: #1f3b52; --stone-2: #3e586e; --stone-3: #92a3b2; --stone-4: #bfcad7;
+  --rune: #84e3b5; --rune-dim: #53998b;
+  --page: #010e1a; --page-2: #011c34; --page-line: #1f3b52; --page-text: #bfcad7; --page-dim: #92a3b2;
+  --display: "Pixelify Sans", "VT323", ui-monospace, monospace;
+  --body: "VT323", ui-monospace, monospace;
+  --s: 2;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #010e1a; } }
+:root[data-theme="dark"] { --page: #010e1a; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--page-text); font: 18px/1.3 var(--body); overflow-x: hidden; }
+a { color: var(--rune); }
+
+/* ---- page chrome ---- */
+header.top { padding: 8px 16px 6px; border-bottom: 1px solid var(--page-line); display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+header.top h1 { font: 600 24px/1.1 var(--display); color: var(--title); margin: 0; letter-spacing: 1px; text-shadow: 0 2px 0 var(--ink); }
+.pbd-tracker { margin: 0; font: 17px/1.2 var(--body); }
+.infobtn { font: 600 18px/1 var(--body); width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--rune-dim); background: var(--page-2); color: var(--rune); cursor: pointer; }
+.infobtn:focus-visible { outline: 2px solid var(--rune); }
+nav.tabs { display: flex; gap: 2px; padding: 6px 16px 0; border-bottom: 4px solid var(--stone-2); overflow-x: auto; }
+.ttab { flex: none; border-style: solid; border-width: 12px 12px 0; border-image: url(multiplayer/ui/oak-tab-shut.png) 56 56 0 fill stretch; image-rendering: auto;
+  color: var(--label); font: 20px/1 var(--body); padding: 0 10px 6px; text-decoration: none; letter-spacing: 1px; }
+.ttab[aria-selected="true"] { border-image-source: url(multiplayer/ui/oak-tab-open.png); color: var(--oak-label); }
+.ttab:focus-visible { outline: 2px solid var(--rune); }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 8px 16px; border-bottom: 1px solid var(--page-line); background: var(--page-2); }
+.bar .grp { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.bar .lab { font: 17px/1 var(--body); color: var(--page-dim); margin-right: 2px; }
+.seg { font: 17px/1 var(--body); background: var(--page); color: var(--page-text); border: 1px solid var(--page-line); padding: 6px 10px; min-height: 36px; cursor: pointer; }
+.seg[aria-pressed="true"] { background: var(--page-line); color: var(--rune); border-color: var(--rune-dim); }
+.seg:disabled { opacity: .45; cursor: default; }
+.seg:focus-visible, .sel:focus-visible, input[type=range]:focus-visible { outline: 2px solid var(--rune); }
+.sel { font: 17px var(--body); height: 36px; background: var(--page); color: var(--page-text); border: 1px solid var(--page-line); padding: 0 6px; max-width: 100%; }
+.readout { font: 17px/1 var(--body); color: var(--rune); min-width: 44px; display: inline-block; }
+input[type=range] { width: 180px; max-width: 46vw; accent-color: var(--rune-dim); }
+main { padding: 12px 16px 32px; }
+section.tab { display: none; }
+section.tab.open { display: block; }
+
+/* ---- a game screen: the world behind, dimmed as the game dims it under a menu ---- */
+.scene { position: relative; width: min(100%, 1440px, calc((100vh - 176px) * 1.6)); min-width: min(100%, 760px); margin: 0 auto; aspect-ratio: 16 / 10; overflow: hidden; background: #000 center / cover no-repeat;
+  display: flex; align-items: center; justify-content: center; padding: calc(24px * var(--s)) 8px calc(16px * var(--s)); }
+.scene::before { content: ""; position: absolute; inset: 0; background: rgba(1, 14, 26, .45); pointer-events: none; }
+.scene.night::before { background: rgba(1, 14, 26, .25); }
+.scene > .k-frame, .scene > .stack { position: relative; z-index: 1; }
+.stack { display: flex; flex-direction: column; align-items: center; gap: calc(6px * var(--s)); max-width: 100%; }
+.logo { width: min(calc(150px * var(--s)), 80vw); height: auto; display: block; }
+
+/* ---- the kit (assets/ui/*: the smooth Cycles renders, 8 texels a native pixel, so every
+   9-slice margin is the native one times 8; --s CSS px a native px, as the game's UI scale) ---- */
+.pt { display: inline-flex; vertical-align: middle; line-height: 0; }
+.pt svg { height: calc(8px * var(--s) * var(--fz, 1)); width: auto; display: block; overflow: visible; }
+.pt .sh { fill: var(--pt-shadow, transparent); }
+.pt .fg { fill: currentColor; }
+.k-frame { position: relative; border-style: solid; border-width: calc(14px * var(--s)); border-image: url(multiplayer/ui/oak-frame.png) 112 fill stretch;
+  display: flex; flex-direction: column; gap: calc(3px * var(--s)); color: var(--text); font: calc(10px * var(--s))/1.05 var(--body); max-width: 100%; }
+.k-lintel-row { display: flex; justify-content: center; margin: calc(-15px * var(--s)) 0 calc(4px * var(--s)); }
+.k-lintel { border-style: solid; border-width: calc(5px * var(--s)) calc(9px * var(--s)) calc(4px * var(--s)); border-image: url(multiplayer/ui/stone-lintel.png) 40 72 32 fill stretch;
+  min-height: calc(16px * var(--s)); min-width: calc(40px * var(--s)); padding: 0 calc(2px * var(--s)); display: inline-flex; align-items: center; justify-content: center; color: var(--oak-label); white-space: nowrap; }
+.k-btn { border-style: solid; border-width: calc(8px * var(--s)); border-image: url(multiplayer/ui/oak-button-idle.png) 64 fill stretch; background: none; color: var(--oak-label);
+  height: calc(22px * var(--s)); min-width: calc(30px * var(--s)); padding: 0 calc(2px * var(--s)); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font: inherit; flex: none; }
+.k-btn > .pt { position: relative; top: calc(0.5px * var(--s)); }
+.k-btn:hover { border-image-source: url(multiplayer/ui/oak-button-hover.png); }
+.k-btn:active { border-image-source: url(multiplayer/ui/oak-button-pressed.png); }
+.k-btn:active > .pt { top: calc(1.5px * var(--s)); }
+.k-btn:focus-visible, .k-btn.focus { outline: none; border-image-source: url(multiplayer/ui/oak-button-focus.png); }
+.k-btn:disabled { border-image-source: url(multiplayer/ui/oak-button-disabled.png); color: var(--label-dim); cursor: default; }
+.k-btn.wide { width: 100%; }
+.k-x { position: absolute; top: calc(-10px * var(--s)); right: calc(-10px * var(--s)); min-width: calc(18px * var(--s)); z-index: 2; }
+.k-sec { color: var(--title); --pt-shadow: var(--ink); margin-top: calc(3px * var(--s)); }
+.k-line { color: var(--text); font: calc(10px * var(--s))/1.05 var(--body); }
+.k-dim { color: var(--text-dim); }
+.k-warn { color: var(--title); font: calc(10px * var(--s))/1.05 var(--body); }
+.k-field { border-style: solid; border-width: calc(6px * var(--s)); border-image: url(multiplayer/ui/stone-tooltip.png) 48 fill stretch; background: none;
+  height: calc(20px * var(--s)); padding: 0 calc(2px * var(--s)); color: var(--text); font: calc(10px * var(--s))/1 var(--body); width: 100%; min-width: 0; outline: none; }
+.k-field::placeholder { color: var(--label-dim); opacity: 1; }
+.k-field:focus { border-image-source: url(multiplayer/ui/oak-tooltip.png); color: var(--oak-label); }
+.k-field.bad { color: var(--title); }
+.k-value { border-style: solid; border-width: calc(6px * var(--s)); border-image: url(multiplayer/ui/stone-tooltip.png) 48 fill stretch; min-height: calc(20px * var(--s));
+  padding: 0 calc(2px * var(--s)); display: flex; align-items: center; color: var(--label); font: calc(10px * var(--s))/1 var(--body); min-width: 0; overflow: hidden; white-space: nowrap; }
+.k-check { width: calc(12px * var(--s)); height: calc(12px * var(--s)); border: 0; padding: 0; cursor: pointer; flex: none; background: url(multiplayer/ui/stone-check-off.png) 0 0 / 100% 100%; }
+.k-check[aria-checked="true"] { background-image: url(multiplayer/ui/stone-check-on.png); }
+.k-check:focus-visible { outline: 2px solid var(--rune); }
+.k-row { display: grid; grid-template-columns: calc(52px * var(--s)) minmax(0, 1fr) auto; gap: calc(3px * var(--s)); align-items: center; min-height: calc(20px * var(--s)); }
+.k-row.two { grid-template-columns: minmax(0, 1fr) auto; }
+.k-row .pt { white-space: nowrap; }
+.k-foot { display: flex; justify-content: space-between; gap: calc(3px * var(--s)); margin-top: calc(4px * var(--s)); }
+.k-list { display: grid; gap: calc(2px * var(--s)); }
+.k-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: calc(3px * var(--s)); align-items: center; border-style: solid; border-width: calc(6px * var(--s));
+  border-image: url(multiplayer/ui/stone-tooltip.png) 48 fill stretch; min-height: calc(24px * var(--s)); padding: 0 calc(1px * var(--s)); }
+.k-item .who { min-width: 0; display: flex; flex-direction: column; gap: calc(1px * var(--s)); overflow: hidden; }
+.k-item .name { color: var(--label); --pt-shadow: var(--ink); }
+.k-item .sub { color: var(--text-dim); font: calc(10px * var(--s))/1 var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.k-item .tag { color: var(--label-dim); --pt-shadow: var(--ink); }
+.k-item .k-btn { height: calc(18px * var(--s)); border-width: calc(6px * var(--s)); min-width: calc(26px * var(--s)); }
+.k-lock { width: calc(7px * var(--s)); height: calc(8px * var(--s)); display: inline-block; vertical-align: middle; margin-left: calc(2px * var(--s)); color: var(--text-dim); }
+.k-bar { position: relative; height: calc(10px * var(--s)); border-style: solid; border-width: calc(4px * var(--s)); border-image: url(multiplayer/ui/stone-bar.png) 32 fill stretch; }
+.k-bar i { position: absolute; left: calc(1px * var(--s)); top: calc(-1px * var(--s)); bottom: calc(-1px * var(--s)); background: url(multiplayer/ui/stone-fill-progress.png) 0 0 / calc(2px * var(--s)) 100% repeat-x; max-width: calc(100% - 2px * var(--s)); }
+.k-toast { position: absolute; left: 50%; bottom: calc(30px * var(--s)); transform: translateX(-50%); color: var(--text); --pt-shadow: var(--ink); z-index: 3; opacity: 0; transition: opacity .25s; pointer-events: none; white-space: nowrap; }
+.k-toast.on { opacity: 1; }
+.k-center { text-align: center; display: flex; flex-direction: column; align-items: center; gap: calc(3px * var(--s)); }
+
+/* ---- the 3D tab: one view, made when the tab first opens ---- */
+.view3d { position: relative; width: 100%; max-width: 1440px; margin: 0 auto; aspect-ratio: 16 / 9; min-height: 340px; max-height: 78vh; background: #0e1424; overflow: hidden; }
+.view3d canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+.view3d canvas:focus-visible { outline: 2px solid var(--rune); outline-offset: -2px; }
+.nametag { position: absolute; left: 0; top: 0; transform: translate(-50%, -100%); color: var(--label); --pt-shadow: var(--ink); pointer-events: none; white-space: nowrap; transition: opacity .2s; }
+.nametag.off { opacity: 0; }
+.cross { position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1px; background: rgba(224, 240, 232, .85); pointer-events: none; }
+
+/* ---- the info modal ---- */
+dialog.infomodal { max-width: min(760px, 94vw); max-height: 86vh; max-height: 86dvh; padding: 0; border: 4px solid var(--stone-2); outline: 2px solid var(--ink); background: var(--page-2); color: var(--page-text); }
+dialog.infomodal::backdrop { background: rgba(1, 14, 26, .72); }
+dialog.infomodal .mhead { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 14px; background: var(--face); border-bottom: 2px solid var(--stone-0); }
+dialog.infomodal .mhead b { font: 600 18px/1.2 var(--display); color: var(--title); }
+dialog.infomodal .mhead button { font: 18px var(--body); min-width: 40px; min-height: 40px; background: var(--page-2); color: var(--page-text); border: 1px solid var(--page-line); cursor: pointer; }
+dialog.infomodal .mbody { padding: 6px 16px 16px; font-size: 18px; }
+dialog.infomodal h3 { font: 600 17px/1.2 var(--display); color: var(--text-dim); margin: 14px 0 4px; }
+dialog.infomodal p, dialog.infomodal li { margin: 4px 0; }
+dialog.infomodal code { color: var(--text-dim); font: 1em var(--body); }
+dialog.infomodal table { border-collapse: collapse; font-size: 17px; }
+dialog.infomodal td, dialog.infomodal th { border-bottom: 1px solid var(--page-line); padding: 3px 8px; text-align: left; vertical-align: top; }
+
+/* ---- the Options menu's CHARACTER tab: the screen beside one 3D view ---- */
+.cwrap { display: grid; grid-template-columns: minmax(0, calc(372px * var(--s))) minmax(0, 1fr); gap: 12px; max-width: 1568px; margin: 0 auto; align-items: stretch; }
+.cpanel { display: flex; justify-content: center; align-items: flex-start; padding: calc(16px * var(--s)) 0 calc(6px * var(--s)); min-width: 0; background: var(--page-2) url(multiplayer/game/day-meadow.jpg) center / cover; position: relative; }
+.cpanel::before { content: ""; position: absolute; inset: 0; background: rgba(1, 14, 26, .6); }
+.cpanel > .k-frame { position: relative; }
+.cview { aspect-ratio: auto; max-height: none; height: max(560px, calc(100vh - 186px)); min-height: 0; }
+.k-otabs { display: flex; flex-wrap: wrap; gap: calc(1px * var(--s)); margin-bottom: calc(2px * var(--s)); }
+.k-otabs .k-btn { height: calc(18px * var(--s)); border-width: calc(6px * var(--s)); min-width: 0; padding: 0 calc(1px * var(--s)); }
+.k-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: calc(8px * var(--s)); align-items: start; }
+.k-rows { display: grid; gap: calc(3px * var(--s)); align-content: start; }
+.cpanel .k-row { grid-template-columns: calc(60px * var(--s)) minmax(0, 1fr) auto; }
+.cpanel .k-row.sw { grid-template-columns: calc(60px * var(--s)) minmax(0, 1fr); align-items: start; }
+.k-row.sw > .pt { margin-top: calc(2px * var(--s)); }
+.k-row.off { opacity: .4; }
+.k-sws { display: flex; flex-wrap: wrap; gap: calc(1px * var(--s)); }
+.k-sw { width: calc(9px * var(--s)); height: calc(9px * var(--s)); border: calc(1px * var(--s)) solid var(--ink); padding: 0; cursor: pointer; box-shadow: inset 0 calc(-1px * var(--s)) 0 rgba(1, 0, 0, .3); }
+.k-sw:disabled { cursor: default; }
+.k-sw[aria-checked="true"] { outline: calc(1px * var(--s)) solid var(--title); outline-offset: calc(1px * var(--s)); }
+.k-sw:focus-visible { outline: 2px solid var(--rune); }
+.k-step { display: inline-flex; gap: calc(1px * var(--s)); }
+.k-step .k-btn { min-width: calc(16px * var(--s)); height: calc(20px * var(--s)); border-width: calc(6px * var(--s)); }
+.k-item .sub.k-when { color: var(--text-dim); }
+@media (max-width: 1180px) {
+  .cwrap { grid-template-columns: minmax(0, 1fr); }
+  .cview { order: -1; min-height: 340px; height: 62vh; }
+}
+@media (max-width: 760px) { .k-cols { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) {
+  .cpanel .k-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .cpanel .k-row.sw > .k-sws { grid-column: 1 / -1; }
+  .cpanel { padding-left: 0; padding-right: 0; }
+}
+
+@media (max-width: 640px) {
+  .k-toast { bottom: 6px; }
+  .scene { padding-bottom: 40px; }
+  .k-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: calc(1px * var(--s)); }
+  .k-row:not(.two) > .pt:first-child { grid-column: 1 / -1; }
+  .k-row > span:empty { display: none; }
+  header.top h1 { font-size: 20px; }
+  main { padding: 10px 0 24px; }
+  .scene { aspect-ratio: auto; min-height: 560px; padding: calc(22px * var(--s)) 6px calc(14px * var(--s)); }
+  .view3d { aspect-ratio: 3 / 4; max-height: 70vh; }
+  .bar { padding: 8px 12px; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>MULTIPLAYER</h1>
+  <button class="infobtn" id="infoBtn" aria-label="About this page" title="About this page">i</button>
+  <p class="pbd-tracker"><a href="https://claude.ai/artifact/VyvoqUcJ869F7Hi6C5dxuA" target="_blank" rel="noopener">All Pale Blue Dot mockups (the tracker)</a></p>
+</header>
+<nav class="tabs" role="tablist" aria-label="Screens">
+  <a class="ttab" role="tab" href="#host" data-tab="host" aria-selected="true">HOST</a>
+  <a class="ttab" role="tab" href="#join" data-tab="join" aria-selected="false">JOIN</a>
+  <a class="ttab" role="tab" href="#player" data-tab="player" aria-selected="false">PLAYER</a>
+  <a class="ttab" role="tab" href="#character" data-tab="character" aria-selected="false">CHARACTER</a>
+</nav>
+
+<section class="tab" id="tab-host" aria-label="Host from the pause menu">
+  <div class="bar">
+    <div class="grp"><span class="lab">Time</span><button class="seg" data-time="day" aria-pressed="true">Day</button><button class="seg" data-time="night" aria-pressed="false">Night</button></div>
+    <div class="grp"><button class="seg" id="hJoin">A player joins</button><button class="seg" id="hLeave">A player leaves</button></div>
+    <div class="grp"><span class="lab">Port</span><button class="seg" id="hTaken" aria-pressed="false">Taken</button></div>
+    <div class="grp"><button class="seg" id="hReset">Start over</button></div>
+  </div>
+  <main><div class="scene" id="hostScene"></div></main>
+</section>
+
+<section class="tab" id="tab-join" aria-label="The join screen">
+  <div class="bar">
+    <div class="grp"><span class="lab">Time</span><button class="seg" data-time="day" aria-pressed="true">Day</button><button class="seg" data-time="night" aria-pressed="false">Night</button></div>
+    <div class="grp"><label class="lab" for="jAnswer">The host answers</label>
+      <select class="sel" id="jAnswer">
+        <option value="ok">Welcome</option>
+        <option value="GameVersion">GameVersion</option>
+        <option value="WorldVersion">WorldVersion</option>
+        <option value="DifferentWorld">DifferentWorld</option>
+        <option value="Full">Full</option>
+        <option value="Banned">Banned</option>
+        <option value="WrongPassword">WrongPassword</option>
+        <option value="none">Nothing (no host there)</option>
+      </select></div>
+    <div class="grp"><button class="seg" id="jReset">Start over</button></div>
+  </div>
+  <main><div class="scene" id="joinScene"></div></main>
+</section>
+
+<section class="tab" id="tab-player" aria-label="Another player in the world">
+  <div class="bar">
+    <div class="grp"><span class="lab">Time</span><button class="seg" data-time="day" aria-pressed="true">Day</button><button class="seg" data-time="night" aria-pressed="false">Night</button></div>
+    <div class="grp"><span class="lab">Wren</span><button class="seg" data-dist="3">Close</button><button class="seg" data-dist="9">Near</button><button class="seg" data-dist="20">Middle</button><button class="seg" data-dist="42">Far</button></div>
+    <div class="grp"><label class="lab" for="pDist">Away</label><input type="range" id="pDist" min="2" max="60" step="1" value="9"><span class="readout" id="pDistO">9 m</span></div>
+    <div class="grp"><span class="lab">View</span><button class="seg" data-view="eyes" aria-pressed="true">Eyes</button><button class="seg" data-view="orbit" aria-pressed="false">Orbit Wren</button></div>
+  </div>
+  <main><div class="view3d" id="view3d"><div class="cross" id="cross"></div><div class="nametag off" id="nametag"></div></div></main>
+</section>
+
+<section class="tab" id="tab-character" aria-label="The character screen in the Options menu">
+  <div class="bar">
+    <div class="grp"><span class="lab">Time</span><button class="seg" data-time="day" aria-pressed="true">Day</button><button class="seg" data-time="night" aria-pressed="false">Night</button></div>
+    <div class="grp"><label class="lab" for="cSeen">Seen in</label>
+      <select class="sel" id="cSeen">
+        <option value="stand">Standing</option>
+        <option value="boat">Rowing boat</option>
+        <option value="cart">Hand cart</option>
+        <option value="horse">Horse</option>
+        <option value="car">Car</option>
+        <option value="plane">Plane</option>
+      </select></div>
+  </div>
+  <main><div class="cwrap"><div class="cpanel" id="charPanel"></div><div class="view3d cview" id="cview"></div></div></main>
+</section>
+
+<dialog class="infomodal" id="info" aria-labelledby="infoTitle">
+  <div class="mhead"><b id="infoTitle">Multiplayer: host, join, another player, your character</b><button id="infoClose" aria-label="Close">✕</button></div>
+  <div class="mbody">
+    <p>The mockups of <code>openspec/changes/multiplayer</code> tasks 5.1 and 5.2 and of <code>openspec/changes/player-character</code> task 1.1, for the owner's approval before any game UI or body is built. Four tabs, each a bare link: <b>Host</b> (<code>#host</code>), <b>Join</b> (<code>#join</code>), <b>Player</b> (<code>#player</code>) and <b>Character</b> (<code>#character</code>). Player and Character draw 3D, one view each; a view is made when its tab first opens and stops drawing when its tab is closed.</p>
+
+    <h3>Versions</h3>
+    <ul>
+      <li><b>1</b> (2026-11-27): Host, Join and Player.</li>
+      <li><b>2</b> (2026-11-27): the other player is M5's townsperson, the game's NPC figure (owner: "humans should be consistent with the NPCs in the game").</li>
+      <li><b>3</b> (2026-11-27): the <b>Character</b> tab (<code>player-character</code> 1.1): the character screen as a tab of the Options menu, and the same figure in a rowing boat, a hand cart, on a horse, in a car and in a plane. The title menu becomes CONTINUE, NEW WORLD, MULTIPLAYER, OPTIONS, QUIT, with Continue's list of worlds and a Servers list on the Join panel.</li>
+    </ul>
+
+    <h3>Host (task 5.1, design 14.3)</h3>
+    <ul>
+      <li>The pause menu as the game draws it today (<code>desktop/menu.rs</code>: RESUME, SAVES, SETTINGS, MAIN MENU, QUIT under the PAUSED lintel) gains <b>HOST</b>, second. Today hosting is <code>--host &lt;port&gt;</code> on the command line (design 20); this is the screen that replaces it.</li>
+      <li><b>Before hosting:</b> a port (47123, the one the two-machine test used), an optional password, and <b>SHOW ON LAN</b>, which makes the game appear in other players' On LAN list. A port outside 1024 to 65535 is refused on the panel; <b>Taken</b> in the bar plays a port already in use.</li>
+      <li><b>While hosting:</b> the address others join by (this machine's LAN address and the port) with COPY, and who is connected, up to 8 (design 14.2). Each guest has KICK and BAN; BAN asks first. STOP asks first when someone is on. The world keeps going under the menu; RESUME goes back to play while still hosting.</li>
+      <li>Joins and leaves show as a line over the hotbar's place, the way the game's toasts read. Use <b>A player joins</b> and <b>A player leaves</b> in the bar.</li>
+      <li>No relay and no public address yet (design 20: a direct address or the LAN among friends); the address shown is the LAN one.</li>
+    </ul>
+
+    <h3>Join (task 5.1, design 9)</h3>
+    <ul>
+      <li><b>The title menu</b> (version 3, the owner): five entries, <b>CONTINUE</b>, <b>NEW WORLD</b>, <b>MULTIPLAYER</b>, <b>OPTIONS</b>, <b>QUIT</b>. Today's (<code>menu.rs</code>) is CONTINUE, NEW WORLD, LOAD WORLD, SETTINGS, QUIT: LOAD WORLD folds into CONTINUE, SETTINGS is renamed OPTIONS, and MULTIPLAYER is new. Joining leaves no world of yours open, so it is on the title, not the pause menu; hosting stays on the pause menu.</li>
+      <li><b>Continue</b> opens the list of saved worlds, latest first, with <b>LOAD LATEST</b> at the top; LOAD on a row loads that one. Either goes to the loading screen.</li>
+      <li><b>Multiplayer</b> opens the Join panel: your NAME (sent in the <code>Hello</code>), an ADDRESS with its port, <b>SERVERS</b> (a server someone keeps running, a hosted game that is always up, kept once joined; its address may be a name rather than a LAN address) and <b>ON LAN</b>, the games hosts on this network show. A game with a password shows a lock and asks for it; a full one shows FULL and cannot be pressed.</li>
+      <li><b>Options</b> opens the settings screen, now with a CHARACTER tab: the Character tab of this page.</li>
+      <li><b>The host answers</b> in the bar picks what the host says to the next JOIN, so every message can be seen. The messages are short and plain, one line each:</li>
+    </ul>
+    <table>
+      <tr><th>The protocol's answer</th><th>The player reads</th></tr>
+      <tr><td><code>JoinRefusal::GameVersion</code></td><td>Game version differs</td></tr>
+      <tr><td><code>JoinRefusal::WorldVersion</code></td><td>World version differs</td></tr>
+      <tr><td><code>JoinRefusal::DifferentWorld</code></td><td>Different world</td></tr>
+      <tr><td><code>JoinRefusal::Full</code></td><td>Game is full</td></tr>
+      <tr><td><code>JoinRefusal::Banned</code></td><td>Banned from this game</td></tr>
+      <tr><td><code>JoinRefusal::WrongPassword</code></td><td>Wrong password (the password field again)</td></tr>
+      <tr><td>No answer (the connect times out; not a refusal)</td><td>No game at that address</td></tr>
+    </table>
+    <ul>
+      <li>"Game version differs" and "Different world" are design 9's words. With the launcher (<code>game-launcher</code> design 8) the first may grow a second line telling the player to restart it; that waits for the launcher.</li>
+      <li>A <code>Welcome</code> goes to the loading screen while the world's regions arrive (design 9: it stays up until they and every pipeline are ready).</li>
+    </ul>
+
+    <h3>Player (task 5.2, design 14.5)</h3>
+    <ul>
+      <li>A patch of the fields on hex columns (2.833 m across, 1 m layers) with the game's terrain tiles, a packed path, the game's trees and lamp posts. You stand at the near end; <b>Wren</b> walks the path. <b>Close</b>, <b>Near</b>, <b>Middle</b>, <b>Far</b> and the slider send Wren to that distance; Wren walks there and stops, then turns to face you. Nothing moves until you ask.</li>
+      <li><b>The name over them only when near:</b> the name is drawn in the kit's font over the head, at the UI's whole-number scale, within <b>24 m</b>, and not past it (recommendation taken, ask only with screenshots: about eight cells, where a face can still be told apart). It shows and hides in a fifth of a second as the line is crossed, and does not linger.</li>
+      <li><b>The same figure as the game's townsfolk</b> (version 2, owner, 2026-11-27: "humans should be consistent with the NPCs in the game"): another player is M5's townsperson, the figure the game draws for its NPCs, built by the same kit (<code>multiplayer/figure-kit.js</code>, copied from <code>npcs.html</code>) and rolled from the Fields folk's palette. In the game another player is drawn by the townsfolk's own code (<code>multiplayer</code> design 24), so the two cannot drift apart.</li>
+      <li><b>Lit like the ground:</b> the terrain's sun with its shadows, and at night the lamps' light per pixel with the towns mockup's falloff (1 - (d/R)^2)^2, every lamp lighting what is near it wherever the camera is. The moon is held at 0.035, so outside the pools the ground and Wren read near black: in the game that is <code>LitByField</code> and <code>LitLikeTerrain</code> on the body's root.</li>
+      <li><b>Eyes</b> is your own view (drag to look, arrow keys too). <b>Orbit Wren</b> turns about the body to see it close (drag, wheel or pinch to zoom).</li>
+    </ul>
+
+    <h3>Character (<code>player-character</code> task 1.1)</h3>
+    <ul>
+      <li><b>Why.</b> The owner, 2026-11-27: "Would be nice to be able to customize character for single player too. This would allow me to have an in game model dude for third person vehicle views like the boat rowing, car driving plane flying stuff and horse riding", and "humans should be consistent with the NPCs in the game". Today the player has no body: first person shows only the hands, the rower in the boat's chase view is a stand-in, and the cart, horse, car and plane show nobody at the controls.</li>
+      <li><b>Where it is made:</b> a <b>CHARACTER</b> tab of the Options menu (the settings screen's PICTURE, SOUND, INPUT, MOVEMENT, WEATHER and WORLD tabs, with this one added), so the look can be changed at any time, from the title or the pause menu (owner, 2026-11-27: fully customizable from Options at any time). A new world opens it once before it loads.</li>
+      <li><b>One figure, one art</b> (design 1): the body is M5's townsperson, the figure the game draws for its NPCs (<code>pbd_core::townsfolk::look::Look</code> and <code>figure</code>; here <code>multiplayer/figure-kit.js</code>). No other body is made, and a choice the townsfolk's parts cannot draw is not offered.</li>
+      <li><b>The choices</b>, every one on screen at once: <b>Build</b> (round, pear, tall, stout), <b>Height</b> (within the build's range, as the townsfolk roll it), <b>Skin</b>, <b>Hair</b> (short, bun, braid, bald) and its <b>colour</b>, <b>Beard</b> (none, goatee, full), <b>Face</b> (the resting face: happy, calm, thinking, sleepy, the four a townsperson rests in), <b>Shirt</b>, <b>Trousers</b>, <b>Shoes</b>, and <b>Hat</b> (none, a brim hat, a cap, a hood, a wrap, a helmet or a headset) with its colour. Under a hat the hair shows at the back only, as on the townsfolk; a hood or a headset covers the ears.</li>
+      <li><b>Swatches, not a colour picker</b> (design 3): skin, hair and cloth come from the peoples' palettes (<code>look::People</code>; here <code>multiplayer/peoples.js</code>, copied from <code>npcs.html</code>), across every people, so a character always sits in the game's palette. Shoes are the townsfolk's three; a hat's colours are the cloth and the role hats' own (straw, helmet iron, headset grey).</li>
+      <li><b>Random</b> rolls a look as <code>look::generate</code> rolls a townsperson: a people at random, its palette, and a hat from that people's hats.</li>
+      <li><b>Seen in</b> (design 4 and 5): the same figure, from outside, in the chase view of each craft. Each craft names a seat and where the hands go; the arms are aimed there from the shoulders and the controls meet the hands, whatever the build and height:
+        <ul>
+          <li><b>Rowing boat</b>: seated on the thwart facing the stern, the hands on the oar handles, the oars through the oarlocks;</li>
+          <li><b>Hand cart</b>: standing between the shafts, a hand on each;</li>
+          <li><b>Horse</b>: astride the saddle, the hands on the reins;</li>
+          <li><b>Car</b>: seated at the wheel, the hands on its rim;</li>
+          <li><b>Plane</b>: seated in the open cockpit, the hands on the stick.</li>
+        </ul>
+        First person stays hands only. Drag (or the arrow keys) turns the view about the figure; the wheel or a pinch zooms. Nothing turns on its own.</li>
+      <li><b>Lit as the ground is:</b> the terrain's sun with its shadows by day; at night the moon is held at 0.035 and every lamp lights what is near it, per pixel, with the towns mockup's falloff: the lamp posts by the path and the field, the boat's stern lantern, the car's headlamps and the plane's panel lamp. In the game that is <code>LitByField</code> and <code>LitLikeTerrain</code> on the figure's root.</li>
+      <li><b>Where it is kept</b> (design 2): one look per install, <code>saves/character.ron</code> beside <code>install.key</code>, so every world and every host sees the same person; until one is made, a look is rolled from the install's key. Nothing in a save changes. In multiplayer <code>Hello</code> carries the look and other players are drawn with it (design 6, a protocol version).</li>
+      <li><b>Open, recommendations taken</b> (ask only with screenshots):
+        <ul>
+          <li>Where the screen opens on a new world: <b>before the world loads</b> (recommended), or on first spawn.</li>
+          <li>Whether a hat is worn in a vehicle: <b>yes</b>, unless it is a helmet a closed cockpit would clip (recommended). The craft here are all open, so every hat stays on.</li>
+        </ul></li>
+      <li><b>The craft</b> are built for this mockup as lofted, smooth-shaded forms, textured with the game's own settlement set (<code>plank</code>, <code>boards</code>, <code>timber</code>, <code>iron</code>, <code>hide</code>, <code>linen</code>, <code>still_water</code>) and the herd's horse hide (<code>herd_hide</code>, row 0). The car's paint and the tyres' rubber are 32 px textures painted in the page, in the same palette; a game version would draw them with a script in <code>tools/art/</code>. They stand in for the craft's own models (M38, M23, M24), which are not changed here.</li>
+    </ul>
+
+    <h3>Which art is whose</h3>
+    <ul>
+      <li><b>The game's:</b> the UI kit's oak frame, plaques, tabs and stone lintel, slot well, check, bar and tooltip (<code>assets/ui/</code>, the smooth renders, sampled linear as the game samples the kit); the kit font (<code>assets/fonts/kit-font.json</code>) and VT323 for body lines; the terrain atlas (<code>assets/tilesets/atlas.png</code>); the timber and iron of the lamp posts (<code>assets/textures/settlement/</code>). The backdrops are game captures (<code>docs/mockups/ui/game/</code>). Provenance: <code>docs/mockups/multiplayer/README.md</code>.</li>
+      <li><b>Mockup-only:</b> the figure's tiles are the townsfolk mockup's (<code>tools/art/npcs_art.py</code>); the title backdrop is a still of the UI mockup's own demo.</li>
+    </ul>
+
+    <h3>Open, for the owner</h3>
+    <ul>
+      <li>Approve the host and join screens (5.1) and the other player (5.2) on the tracker. Until then nothing of this goes in the game; hosting stays on the command line.</li>
+      <li>Approve the Character tab (<code>player-character</code> 1.1) for build. Until then no game code changes.</li>
+    </ul>
+  </div>
+</dialog>
+
+<script src="multiplayer/font/kit-font.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+
+// ---------------------------------------------------------------- the kit's font (ui/game-ui.js)
+const PT = new Map();
+function ptSvg(text) {
+  const t = String(text).toUpperCase();
+  if (PT.has(t)) return PT.get(t);
+  const F = window.KIT_FONT, G = F.glyphs; let x = 0, d = "";
+  for (const ch of t) {
+    const g = G[ch] || G["?"];
+    g.rows.forEach((row, y) => {
+      let i = 0;
+      while (i < row.length) {
+        if (row[i] !== "#") { i++; continue; }
+        let j = i; while (j < row.length && row[j] === "#") j++;
+        d += `M${x + i} ${y}h${j - i}v1h${i - j}z`; i = j;
+      }
+    });
+    x += g.w + F.spacing;
+  }
+  const w = Math.max(1, x - F.spacing);
+  const svg = `<svg viewBox="0 0 ${w} 8" width="${w}" height="8" shape-rendering="crispEdges" aria-hidden="true"><path class="sh" transform="translate(0 1)" d="${d}"/><path class="fg" d="${d}"/></svg>`;
+  PT.set(t, svg);
+  return svg;
+}
+function P(text, cls) { const s = document.createElement("span"); s.className = "pt" + (cls ? " " + cls : ""); s.setAttribute("role", "img"); s.setAttribute("aria-label", text); s.innerHTML = ptSvg(text); return s; }
+window.ptSvg = ptSvg;
+
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "style") e.style.cssText = v; else if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) e.append(typeof k === "string" ? document.createTextNode(k) : k);
+  return e;
+}
+const btn = (label, on, o = {}) => h("button", { class: "k-btn" + (o.cls ? " " + o.cls : ""), type: "button", "aria-label": label, disabled: o.disabled, onclick: on ? e => { e.stopPropagation(); on(e); } : null }, P(label));
+const frame = (w, ...kids) => h("div", { class: "k-frame", style: `width:min(calc(${w}px * var(--s)), 100%)` }, ...kids);
+const lintel = (title, onX) => [h("div", { class: "k-lintel-row" }, h("div", { class: "k-lintel" }, P(title))), onX ? btn("X", onX, { cls: "k-x" }) : null];
+const sec = t => h("div", { class: "k-sec" }, P(t));
+const line = (t, cls) => h("div", { class: "k-line" + (cls ? " " + cls : "") }, t);
+const lock = () => { const s = h("span", { class: "k-lock", role: "img", "aria-label": "Password" }); s.innerHTML = '<svg viewBox="0 0 7 8" width="100%" height="100%" shape-rendering="crispEdges"><path fill="#010000" transform="translate(0 1)" d="M1 0h5v1h1v2h-1v-2h-1v2h-3v-2h-1v2h-1v-2h1zM0 3h7v5h-7z"/><path fill="currentColor" d="M1 0h5v1h1v2h-1v-2h-1v2h-3v-2h-1v2h-1v-2h1zM0 3h7v4h-7z"/><path fill="#010000" d="M3 4h1v2h-1z"/></svg>'; return s; };
+
+// ---------------------------------------------------------------- day and night (all tabs)
+const PAGE = { night: false };
+const BACKDROP = { host: ["multiplayer/game/day-meadow.jpg", "multiplayer/game/night-dunmouth-play.jpg"], join: ["multiplayer/game/title-backdrop.jpg", "multiplayer/game/night-dunmouth-world.jpg"] };
+function setNight(n) {
+  PAGE.night = n;
+  document.querySelectorAll("[data-time]").forEach(b => b.setAttribute("aria-pressed", String((b.dataset.time === "night") === n)));
+  for (const [k, pair] of Object.entries(BACKDROP)) { const el = $(k + "Scene"); el.style.backgroundImage = `url(${pair[n ? 1 : 0]})`; el.classList.toggle("night", n); }
+  $("charPanel").style.backgroundImage = `url(${BACKDROP.host[n ? 1 : 0]})`;
+  if (window.PLAYER3D) window.PLAYER3D.setNight(n);
+  if (window.CHAR3D) window.CHAR3D.setNight(n);
+}
+document.querySelectorAll("[data-time]").forEach(b => b.addEventListener("click", () => setNight(b.dataset.time === "night")));
+
+// ---------------------------------------------------------------- toast (the game's line over the hotbar)
+function toast(scene, text) {
+  let t = scene.querySelector(".k-toast"); if (!t) { t = h("div", { class: "k-toast" }); scene.append(t); }
+  t.replaceChildren(P(text)); t.classList.add("on"); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("on"), 2200);
+}
+
+// ================================================================ HOST
+const GUESTS = ["Wren", "Tam", "Ide", "Sela", "Bryn", "Cal", "Petra", "Hal"];
+const HOST = { screen: "pause", port: "47123", password: "", lan: true, hosting: false, players: [], ask: null, stopAsk: false, err: "", copied: false, taken: false, next: 0 };
+const ME = "Mara", MAX = 8;
+function hostRender() {
+  const S = HOST, scene = $("hostScene");
+  const keepToast = scene.querySelector(".k-toast");
+  let panel;
+  if (S.screen === "pause") {
+    panel = frame(120, ...lintel("Paused", () => {}),
+      btn("Resume", () => {}, { cls: "focus wide" }), btn("Host", () => { S.screen = "host"; hostRender(); }, { cls: "wide" }),
+      btn("Saves", null, { cls: "wide" }), btn("Settings", null, { cls: "wide" }), btn("Main menu", null, { cls: "wide" }), btn("Quit", null, { cls: "wide" }));
+  } else if (!S.hosting) {
+    const port = h("input", { class: "k-field" + (S.err ? " bad" : ""), id: "hPort", inputmode: "numeric", value: S.port, "aria-label": "Port", maxlength: "5" });
+    port.addEventListener("input", () => { S.port = port.value.replace(/\D/g, "").slice(0, 5); port.value = S.port; });
+    const pw = h("input", { class: "k-field", type: "password", value: S.password, placeholder: "None", "aria-label": "Password", maxlength: "32" });
+    pw.addEventListener("input", () => { S.password = pw.value; });
+    const lan = h("button", { class: "k-check", type: "button", role: "checkbox", "aria-checked": String(S.lan), "aria-label": "Show on LAN", onclick: () => { S.lan = !S.lan; hostRender(); } });
+    panel = frame(230, ...lintel("Host", () => { S.screen = "pause"; S.err = ""; hostRender(); }),
+      h("div", { class: "k-row" }, P("Port"), port, h("span")),
+      h("div", { class: "k-row" }, P("Password"), pw, h("span")),
+      h("div", { class: "k-row two" }, P("Show on LAN"), lan),
+      S.err ? line(S.err, "k-warn") : null,
+      h("div", { class: "k-foot" }, btn("Back", () => { S.screen = "pause"; S.err = ""; hostRender(); }), btn("Start", startHost, { cls: "focus" })));
+  } else {
+    const n = S.players.length + 1;
+    const rows = [h("div", { class: "k-item" }, h("div", { class: "who" }, h("span", { class: "name" }, P(ME))), h("span", { class: "tag" }, P("You")), h("span"))];
+    for (const p of S.players) {
+      if (S.ask === p) rows.push(h("div", { class: "k-item" }, h("div", { class: "who" }, h("span", { class: "sub" }, `Ban ${p}?`)), btn("Ban", () => { drop(p, `${p} banned`); }), btn("Cancel", () => { S.ask = null; hostRender(); })));
+      else rows.push(h("div", { class: "k-item" }, h("div", { class: "who" }, h("span", { class: "name" }, P(p))), btn("Kick", () => drop(p, `${p} kicked`)), btn("Ban", () => { S.ask = p; hostRender(); })));
+    }
+    const addr = "192.168.1.24:" + S.port;
+    const foot = S.stopAsk
+      ? [h("div", { class: "k-line k-warn", style: "text-align:center" }, `Stop? ${S.players.length === 1 ? "1 player leaves" : S.players.length + " players leave"}.`),
+         h("div", { class: "k-foot" }, btn("Cancel", () => { S.stopAsk = false; hostRender(); }), btn("Stop", stopHost))]
+      : [h("div", { class: "k-foot" }, btn("Stop", () => { if (S.players.length) { S.stopAsk = true; hostRender(); } else stopHost(); }), btn("Back", () => { S.screen = "pause"; hostRender(); }, { cls: "focus" }))];
+    panel = frame(230, ...lintel("Host", () => { S.screen = "pause"; hostRender(); }),
+      h("div", { class: "k-row" }, P("Address"), h("div", { class: "k-value", "aria-label": "Address" }, addr), btn(S.copied ? "Copied" : "Copy", () => { try { navigator.clipboard.writeText(addr); } catch (e) { /* no clipboard: the label still answers */ } S.copied = true; hostRender(); setTimeout(() => { S.copied = false; hostRender(); }, 1400); })),
+      h("div", { class: "k-row" }, P("Password"), h("div", { class: "k-value" }, S.password ? "Set" : "None"), h("span")),
+      h("div", { class: "k-row two", style: "min-height:0" }, h("div", { class: "k-sec" }, P("Players")), h("div", { class: "k-sec" }, P(`${n}/${MAX}`))),
+      h("div", { class: "k-list" }, ...rows), ...foot);
+  }
+  scene.replaceChildren(panel); if (keepToast) scene.append(keepToast);
+  $("hJoin").disabled = !HOST.hosting || HOST.players.length + 1 >= MAX; $("hLeave").disabled = !HOST.hosting || !HOST.players.length;
+  $("hTaken").setAttribute("aria-pressed", String(HOST.taken));
+}
+function startHost() {
+  const p = +HOST.port;
+  if (!HOST.port || p < 1024 || p > 65535) { HOST.err = "Port must be 1024 to 65535"; hostRender(); return; }
+  if (HOST.taken) { HOST.err = "Port in use"; hostRender(); return; }
+  HOST.err = ""; HOST.hosting = true; hostRender(); toast($("hostScene"), "Hosting on port " + HOST.port);
+}
+function stopHost() { HOST.hosting = false; HOST.players = []; HOST.stopAsk = false; HOST.ask = null; hostRender(); toast($("hostScene"), "Hosting stopped"); }
+function drop(p, msg) { HOST.players = HOST.players.filter(q => q !== p); HOST.ask = null; if (!HOST.players.length) HOST.stopAsk = false; hostRender(); toast($("hostScene"), msg); }
+$("hJoin").addEventListener("click", () => {
+  if (!HOST.hosting || HOST.players.length + 1 >= MAX) return;
+  const free = GUESTS.filter(g => !HOST.players.includes(g)); const p = free[0];
+  HOST.players.push(p); hostRender(); toast($("hostScene"), p + " joined");
+});
+$("hLeave").addEventListener("click", () => { const p = HOST.players[HOST.players.length - 1]; if (p) drop(p, p + " left"); });
+$("hTaken").addEventListener("click", () => { HOST.taken = !HOST.taken; hostRender(); });
+$("hReset").addEventListener("click", () => { Object.assign(HOST, { screen: "pause", port: "47123", password: "", lan: true, hosting: false, players: [], ask: null, stopAsk: false, err: "", copied: false }); hostRender(); });
+
+// ================================================================ JOIN
+const LAN = [
+  { world: "Fern Hollow", host: "Wren", n: 2, pw: false, addr: "192.168.1.24:47123" },
+  { world: "Ashen Reach", host: "Tam", n: 5, pw: true, addr: "192.168.1.31:47123" },
+  { world: "Saltmarsh", host: "Ide", n: 8, pw: false, addr: "192.168.1.40:47200" },
+];
+const REFUSE = {
+  GameVersion: "Game version differs", WorldVersion: "World version differs", DifferentWorld: "Different world",
+  Full: "Game is full", Banned: "Banned from this game", WrongPassword: "Wrong password", none: "No game at that address",
+};
+// a server someone keeps running (a hosted, always-on game), kept on the Join panel once joined
+const SERVERS = [{ world: "Long Reach", host: "Server", n: 4, pw: true, addr: "longreach.example:47123" }];
+// the saved worlds CONTINUE lists, the latest first
+const WORLDS = [
+  { name: "Fern Hollow", when: "12 min ago" }, { name: "World 3", when: "2 hours ago" },
+  { name: "Saltmarsh", when: "3 days ago" }, { name: "World 1", when: "9 days ago" },
+];
+const JOIN = { screen: "title", name: "Mara", addr: "192.168.1.24:47123", target: null, pw: "", msg: "", timer: 0, prog: 0, loading: "" };
+function joinRender() {
+  const S = JOIN, scene = $("joinScene");
+  let panel;
+  if (S.screen === "title") {
+    panel = h("div", { class: "stack" }, h("img", { class: "logo", src: "multiplayer/game/logo.png", alt: "Pale Blue Dot" }),
+      frame(120, btn("Continue", () => { S.screen = "continue"; joinRender(); }, { cls: "focus wide" }), btn("New world", null, { cls: "wide" }),
+        btn("Multiplayer", () => { S.screen = "join"; joinRender(); }, { cls: "wide" }), btn("Options", () => { location.hash = "#character"; }, { cls: "wide" }), btn("Quit", null, { cls: "wide" })));
+  } else if (S.screen === "continue") {
+    const rows = WORLDS.map(w => h("div", { class: "k-item" }, h("div", { class: "who" }, h("span", { class: "name" }, P(w.name)), h("span", { class: "sub k-when" }, w.when)), h("span"),
+      btn("Load", () => loadWorld(w.name))));
+    panel = frame(200, ...lintel("Continue", back),
+      btn("Load latest", () => loadWorld(WORLDS[0].name), { cls: "focus wide" }),
+      h("div", { class: "k-sec" }, P("Worlds")), h("div", { class: "k-list" }, ...rows),
+      h("div", { class: "k-foot" }, btn("Back", back), h("span")));
+  } else if (S.screen === "join") {
+    const name = h("input", { class: "k-field", value: S.name, "aria-label": "Name", maxlength: "16" }); name.addEventListener("input", () => { S.name = name.value; });
+    const addr = h("input", { class: "k-field", value: S.addr, "aria-label": "Address", maxlength: "64" }); addr.addEventListener("input", () => { S.addr = addr.value; });
+    const games = LAN.map(g => h("div", { class: "k-item" },
+      h("div", { class: "who" }, h("span", { class: "name" }, P(g.world), g.pw ? lock() : null), h("span", { class: "sub" }, `${g.host} · ${g.n}/8`)),
+      h("span"), g.n >= 8 ? btn("Full", null, { disabled: true }) : btn("Join", () => pick(g))));
+    panel = frame(230, ...lintel("Multiplayer", back),
+      h("div", { class: "k-row" }, P("Name"), name, h("span")),
+      h("div", { class: "k-row" }, P("Address"), addr, btn("Join", () => go({ world: null, addr: S.addr, pw: false }), { cls: "focus" })),
+      h("div", { class: "k-sec" }, P("Servers")), h("div", { class: "k-list" }, ...SERVERS.map(g => h("div", { class: "k-item" },
+        h("div", { class: "who" }, h("span", { class: "name" }, P(g.world), g.pw ? lock() : null), h("span", { class: "sub" }, `${g.addr} · ${g.n}/8`)), h("span"), btn("Join", () => pick(g))))),
+      h("div", { class: "k-sec" }, P("On LAN")), h("div", { class: "k-list" }, ...games),
+      h("div", { class: "k-foot" }, btn("Back", back), h("span")));
+  } else if (S.screen === "password") {
+    const pw = h("input", { class: "k-field", type: "password", value: S.pw, "aria-label": "Password", maxlength: "32" }); pw.addEventListener("input", () => { S.pw = pw.value; });
+    setTimeout(() => pw.focus({ preventScroll: true }), 0);
+    panel = frame(170, ...lintel("Join", () => { S.screen = "join"; S.msg = ""; joinRender(); }),
+      S.target.world ? h("div", { class: "k-sec", style: "margin-top:0" }, P(S.target.world)) : line(S.target.addr, "k-dim"),
+      S.msg ? line(S.msg, "k-warn") : null,
+      h("div", { class: "k-row" }, P("Password"), pw, h("span")),
+      h("div", { class: "k-foot" }, btn("Back", () => { S.screen = "join"; S.msg = ""; joinRender(); }), btn("Join", () => go(S.target, true), { cls: "focus" })));
+  } else if (S.screen === "joining") {
+    panel = frame(150, ...lintel("Join"), h("div", { class: "k-center" }, line("Joining " + (S.target.world || S.target.addr)), btn("Cancel", () => { clearTimeout(S.timer); S.screen = "join"; joinRender(); })));
+  } else if (S.screen === "refused") {
+    panel = frame(150, ...lintel("Not joined", () => { S.screen = "join"; joinRender(); }), h("div", { class: "k-center" }, line(S.msg, "k-warn"), h("div", { class: "k-dim k-line" }, S.target.world || S.target.addr), btn("Back", () => { S.screen = "join"; joinRender(); }, { cls: "focus" })));
+  } else if (S.screen === "loading") {
+    panel = frame(170, ...lintel("Loading"), h("div", { class: "k-center", style: "align-items:stretch" }, line(S.loading || ("Joining " + (S.target.world || "Fern Hollow")), ""), h("div", { class: "k-bar" }, h("i", { style: `width:${Math.round(S.prog * 100)}%` })),
+      h("div", { class: "k-line k-dim", style: "text-align:center" }, S.prog < 1 ? "Getting the world" : "Ready")));
+  }
+  scene.replaceChildren(panel);
+}
+function back() { JOIN.screen = "title"; JOIN.msg = ""; joinRender(); }
+function startLoading(text) {
+  JOIN.screen = "loading"; JOIN.loading = text; JOIN.prog = 0; joinRender();
+  const t0 = performance.now(); const step = () => { JOIN.prog = Math.min(1, (performance.now() - t0) / 2200); if (JOIN.screen !== "loading") return; joinRender(); if (JOIN.prog < 1) requestAnimationFrame(step); }; requestAnimationFrame(step);
+}
+function loadWorld(name) { JOIN.target = { world: name }; startLoading(name); }
+function pick(g) { JOIN.target = g; JOIN.pw = ""; JOIN.msg = ""; if (g.pw) { JOIN.screen = "password"; joinRender(); } else go(g); }
+function go(target, withPw) {
+  JOIN.target = target; JOIN.screen = "joining"; joinRender();
+  const ans = $("jAnswer").value;
+  JOIN.timer = setTimeout(() => {
+    if (ans === "ok") { startLoading(""); return; }
+    JOIN.msg = REFUSE[ans];
+    if (ans === "WrongPassword") { JOIN.screen = "password"; JOIN.pw = ""; } else JOIN.screen = "refused";
+    joinRender();
+  }, ans === "none" ? 1600 : 700);
+}
+$("jReset").addEventListener("click", () => { clearTimeout(JOIN.timer); Object.assign(JOIN, { screen: "title", target: null, pw: "", msg: "", prog: 0, loading: "" }); joinRender(); });
+
+// ================================================================ tabs (one at a time, a bare #anchor each)
+const TABS = ["host", "join", "player", "character"];
+function openTab(id) {
+  if (!TABS.includes(id)) id = "host";
+  for (const t of TABS) { $("tab-" + t).classList.toggle("open", t === id); }
+  document.querySelectorAll(".ttab").forEach(a => a.setAttribute("aria-selected", String(a.dataset.tab === id)));
+  // one 3D view on the page at a time: the hidden tab's loop stops before the open one starts
+  if (id !== "player" && window.PLAYER3D) window.PLAYER3D.hide();
+  if (id !== "character" && window.CHAR3D) window.CHAR3D.hide();
+  if (id === "player" && window.PLAYER3D) window.PLAYER3D.show();
+  if (id === "character" && window.CHAR3D) { window.CHAR3D.setNight(PAGE.night); window.CHAR3D.show(); }
+}
+window.addEventListener("hashchange", () => openTab(location.hash.slice(1)));
+
+// ---------------------------------------------------------------- the info modal
+const info = $("info");
+$("infoBtn").addEventListener("click", () => info.showModal());
+$("infoClose").addEventListener("click", () => info.close());
+info.addEventListener("click", e => { if (e.target === info) info.close(); });
+
+hostRender(); joinRender(); setNight(false);
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="multiplayer/scene-kit.js?v=1"></script>
+<script src="multiplayer/figure-kit.js?v=1"></script>
+<script src="multiplayer/player.js?v=3"></script>
+<script src="multiplayer/peoples.js?v=1"></script>
+<script src="multiplayer/character.js?v=1"></script>
+<script>openTab(location.hash.slice(1));</script>
+</body>
+</html>

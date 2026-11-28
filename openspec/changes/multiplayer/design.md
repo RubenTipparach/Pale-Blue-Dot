@@ -716,6 +716,448 @@ game applied every change, its own dig was accepted, and restarted it
 rejoined and was sent the hut. A seven-bot soak for 60 s passed the same
 checks (1715 requests).
 
+### 22. A joined player's own pack (2026-11-27)
+
+**Found.** The two-machine run (2026-11-23) noted the joining player's
+hotbar empty. The starting kit has been empty since 2026-11-17, so an empty
+hotbar on a first join is right. What is wrong is behind it: nothing sends
+a joined player their own slots. The server keeps every player's slots
+(`Player::slots`) and decides digs, places, pack moves and pickups against
+them, but no message carries them back. A joined game makes no prediction
+(design 20, first cut), so:
+
+- a block the player digs goes into the server's copy and never shows up
+  in their hotbar, so they have nothing to place;
+- a returning player gets the starting kit again, because the host passes
+  the kit to every `join`, even for a key it already knows;
+- a refusal cannot put the pack back (design 15.3 and `refuse_hands` say
+  "until the inventory message").
+
+**The message.** `ToClient::Slots { slots }`: the player's whole carried
+slots, the hotbar's ten and then the pack's thirty, sent only to that
+player. A slot goes on the wire as a count (u16, 0 for empty) and then its
+item: a kind byte, then the material's save code (u8) for a block, the tool
+in `Tool::ALL` order (u8), the fish's roster index (u16), or the good's
+code as text. A good goes by its code, never its table index, as the save
+does (`farming-and-smelting` decision 1). An unknown good or material
+fails to decode (`Decode::Invalid`). Which slot is selected is not sent: it
+is the player's hand on their own game. The protocol goes to version 2,
+and so does its minimum, so a version-1 game is refused with "Game version
+differs" rather than missing messages it cannot read.
+
+**When it is sent:**
+- right after `Welcome`;
+- after every accepted request that changed that player's slots (a dig, a
+  place, a pack move or a pickup), after the request's `Accepted`;
+- after every refused request about the hands or a cell, so a prediction
+  is put back (design 15.3).
+
+The host's own player, player 0, is never sent it: its slots are the app's
+own (design 18).
+
+**The joined game** sets its `Hotbar` to the slots it is sent and keeps its
+own selected index. Its pack screen, the held item and the build preview
+read the `Hotbar`, so they follow.
+
+**Away is not gone.** `Server::leave` keeps a departed player's slots by
+their number, and `join` gives a known key the slots it left with, not the
+new player's kit. This lasts only while the host is running: keeping them
+in the host's save is design 10's `player` record, which comes next.
+
+**Found with it: a guest's slots were written as the host's.** On a
+hosted world, the host's save is the store (design 18), and its lines carry
+no author: every player line is player 0's (`world-persistence` decision
+11). But `SaveStore` wrote a guest's dig, place, pack move or pickup with
+the guest's slots. Only a `debug_assert` stood in the way, and it is off in
+the `fast` and release builds. So the host's in-memory carried slots, and
+after a reload the host's pack, became the guest's last slots. The fix is
+in `SaveStore`:
+- a guest's edit is written with the host's own slots as they stand;
+- a guest's pickup writes what is left on the drop, also with the host's
+  own slots;
+- a guest's pack move writes no line, because the save has nothing of the
+  guest's to keep until design 10's player record.
+
+The guest's slots stay in the server's memory. A save written during the
+2026-11-23 run may already have the laptop player's slots as the Mac
+player's; the owner can check the Mac's pack.
+Check: `a_guests_hands_never_become_the_hosts_slots`.
+
+**Not covered here:** the aim fault from the same run, where bare hands
+dug only straight down for the laptop's player. The request carries the
+cell the client picked, so the fault is on the joined game's side. It
+needs a run on the owner's machines to find, and it stays open in the
+two-machine notes.
+
+**Checks:**
+- the round trip of `Slots` with one of each kind;
+- a good whose code this build lacks fails to decode;
+- a remote player's dig is answered with `Accepted` and then `Slots`
+  holding the block;
+- a refused place is answered with `Slots` as they were;
+- a player who leaves and rejoins gets the slots they left with, not the
+  kit;
+- the joined game's `Hotbar` takes the slots and keeps its selected slot.
+
+### 23. Drops through the server (task 8.2, the drops; 2026-11-27)
+
+**Found.** Writing design 22's tests showed why a joined player cannot
+build: a dig does not put its block in the pack, it floats out as a drop
+for the magnet to pull in (`inventory-grid` decision 4). The server works
+out what floats (`Decided::floats`), and for a remote player throws it away
+(`handle`: "What floats out becomes a drop record with task 8.2"). Nobody
+else sees a drop either: the host's own digs make drops only in the host's
+app. So a joined player's dig yields nothing, and the first thing they try
+in the world does nothing for them.
+
+**The drop is made where the dig is decided.**
+- Single player and the host's own player: the app makes the drop before
+  asking, as today (`Drops::make`, at the dug cell plus the lift), and the
+  store writes it on the dig's line.
+- A remote player's dig: the app is not there, so the store makes the drop,
+  `Store::make_drop(item, cell, layer, made_s)`. It is the same drop
+  `Drops::make` would make: the save's next id, at the cell's centre
+  half a metre up, scattered by its id, in the body's frame (f64), made at
+  the server's world clock. It is written on the dig's line as the app's
+  drop is. The save's lines do not change.
+
+**Everyone is told.** Two messages, both broadcast to every player:
+- `ToClient::Drop { drop }` when a drop is made by a dig, whoever dug. It
+  carries the id, the item and count (design 22's slot encoding), the
+  position (f64, the home body's frame) and the time it was made.
+- `ToClient::DropLeft { id, left }` when a pickup is decided, whoever
+  picked: how many are left, 0 for gone.
+
+The host's own game is player 0. It gets both through the outbox, adds a
+drop it does not already hold, and sets what is left on one it does. Its
+own digs and pickups are already in its `Drops`, so applying them again
+changes nothing.
+
+**A joined game's magnet asks.** Its drops are only those it was told
+about. When the magnet brings one in (`drops::step` says picked), it sends
+`Request::Pick { drop }` once, through the same queue as a dig, and changes
+nothing itself. What it takes comes back as `DropLeft` and `Slots`. Two
+players reaching one drop are given it once, by the server (design 19).
+
+**Not yet:** a toss (Q, or a stack dragged off the pack) by a joined
+player, and a host's toss being seen by its guests; a chest broken by a
+guest, whose contents spill; and expiry, which each game still runs on its
+own clock from the drop's `made_s`. Drops are not yet sent to a player who
+joins after they were made. All of these are left for region records (the
+rest of 8.2, with 6.3's snapshots).
+
+**Checks:**
+- the two messages round-trip;
+- a remote player's dig makes a drop in the store, writes it on the dig's
+  line, and broadcasts `Drop` to everyone;
+- the host's own dig with the app's drop broadcasts that drop;
+- a remote player's pickup broadcasts `DropLeft` and sends `Slots` holding
+  the item;
+- the host's game adds a guest's drop to its `Drops` once.
+
+### 24. Other players in the world (task 8.1; 2026-11-27)
+
+The owner, 2026-11-27, on the handoff's list: "I asked to get it all
+done". Seeing another player is the gap the handoff names first. The
+protocol has carried a pose both ways since 3.2 (`ToServer::Presence`,
+`ToClient::Presence`), but nothing sends it, the server drops it, and no
+game draws it.
+
+**What is sent.** Each game sends its own player's pose at 20 Hz while it
+is joined or hosting:
+- the feet, as a `WorldPos` in the home body's frame (f64): the walker's
+  centre brought down by its half height, from the origin's own methods,
+  never from a planet-centred f32;
+- yaw, the way the camera faces, measured in the tangent plane at the feet
+  from a fixed tangent frame (`protocol::tangent_frame`: east from the
+  body's Z axis crossed with up, Y when up is along Z; north completes
+  it). `yaw_of` and `forward_of` are one core pair, so the sender and the
+  drawer cannot disagree.
+- pitch, the camera's look up or down.
+
+**The server** keeps each player's last pose and passes each one it
+receives to every other player as `ToClient::Presence`, never back to
+its sender. The host's own pose goes through the same call
+(`Server::presence`), so the host is seen as any player is. When a
+player leaves, everyone is told with a new `ToClient::Gone { player }`.
+It rides the one reliable stream, as everything does today; unreliable
+datagrams for presence (design 1) wait for a measured need.
+
+**Each game** keeps, per other player, the last two poses it received with
+the time each arrived (`Others`). It draws them 100 ms behind (the gap at
+20 Hz, and a little more), interpolating the feet in f64 along the
+chord and putting them back on the sphere's radius. Yaw turns the
+short way. The stored state is f64 in the body's frame, so a rebase of
+one game's origin moves nothing it stores; the figure's local position
+is worked out from the origin each frame. Once the last pose is 2 s
+old, the player stays where they were last seen.
+
+**The figure is the townsfolk's**, approved in M5 and drawn by
+`townsfolk`: one shaped, textured body with a face, its walk animation,
+the field's light, and its fade in and out. Other players are the
+people of a reserved site, `PLAYERS_SITE`, with one person each,
+numbered by the player, a look generated from the player's number with a
+village tunic. They are driven each frame (`Townsfolk::drive`) and walk
+when they move faster than 0.3 m/s. They are not townsfolk to anything
+else:
+- `everyone()` leaves them out, so combat, guards and town missions never
+  see them; a swing at another player does nothing
+  (`survival-mode` 4.7's single-player half stands);
+- they get no `Talker`.
+- The walker's solids include them, as they do townsfolk, so players
+  cannot walk through each other.
+
+Their name over them waits for mockup 5.2 (names are empty today: the
+join sends none).
+
+**Checks:**
+- `yaw_of` and `forward_of` round trip, at the poles too;
+- the server passes a pose to the others and not back to the sender, and
+  tells everyone `Gone` when a player leaves;
+- interpolation is 100 ms behind and on the sphere;
+- two games with different origins put the same other player at the same
+  world point;
+- a visitor is not in `everyone()`, and has no `Talker`.
+
+### 25. A toss through the server (task 2.2, the toss; 2026-11-27)
+
+Design 23 left the toss out: Q (or a stack dragged off the pack) took the
+stack from the slots and wrote the toss line in the app alone, so a joined
+player's toss did nothing on the host and a host's toss was never seen.
+
+- **The rule** is `pbd_core::accept::toss(slots, slot, count)`: refused
+  for an empty slot or more than it holds, otherwise the slots with
+  `count` taken and the stack that was taken.
+- **The request** is `Request::Toss { slot, count, at_mm }`. `at_mm` is
+  where it lands, the app's point ahead of the chest, in whole millimetres
+  in the body's frame. Millimetres keep `Request` `Eq`, which the joined
+  game's queue needs, and are finer than anything a drop draws. Reach is
+  checked with the rest of 8.7.
+- **The server** decides it (`Server::toss`), and the store writes the
+  toss line it always wrote (`Store::commit_toss`), naming the drop by its
+  next id and pushed aside by it (`drops::scattered`), as `Drops::make`
+  always placed a toss. A guest's toss carries the host's own slots, as in
+  design 22.
+  Everyone is told with `Drop`, and the player gets `Slots`.
+- **The made time:** the host's own toss uses the app's clock, so single
+  player's lines stay byte for byte what they were. A remote toss uses the
+  server's clock.
+- **A log thrown over water** stays the app's (`logs::throw_in`) until
+  floating logs are shared.
+
+**Checks:**
+- the rule refuses an empty slot and too many;
+- a guest's toss makes a drop everyone is told of and the guest's slots
+  lose the stack;
+- the host's toss through the server writes the line `record_toss`
+  always wrote.
+
+### 26. Crops through the server, and world records sent (task 2.2 and 8.2, crops; 2026-11-27)
+
+Sowing and harvesting were decided in the app (`farm.rs` `plant`,
+`harvest`), wrote a `plot` record with the slots, and nobody else ever saw
+the record. This moves both into the core and the server, and sends every
+record the server's store takes to every player.
+
+**The rules** (`pbd_core::farming::accept`):
+- `plant(ground, over, growing, climate, slots, layer, now_s)` takes one
+  seed from the selected slot and returns the sown plot and the slots
+  after. It is refused when:
+  - the ground is not tilled soil with air over it (`NotTilled`);
+  - a crop already grows there (`Growing`);
+  - the climate does not suit the crop (`Climate`);
+  - the slot holds no seed (`EmptySlot`).
+- `harvest(plot, farm, slots, now_s)` returns the bare plot, the slots
+  with the produce and seeds given, and how many of each. It is refused
+  when the crop is not ripe (`NotRipe`) or the pack has no room (`NoRoom`).
+  Nothing is given unless all of it fits, as today.
+
+The app keeps its notes ("Seeds need tilled soil", "Ripe in 6 h") and
+reads them from the refusal.
+
+**The server** decides `Request::Plant { cell, layer, slot }` and
+`Request::Harvest { cell }`:
+- the ground comes from its column (seed and edits), the climate from
+  `planet_gen::biome_at` at the cell's direction, as `climate_at` reads
+  it;
+- the plot comes from the store (`Store::record`);
+- the farm's tuning is set on the server like the crew chain
+  (`Server::set_farm`), and a harvest asked of a server with none is
+  refused.
+
+The store writes the record with the player's slots
+(`Store::commit_record_with_hands`; a guest's with the host's own, design
+22).
+
+**Records are sent.** Every record the server's store takes, whether a
+plot, a crew record or anything that comes this way later, is broadcast
+as `ToClient::Record { record }` (kind, id, schema and its RON body). A
+joined game puts it in its own records (`WorldSave::take_remote_record`),
+so its crops draw from it as the host's do. The refusals grow by the
+farming ones above, in the protocol's code table (protocol 2 is not yet
+released, so its number stays).
+
+**Not yet:** tilling stays an edit (it already goes through the server),
+fertiliser, wild plants and clutter picking, and the missions' `Planted`
+and `Gained` counts for a joined player (missions are a later writer).
+
+**Checks:**
+- each refusal of the rules, and a harvest that gives exactly what
+  `harvest` gave;
+- a guest's sowing through the server is broadcast as a `Record`, and a
+  harvest of it gives the guest the produce;
+- the host's sowing through the server writes the line `store_with_hands`
+  always wrote.
+
+### 27. A persistent server on Fly.io, the Tenebris way (2026-11-27)
+
+The owner, 2026-11-27: "Use tenebris hosting pattern for now where we can
+deploy a persistent server to fly.io, but yea the option is there if
+someone wants to host server themselves". Hosting from the pause menu
+(design 20, mockup 5.1) stays. Alongside it, a dedicated server runs on
+Fly.io and is the game's default server, as `tenebris.fly.dev` is
+Tenebris's.
+
+**What Tenebris does** (`RubenTipparach/tenebris`: `tenebris-rs/Dockerfile`,
+`tenebris-rs/fly.toml`, `server-js/fly.toml`,
+`.github/workflows/server.yml`):
+- a two-stage Dockerfile: `rust:bookworm` builds the server crate with
+  `--release --locked`, and `debian:bookworm-slim` runs only the binary and
+  its config tree;
+- `fly.toml`: one app in `ord`, one shared-CPU machine, and the volume
+  `tenebris_saves` mounted at `/data`, which holds the worlds and survives
+  every deploy. Its comment warns that `fly launch --copy-config` strips the
+  mount;
+- a `/health` check and an `/admin` page (open for now, or behind an
+  `ADMIN_TOKEN` secret);
+- a GitHub workflow, run by hand or called by the release workflow. It
+  needs a `FLY_API_TOKEN` deploy token, makes the volume the first time,
+  and deploys with `fly deploy --ha=false`, one deploy at a time.
+
+**What differs here, and the choice made** (recommendation taken, ask
+only with screenshots):
+- Tenebris speaks WebSocket over Fly's HTTP proxy. This game speaks QUIC
+  over UDP (`pbd-net`, design 20).
+- Fly serves UDP through a `[[services]]` block with `protocol = "udp"`.
+  The server binds `fly-global-services`, and the app needs a dedicated
+  IPv4 address.
+- Fly's proxy does not start a stopped machine for UDP, so the machine is
+  kept running (`min_machines_running = 1`). Tenebris's machines stop when
+  idle.
+- **Taken:** keep QUIC and pay for the dedicated address. A second
+  transport (QUIC for self-hosting, WebSocket for Fly) would split one
+  protocol into two to keep working, the thing the one-rule principle
+  forbids. If Fly's UDP proves troublesome, a WebSocket transport is the
+  fallback: `pbd-net` keeps its channels and swaps the socket.
+- `/health` and `/admin` are served over HTTP on a separate TCP port by
+  the same binary.
+
+**The server binary** is `pbd-headless`'s `serve` (design 21) with two
+additions:
+- a store on disk, not `MemoryStore`: the same journal format as a
+  `WorldSave` (the save's format module moves to a crate both can use,
+  without Bevy), under `/data/worlds/<id>/`;
+- `--server <port> --world <id>`, which opens or makes a world with a
+  seed and serves it. The world clock runs only while someone is on
+  (design 11).
+
+**What goes in the repository:** `deploy/fly/Dockerfile`,
+`deploy/fly/fly.toml` (app `pale-blue-dot`, volume `pbd_worlds` at
+`/data`), and `.github/workflows/server-deploy.yml`. Deploying needs the
+owner's Fly account, a `FLY_API_TOKEN` repository secret and the
+dedicated IPv4 address: the owner's to set up, once.
+
+**In the game:** the Multiplayer menu (design 28) lists the hosted server
+first, then LAN games, then joining by address. Hosting stays in the
+pause menu.
+
+**Checks:**
+- the on-disk store writes and reads back the same journal a `WorldSave`
+  does (a byte-for-byte test);
+- `pbd-headless --server` restarted keeps its world;
+- the image builds in CI.
+
+The first real deploy is the owner's, with a bot soak against it from the
+Mac.
+
+### 28. The title menu: Continue, New world, Multiplayer, Options, Quit (2026-11-27)
+
+The owner, 2026-11-27: "Change menu to continue, new world, multiplayer,
+options and quit. Continue will have worlds you can load. Or load latest
+save".
+
+- **Continue** opens the saved worlds list (today's saves page), with
+  **Load latest** at its top. A plain launch's front door is still that
+  list (CLAUDE.md, the saves page).
+- **New world**: today's new world flow.
+- **Multiplayer**:
+  - the hosted server (design 27), then games found on the LAN, then
+    join by address, with the refusal messages of mockup 5.1;
+  - hosting your own open world stays in the pause menu.
+- **Options**: today's settings, with a Character page beside them
+  (`player-character`).
+- **Quit.**
+
+Every word comes from the locale file. The mockup is M40's Join tab,
+updated with the Continue list. The game changes after the owner approves
+it.
+
+### 29. The digest round robin and the resync (task 7.1; 2026-11-27)
+
+Design 2 says what a region's digest is. This is how a joined game finds a
+region it has wrong and gets it right.
+
+- **The server** sends one region's digest every `DIGEST_EVERY_S` (2 s) to
+  every player: `Digest { region, seq, digest }`, the next region with an
+  edit in a fixed rotation (`Server::send_digest`). The host's game and the
+  dedicated server call it on their loops. It carries the server's
+  sequence, so a game still waiting for changes in flight is not alarmed
+  by them.
+- **A joined game** keeps the server's last sequence per region, from every
+  `Change` and `Snapshot` it applies. It does not use its own ledger's
+  count, which counts layers set and not the server's accepts. On a
+  `Digest` whose sequence it has reached, it compares its own digest of
+  the region. If they differ it sends `Resync { region }` once (it is
+  queued like a request, and not sent again while one is waiting).
+- **A snapshot replaces the region whole.** Edits are only ever added or
+  replaced, so a wrong extra layer would survive a merge. A snapshot first
+  clears every cell of that region in the game's copy (`Edits::clear_cell`,
+  new), then sets the snapshot's edits and recomputes those cells' digests
+  (`Ledger::resync`, new). The join's first snapshots go the same way.
+- The tier is brought round to the replaced cells through the same APPLY.
+
+**Checks:**
+- `Edits::clear_cell`;
+- the server's rotation visits every region with an edit;
+- a game whose copy of a region is wrong asks for it once, and the
+  snapshot makes its digest equal the server's;
+- a game that is behind in sequence does not ask.
+
+### 30. The cheat checks (task 8.7; 2026-11-27)
+
+Design 15.7's three named checks, each a flag in the server's `Cheats`,
+all off unless set. A dedicated server sets them from its flags. The host's
+in-process server never sets them, for its own player or anyone else, and
+single player never runs them.
+- **Movement** (`--max-speed <m/s>`): a pose whose distance from the last,
+  over the time between them, is faster than the limit is logged as
+  `CHEAT player N: moved X m/s` and not passed on to the others. The next
+  pose within the limit is.
+- **Reach** (`--reach <m>`): a request whose target is farther than the
+  limit from the player's last pose is refused with `Refusal::Cheat` and
+  logged. The target is the dug or placed cell's layer, the sown or
+  harvested cell, the drop picked up, or where a toss lands. A request
+  before any pose has arrived is not checked.
+- **Dig time** against the tool is not built. It needs the swing's start
+  in the request, and no request carries that yet. It stays listed here.
+
+Every failed check is kept as `(player, reason)` in `Server::cheats`, for
+the dedicated server's log and a later admin page.
+
+**Checks:** a teleporting pose is not relayed and is logged; a dig past
+reach is refused as `Cheat`, one within it is taken; with no flags set,
+nothing is checked.
+
 ## Risks / Trade-offs
 
 - **Every stateful rule moves to the server path.** This is most of the work,

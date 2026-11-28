@@ -3857,6 +3857,7 @@ dependencies = [
  "naga",
  "pbd-core",
  "pbd-net",
+ "pbd-save",
  "pbd-server",
  "proc-macro2",
  "quote",
@@ -3885,7 +3886,9 @@ dependencies = [
  "glam 0.30.10",
  "pbd-core",
  "pbd-net",
+ "pbd-save",
  "pbd-server",
+ "ron",
 ]
 
 [[package]]
@@ -3898,6 +3901,16 @@ dependencies = [
  "rcgen",
  "rustls",
  "tokio",
+]
+
+[[package]]
+name = "pbd-save"
+version = "0.1.0"
+dependencies = [
+ "glam 0.30.10",
+ "pbd-core",
+ "ron",
+ "serde",
 ]
 
 [[package]]

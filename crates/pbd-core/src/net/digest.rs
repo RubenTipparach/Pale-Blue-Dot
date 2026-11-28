@@ -212,6 +212,20 @@ impl Regions {
         out
     }
 
+    /// Forget `region` and file again only the cells of `keys`, then refresh
+    /// its digest from `edits`: a region replaced whole (design 29).
+    pub fn refile(&mut self, region: u32, keys: &[u32], edits: &Edits) {
+        self.cells.remove(&region);
+        for &key in keys {
+            self.file(key);
+        }
+        if self.cells.contains_key(&region) {
+            self.refresh(region, edits);
+        } else {
+            self.digests.remove(&region);
+        }
+    }
+
     fn file(&mut self, key: u32) -> Option<u32> {
         let a = crate::cell_key::unpack(key)?;
         let (r, p) = (region::region(a)?, region::place(a)?);

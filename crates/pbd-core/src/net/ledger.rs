@@ -69,6 +69,14 @@ impl Ledger {
         }
     }
 
+    /// `region` replaced whole from a snapshot as of `seq` (design 29): its
+    /// cells are `keys`, which `edits` now hold; its digest is refreshed and
+    /// its sequence set to the server's.
+    pub fn resync(&mut self, region: u32, seq: u64, keys: &[u32], edits: &Edits) {
+        self.regions.refile(region, keys, edits);
+        self.seqs.insert(region, seq);
+    }
+
     /// A region's last sequence: nought if nothing in it was ever changed.
     pub fn seq(&self, region: u32) -> u64 {
         self.seqs.get(&region).copied().unwrap_or(0)
@@ -180,5 +188,50 @@ mod tests {
             assert_eq!(one.digest(r), two.digest(r));
             assert!(one.seq(r) > 0);
         }
+    }
+
+    /// Design 29: a copy with a wrong extra layer, replaced whole from the
+    /// server's snapshot, holds exactly the server's edits for the region,
+    /// at its sequence, with its digest equal to the server's and to a full
+    /// recompute.
+    #[test]
+    fn a_region_replaced_from_a_snapshot_matches_the_server() {
+        let (a, b) = (cell(100, 100), cell(101, 100));
+        let set = |e: &mut Edits, l: &mut Ledger, cell, layer, material| {
+            let edit = Edit {
+                cell,
+                layer,
+                material,
+            };
+            e.set(edit);
+            l.accept(edit, e);
+        };
+        let (mut se, mut sl) = (Edits::new(), Ledger::default());
+        set(&mut se, &mut sl, a, 200, Material::Air);
+        set(&mut se, &mut sl, a, 199, Material::Air);
+        set(&mut se, &mut sl, b, 201, Material::Stone);
+        let (mut ce, mut cl) = (Edits::new(), Ledger::default());
+        set(&mut ce, &mut cl, a, 200, Material::Air);
+        // A layer the server never had: a merge would keep it.
+        set(&mut ce, &mut cl, a, 150, Material::Stone);
+        let region = crate::cell_key::region::of_key(a).unwrap();
+        assert_eq!(region, crate::cell_key::region::of_key(b).unwrap());
+        assert_ne!(cl.digest(region), sl.digest(region));
+        let snap = sl.snapshot(region, &se);
+        let (r, edits) = crate::net::digest::snapshot_edits(&snap.bytes).unwrap();
+        assert_eq!(r, region);
+        for cell in [a, b] {
+            ce.clear_cell(cell);
+        }
+        for &edit in &edits {
+            ce.set(edit);
+        }
+        let mut keys: Vec<u32> = edits.iter().map(|e| e.cell).collect();
+        keys.dedup();
+        cl.resync(region, snap.seq, &keys, &ce);
+        assert_eq!(cl.digest(region), sl.digest(region));
+        assert_eq!(cl.digest(region), recompute(region, &ce));
+        assert_eq!(cl.seq(region), sl.seq(region));
+        assert_eq!(ce.for_cell(a), se.for_cell(a));
     }
 }

@@ -111,16 +111,19 @@ fn requests_are_journaled_in_order_and_sent_to_everyone() {
             Material::Air
         );
     }
-    // Each request: Accepted to its player, then the change to both.
+    // Each request: Accepted to its player, then the change to both, then
+    // the dug block's drop to both (design 23).
     let out = s.drain();
-    assert_eq!(out.len(), 6 * 3);
-    for chunk in out.chunks(3) {
+    assert_eq!(out.len(), 6 * 5);
+    for chunk in out.chunks(5) {
         assert!(matches!(
             chunk[0],
             (To::Player(0), ToClient::Accepted { .. })
         ));
         assert!(matches!(chunk[1], (To::Player(0), ToClient::Change { .. })));
         assert!(matches!(chunk[2], (To::Player(1), ToClient::Change { .. })));
+        assert!(matches!(chunk[3], (To::Player(0), ToClient::Drop { .. })));
+        assert!(matches!(chunk[4], (To::Player(1), ToClient::Drop { .. })));
     }
     // The ledger is the world's: its digest is a recompute of the edits.
     for (_, sequenced, _) in &st.entries {
@@ -524,6 +527,16 @@ impl Store for NoRecords {
     fn commit(&mut self, author: &Author, edit: Edit, carried: &Slots) -> Option<Sequenced> {
         self.0.commit(author, edit, carried)
     }
+    fn floating(
+        &mut self,
+        author: &Author,
+        item: Item,
+        cell: u32,
+        layer: u16,
+        made_s: f64,
+    ) -> Option<ItemDrop> {
+        self.0.floating(author, item, cell, layer, made_s)
+    }
     fn commit_pack(&mut self, author: &Author, carried: &Slots) -> bool {
         self.0.commit_pack(author, carried)
     }
@@ -535,6 +548,27 @@ impl Store for NoRecords {
     }
     fn commit_record(&mut self, _: &Author, _: Record) -> bool {
         false
+    }
+    fn record(&self, kind: &str, id: u64) -> Option<Record> {
+        self.0.record(kind, id)
+    }
+    fn commit_record_with_hands(
+        &mut self,
+        author: &Author,
+        record: Record,
+        carried: &Slots,
+    ) -> bool {
+        self.0.commit_record_with_hands(author, record, carried)
+    }
+    fn commit_toss(
+        &mut self,
+        author: &Author,
+        stack: pbd_core::inventory::Stack,
+        at: glam::DVec3,
+        made_s: f64,
+        carried: &Slots,
+    ) -> Option<ItemDrop> {
+        self.0.commit_toss(author, stack, at, made_s, carried)
     }
 }
 
@@ -678,4 +712,572 @@ fn vitals_are_journaled_on_a_hit_and_every_few_seconds_and_read_back() {
         .unwrap();
     assert_eq!(saved.health, cfg.health.max_pts);
     assert_eq!(saved.food_fp as f32, cfg.food.wake_fp);
+}
+
+/// The messages queued for `player`, in order.
+fn to_player(s: &mut Server, player: u32) -> Vec<ToClient> {
+    s.drain()
+        .into_iter()
+        .filter(|(to, _)| *to == To::Player(player))
+        .map(|(_, m)| m)
+        .collect()
+}
+
+/// Design 22: a remote player is sent their slots after the welcome, and a
+/// place is answered, then followed by their slots with the block spent.
+#[test]
+fn a_remote_players_place_is_followed_by_their_slots() {
+    use pbd_core::inventory::Stack;
+    let (mut s, mut st) = server();
+    let mut carried = Slots::default();
+    carried.set(0, Some(Stack::new(Item::Block(Material::Stone), 3)));
+    let host = s.join(0, &hello(1), carried.clone()).unwrap();
+    let guest = s.join(1, &hello(2), carried).unwrap();
+    assert_eq!((host, guest), (0, 1));
+    let sent = s.drain();
+    // The host's own player is never sent slots; the guest is, after its
+    // welcome.
+    let slots_to = |p: u32| {
+        sent.iter()
+            .filter(|(to, m)| *to == To::Player(p) && matches!(m, ToClient::Slots { .. }))
+            .count()
+    };
+    assert_eq!((slots_to(0), slots_to(1)), (0, 1));
+    let (cell, top) = dry_cells(&s, 1)[0];
+    s.handle(
+        &mut st,
+        guest,
+        ToServer::Request {
+            id: 4,
+            request: Request::Place {
+                cell,
+                layer: top + 1,
+                slot: 0,
+            },
+        },
+    );
+    let got = to_player(&mut s, guest);
+    let accepted = got
+        .iter()
+        .position(|m| matches!(m, ToClient::Accepted { id: 4, .. }))
+        .unwrap_or_else(|| panic!("accepted: {got:?}"));
+    let Some(ToClient::Slots { slots }) = got.last() else {
+        panic!("the slots come last: {got:?}");
+    };
+    assert!(got.len() - 1 > accepted);
+    assert_eq!(slots.get(0).map(|stack| stack.count), Some(2));
+    assert_eq!(slots, &s.player(guest).unwrap().slots);
+}
+
+/// Design 22: a refused place is answered with the slots as they were, so
+/// a prediction can be put back.
+#[test]
+fn a_refused_place_is_answered_with_the_slots_as_they_were() {
+    let (mut s, mut st) = server();
+    let players = joined(&mut s, &[1, 2], Slots::default());
+    let (cell, top) = dry_cells(&s, 1)[0];
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Request {
+            id: 2,
+            request: Request::Place {
+                cell,
+                layer: top + 1,
+                slot: 0,
+            },
+        },
+    );
+    let got = to_player(&mut s, players[1]);
+    assert!(
+        matches!(got.first(), Some(ToClient::Refused { id: 2, .. })),
+        "{got:?}"
+    );
+    assert_eq!(
+        got.last(),
+        Some(&ToClient::Slots {
+            slots: Slots::default()
+        })
+    );
+    assert!(st.entries.is_empty());
+}
+
+/// Design 22: a player who leaves and joins again is given the slots they
+/// left with, not the new player's kit.
+#[test]
+fn a_player_who_rejoins_gets_the_slots_they_left_with() {
+    use pbd_core::inventory::Stack;
+    let (mut s, _) = server();
+    let mut carried = Slots::default();
+    carried.set(2, Some(Stack::new(Item::Block(Material::Stone), 9)));
+    let host = s.join(0, &hello(1), Slots::default()).unwrap();
+    let guest = s.join(1, &hello(2), carried.clone()).unwrap();
+    assert!(s.leave(guest).is_some());
+    s.drain();
+    let again = s.join(2, &hello(2), Slots::default()).unwrap();
+    assert_eq!(again, guest);
+    assert_eq!(s.player(guest).unwrap().slots, carried);
+    assert_eq!(
+        to_player(&mut s, guest).last(),
+        Some(&ToClient::Slots { slots: carried })
+    );
+    let _ = host;
+}
+
+/// Design 23: a remote player's dig makes a drop in the store, written with
+/// the dig, and every player is told of it; the guest's pickup of it tells
+/// every player what is left and sends the guest their slots holding it.
+#[test]
+fn a_guests_dig_drop_is_told_to_everyone_and_picked_once() {
+    let (mut s, mut st) = server();
+    let players = joined(&mut s, &[1, 2], Slots::default());
+    let (cell, top) = dry_cells(&s, 1)[0];
+    let was = s
+        .column(&Edits::new(), cell)
+        .unwrap()
+        .material(top as usize);
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Request {
+            id: 1,
+            request: Request::Dig { cell, layer: top },
+        },
+    );
+    let sent = s.drain();
+    let made: Vec<(To, ItemDrop)> = sent
+        .iter()
+        .filter_map(|(to, m)| match m {
+            ToClient::Drop { drop } => Some((*to, *drop)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(made.len(), 2, "both players are told: {sent:?}");
+    let drop = made[0].1;
+    assert_eq!(made[1].1, drop);
+    assert_eq!(drop.item, Item::Block(was));
+    assert_eq!(st.drop(drop.id), Some(drop), "written with the dig");
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Request {
+            id: 2,
+            request: Request::Pick { drop: drop.id },
+        },
+    );
+    let sent = s.drain();
+    let left: Vec<&ToClient> = sent
+        .iter()
+        .filter(|(_, m)| matches!(m, ToClient::DropLeft { .. }))
+        .map(|(_, m)| m)
+        .collect();
+    assert_eq!(left.len(), 2, "both players are told");
+    assert_eq!(
+        left[0],
+        &ToClient::DropLeft {
+            id: drop.id,
+            left: 0
+        }
+    );
+    let Some((_, ToClient::Slots { slots })) = sent.last() else {
+        panic!("the guest's slots come last: {sent:?}");
+    };
+    assert!(
+        slots
+            .iter()
+            .flatten()
+            .any(|stack| stack.item == Item::Block(was) && stack.count == 1)
+    );
+    // The host reaching the same drop is refused: it is gone.
+    s.handle(
+        &mut st,
+        players[0],
+        ToServer::Request {
+            id: 3,
+            request: Request::Pick { drop: drop.id },
+        },
+    );
+    assert!(s.drain().iter().any(|(_, m)| matches!(
+        m,
+        ToClient::Refused {
+            id: 3,
+            reason: Refusal::Gone
+        }
+    )));
+}
+
+/// Design 24: a pose goes to every other player and never back to its
+/// sender; a player who leaves is told to everyone still in as gone.
+#[test]
+fn a_pose_goes_to_the_others_and_a_leaver_is_gone() {
+    use pbd_core::net::protocol::Pose;
+    use pbd_core::world_frame::{FrameId, WorldPos};
+    let (mut s, mut st) = server();
+    let players = joined(&mut s, &[1, 2, 3], Slots::default());
+    let pose = Pose {
+        at: WorldPos::new(FrameId(0), glam::DVec3::new(0.0, 4800.0, 0.0)),
+        yaw: 0.5,
+        pitch: -0.1,
+    };
+    s.handle(&mut st, players[1], ToServer::Presence { pose });
+    let sent = s.drain();
+    let to: Vec<To> = sent.iter().map(|(to, _)| *to).collect();
+    assert_eq!(to, vec![To::Player(players[0]), To::Player(players[2])]);
+    assert!(sent.iter().all(|(_, m)| *m
+        == ToClient::Presence {
+            player: players[1],
+            pose
+        }));
+    assert_eq!(s.player(players[1]).unwrap().pose, Some(pose));
+    s.leave(players[2]);
+    let sent = s.drain();
+    assert_eq!(sent.len(), 2);
+    assert!(
+        sent.iter()
+            .all(|(_, m)| *m == ToClient::Gone { player: players[2] })
+    );
+}
+
+/// Design 25: a guest's toss takes the stack from their slots, makes a drop
+/// where they asked that everyone is told of, and sends them their slots.
+#[test]
+fn a_guests_toss_makes_a_drop_everyone_sees() {
+    use pbd_core::inventory::Stack;
+    let (mut s, mut st) = server();
+    let mut carried = Slots::default();
+    carried.set(4, Some(Stack::new(Item::Block(Material::Stone), 6)));
+    let players = joined(&mut s, &[1, 2], carried);
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Request {
+            id: 5,
+            request: Request::Toss {
+                slot: 4,
+                count: 2,
+                at_mm: [1_500, 4_800_250, -3_000],
+            },
+        },
+    );
+    let sent = s.drain();
+    let drops: Vec<ItemDrop> = sent
+        .iter()
+        .filter_map(|(_, m)| match m {
+            ToClient::Drop { drop } => Some(*drop),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(drops.len(), 2, "both players are told: {sent:?}");
+    let d = drops[0];
+    assert_eq!((d.item, d.count), (Item::Block(Material::Stone), 2));
+    assert_eq!(
+        d.position,
+        pbd_core::drops::scattered(glam::DVec3::new(1.5, 4800.25, -3.0), d.id)
+    );
+    assert_eq!(st.drop(d.id), Some(d));
+    assert_eq!(
+        s.player(players[1]).unwrap().slots.get(4).map(|s| s.count),
+        Some(4)
+    );
+    assert!(matches!(sent.last(), Some((_, ToClient::Slots { .. }))));
+    // More than the slot holds is refused and changes nothing.
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Request {
+            id: 6,
+            request: Request::Toss {
+                slot: 4,
+                count: 9,
+                at_mm: [0, 4_800_000, 0],
+            },
+        },
+    );
+    assert!(
+        s.drain()
+            .iter()
+            .any(|(_, m)| matches!(m, ToClient::Refused { id: 6, .. }))
+    );
+    assert_eq!(st.drops.len(), 1);
+}
+
+/// Design 26: a guest sows on tilled soil through the server; the plot is
+/// sent to everyone as a record; sowing again is refused while it grows; a
+/// harvest before ripe is refused, and a ripe one gives the guest the crop.
+#[test]
+fn a_guests_crop_is_sown_sent_and_harvested_through_the_server() {
+    use pbd_core::farming::{Crop, PLOT_KIND, Plot};
+    use pbd_core::inventory::Stack;
+    let (mut s, mut st) = server();
+    // A cell of tilled soil in a climate wheat grows in.
+    let cells = dry_cells(&s, 40);
+    let found = cells.iter().copied().find(|&(cell, top)| {
+        let d = pbd_core::cell_key::key_direction(cell).unwrap();
+        let h = column::layer_altitude(usize::from(top)) + 1.0;
+        Crop::WHEAT.grows_in(pbd_core::farming::Climate::of(
+            pbd_core::planet_gen::biome_at(&s.world.terrain, d, h),
+        ))
+    });
+    let Some((cell, top)) = found else {
+        panic!("no wheat ground among the dry cells");
+    };
+    st.edits.set(Edit {
+        cell,
+        layer: top,
+        material: Material::Tilled,
+    });
+    let mut carried = Slots::default();
+    carried.set(0, Some(Stack::new(Item::Good(Crop::WHEAT.row().seed), 2)));
+    let players = joined(&mut s, &[1, 2], carried);
+    let sow = |s: &mut Server, st: &mut MemoryStore, id| {
+        s.handle(
+            st,
+            players[1],
+            ToServer::Request {
+                id,
+                request: Request::Plant {
+                    cell,
+                    layer: top,
+                    slot: 0,
+                },
+            },
+        );
+        s.drain()
+    };
+    let sent = sow(&mut s, &mut st, 1);
+    let records: Vec<&Record> = sent
+        .iter()
+        .filter_map(|(_, m)| match m {
+            ToClient::Record { record } => Some(record),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(records.len(), 2, "both players are told: {sent:?}");
+    let plot: Plot = records[0].read().unwrap();
+    assert_eq!(plot.crop(), Some(Crop::WHEAT));
+    assert_eq!(st.records.get(PLOT_KIND, u64::from(cell)), Some(records[0]));
+    assert_eq!(
+        s.player(players[1]).unwrap().slots.get(0).map(|s| s.count),
+        Some(1)
+    );
+    let again = sow(&mut s, &mut st, 2);
+    assert!(again.iter().any(|(_, m)| *m
+        == ToClient::Refused {
+            id: 2,
+            reason: Refusal::Growing
+        }));
+    let reap = |s: &mut Server, st: &mut MemoryStore, id| {
+        s.handle(
+            st,
+            players[1],
+            ToServer::Request {
+                id,
+                request: Request::Harvest { cell },
+            },
+        );
+        s.drain()
+    };
+    assert!(reap(&mut s, &mut st, 3).iter().any(|(_, m)| *m
+        == ToClient::Refused {
+            id: 3,
+            reason: Refusal::NotRipe
+        }));
+    s.clock_s = 1.0e9;
+    let got = reap(&mut s, &mut st, 4);
+    assert!(
+        got.iter()
+            .any(|(_, m)| matches!(m, ToClient::Accepted { id: 4, .. })),
+        "{got:?}"
+    );
+    let produce = Item::Good(Crop::WHEAT.row().produce);
+    assert!(
+        s.player(players[1])
+            .unwrap()
+            .slots
+            .iter()
+            .flatten()
+            .any(|stack| stack.item == produce)
+    );
+    let bare: Plot = st
+        .records
+        .get(PLOT_KIND, u64::from(cell))
+        .unwrap()
+        .read()
+        .unwrap();
+    assert_eq!(bare.crop(), None);
+}
+
+/// Design 29: the digest rotation visits every region with an edit, in
+/// order, and starts over; each digest goes to every player.
+#[test]
+fn the_digest_rotation_visits_every_region() {
+    let (mut s, mut st) = server();
+    let players = joined(&mut s, &[1, 2], Slots::default());
+    assert_eq!(s.send_digest(&st), None, "no region has an edit yet");
+    for (cell, top) in dry_cells(&s, 6) {
+        let edit = Edit {
+            cell,
+            layer: top,
+            material: Material::Air,
+        };
+        st.edits.set(edit);
+        st.ledger.accept(edit, &st.edits);
+    }
+    s.drain();
+    let regions = st.ledger.regions().regions();
+    assert!(regions.len() > 1, "the cells span regions: {regions:?}");
+    let sent: Vec<u32> = (0..regions.len() + 1)
+        .filter_map(|_| s.send_digest(&st))
+        .collect();
+    assert_eq!(&sent[..regions.len()], &regions[..]);
+    assert_eq!(sent[regions.len()], regions[0], "and starts over");
+    let out = s.drain();
+    assert_eq!(out.len(), 2 * sent.len());
+    assert!(
+        out.iter()
+            .all(|(to, m)| players.iter().any(|p| *to == To::Player(*p))
+                && matches!(m, ToClient::Digest { .. }))
+    );
+}
+
+/// Design 30: with the checks set, a teleporting pose is logged and not
+/// passed on, and a dig past reach is refused as a cheat while one within
+/// it is taken; with no checks set, nothing is checked.
+#[test]
+fn the_cheat_checks_flag_a_teleport_and_a_reach_and_are_off_by_default() {
+    use pbd_core::net::protocol::Pose;
+    use pbd_core::world_frame::{FrameId, WorldPos};
+    let (mut s, mut st) = server();
+    let players = joined(&mut s, &[1, 2], Slots::default());
+    let (cell, top) = dry_cells(&s, 1)[0];
+    let radius = f64::from(s.world.terrain.radius_m);
+    let ground = pbd_core::cell_key::key_direction(cell)
+        .unwrap()
+        .as_dvec3()
+        .normalize()
+        * (radius + f64::from(column::layer_altitude(usize::from(top))));
+    let pose = |at: glam::DVec3| Pose {
+        at: WorldPos::new(FrameId(0), at),
+        yaw: 0.0,
+        pitch: 0.0,
+    };
+    let far = ground + glam::DVec3::new(500.0, 0.0, 0.0);
+    // Off by default: a far pose is passed on and a far dig is taken.
+    s.handle(&mut st, players[1], ToServer::Presence { pose: pose(far) });
+    assert!(
+        s.drain()
+            .iter()
+            .any(|(_, m)| matches!(m, ToClient::Presence { .. }))
+    );
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Request {
+            id: 1,
+            request: Request::Dig { cell, layer: top },
+        },
+    );
+    assert!(
+        s.drain()
+            .iter()
+            .any(|(_, m)| matches!(m, ToClient::Accepted { id: 1, .. }))
+    );
+    assert!(s.flagged.is_empty());
+    // Set: 8 m/s and 6 m.
+    s.set_cheats(Cheats {
+        max_speed_mps: Some(8.0),
+        reach_m: Some(6.0),
+    });
+    s.tick(1.0);
+    s.drain();
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Presence { pose: pose(ground) },
+    );
+    assert!(
+        !s.drain()
+            .iter()
+            .any(|(_, m)| matches!(m, ToClient::Presence { .. })),
+        "500 m in a second is not passed on"
+    );
+    assert_eq!(s.flagged.len(), 1);
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Request {
+            id: 2,
+            request: Request::Dig {
+                cell,
+                layer: top - 1,
+            },
+        },
+    );
+    assert!(s.drain().iter().any(|(_, m)| *m
+        == ToClient::Refused {
+            id: 2,
+            reason: Refusal::Cheat
+        }));
+    assert_eq!(s.flagged.len(), 2);
+    // Walked back near the cell over 100 s: passed on, and the dig taken.
+    s.tick(100.0);
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Presence {
+            pose: pose(ground + glam::DVec3::new(0.0, 1.0, 0.0)),
+        },
+    );
+    s.handle(
+        &mut st,
+        players[1],
+        ToServer::Request {
+            id: 3,
+            request: Request::Dig {
+                cell,
+                layer: top - 1,
+            },
+        },
+    );
+    assert!(
+        s.drain()
+            .iter()
+            .any(|(_, m)| matches!(m, ToClient::Accepted { id: 3, .. }))
+    );
+}
+
+/// `player-character` 4.3: a player's look goes to every other player, a
+/// player who joins later is sent it, and a look the townsfolk cannot draw
+/// is ignored.
+#[test]
+fn a_players_look_reaches_everyone_and_a_late_joiner() {
+    use pbd_core::townsfolk::character::rolled;
+    let (mut s, mut st) = server();
+    let players = joined(&mut s, &[1, 2], Slots::default());
+    let look = rolled(&[5; 16]);
+    s.handle(&mut st, players[1], ToServer::Look { look });
+    let sent = s.drain();
+    assert_eq!(
+        sent,
+        vec![(
+            To::Player(players[0]),
+            ToClient::Look {
+                player: players[1],
+                look
+            }
+        )]
+    );
+    let late = s.join(9, &hello(3), Slots::default()).unwrap();
+    assert!(s.drain().contains(&(
+        To::Player(late),
+        ToClient::Look {
+            player: players[1],
+            look
+        }
+    )));
+    let mut bad = look;
+    bad.height_m = 3.0;
+    s.handle(&mut st, players[0], ToServer::Look { look: bad });
+    assert!(s.drain().is_empty());
+    assert_eq!(s.player(players[0]).unwrap().look, None);
 }

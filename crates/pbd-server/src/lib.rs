@@ -43,6 +43,8 @@ use std::collections::BTreeMap;
 pub const TICK_S: f64 = 1.0 / 20.0;
 /// How often the clock is sent, s (design 15.8).
 pub const CLOCK_EVERY_S: f64 = 5.0;
+/// How often one region's digest is sent to every player, s (design 29).
+pub const DIGEST_EVERY_S: f64 = 2.0;
 /// Players at most (design 14.2).
 pub const MAX_PLAYERS: usize = 8;
 
@@ -57,6 +59,18 @@ pub trait Store {
     /// set it in the edits, number it in its region and journal it. `None`
     /// refuses it, changing nothing, and the server refuses the request.
     fn commit(&mut self, author: &Author, edit: Edit, carried: &Slots) -> Option<Sequenced>;
+    /// The drop the next [`Store::commit`] writes on its line, for `item`
+    /// floating out of `cell`'s `layer` (design 23): the app's own, made
+    /// before it asked, for the host's player; one the store makes now,
+    /// named by its next id, for a remote player. `None` writes no drop.
+    fn floating(
+        &mut self,
+        author: &Author,
+        item: Item,
+        cell: u32,
+        layer: u16,
+        made_s: f64,
+    ) -> Option<ItemDrop>;
     /// Journal a player's slots after a move in the pack. `false` refuses
     /// it (design 19).
     fn commit_pack(&mut self, author: &Author, carried: &Slots) -> bool;
@@ -65,9 +79,30 @@ pub trait Store {
     /// Journal a pickup: `left` remain on drop `id` (none: it is gone), the
     /// rest went into `carried`. `false` refuses it.
     fn commit_pick(&mut self, author: &Author, id: u64, left: u16, carried: &Slots) -> bool;
+    /// Journal a toss (design 25): a drop of `stack` at `at` (the body's
+    /// frame), made at `made_s`, named by the store's next id, and the
+    /// author's slots after it. `None` refuses it.
+    fn commit_toss(
+        &mut self,
+        author: &Author,
+        stack: pbd_core::inventory::Stack,
+        at: glam::DVec3,
+        made_s: f64,
+        carried: &Slots,
+    ) -> Option<ItemDrop>;
     /// Journal a world record `author`'s deed changed: the crew's progress
     /// (`coop-missions` design 1). `false` refuses it.
     fn commit_record(&mut self, author: &Author, record: Record) -> bool;
+    /// A world record as the store holds it now (design 26).
+    fn record(&self, kind: &str, id: u64) -> Option<Record>;
+    /// Journal a record a player's deed changed with their slots after it
+    /// (design 26). `false` refuses it.
+    fn commit_record_with_hands(
+        &mut self,
+        author: &Author,
+        record: Record,
+        carried: &Slots,
+    ) -> bool;
 }
 
 /// A pack or pickup a [`MemoryStore`] journaled: the author, the drop and
@@ -90,6 +125,8 @@ pub struct MemoryStore {
     pub records: Records,
     /// Refuse everything from here on, as a failed writer does.
     pub failed: bool,
+    /// The drop the next commit writes (design 23).
+    pub floating: Option<ItemDrop>,
 }
 
 impl MemoryStore {
@@ -117,7 +154,32 @@ impl Store for MemoryStore {
         let sequenced = self.ledger.accept(edit, &self.edits);
         self.entries
             .push((author.clone(), sequenced, carried.clone()));
+        if let Some(drop) = self.floating.take() {
+            self.drops.insert(drop.id, drop);
+        }
         Some(sequenced)
+    }
+    fn floating(
+        &mut self,
+        _author: &Author,
+        item: Item,
+        cell: u32,
+        layer: u16,
+        made_s: f64,
+    ) -> Option<ItemDrop> {
+        // In memory there is no planet: the cell's direction, as far out as
+        // the layer's number, is enough to tell drops apart.
+        let direction = pbd_core::cell_key::key_direction(cell)?.as_dvec3();
+        let id = self.drops.keys().next_back().map_or(0, |id| id + 1);
+        let drop = ItemDrop {
+            id,
+            item,
+            count: 1,
+            position: direction * f64::from(layer),
+            made_s,
+        };
+        self.floating = Some(drop);
+        Some(drop)
     }
     fn commit_pack(&mut self, author: &Author, carried: &Slots) -> bool {
         if self.failed {
@@ -148,6 +210,45 @@ impl Store for MemoryStore {
         }
         self.records.put(record);
         true
+    }
+    fn record(&self, kind: &str, id: u64) -> Option<Record> {
+        self.records.get(kind, id).cloned()
+    }
+    fn commit_record_with_hands(
+        &mut self,
+        author: &Author,
+        record: Record,
+        carried: &Slots,
+    ) -> bool {
+        if self.failed {
+            return false;
+        }
+        self.records.put(record);
+        self.hands.push((author.clone(), None, carried.clone()));
+        true
+    }
+    fn commit_toss(
+        &mut self,
+        author: &Author,
+        stack: pbd_core::inventory::Stack,
+        at: glam::DVec3,
+        made_s: f64,
+        carried: &Slots,
+    ) -> Option<ItemDrop> {
+        if self.failed {
+            return None;
+        }
+        let id = self.drops.keys().next_back().map_or(0, |id| id + 1);
+        let drop = ItemDrop {
+            id,
+            item: stack.item,
+            count: stack.count,
+            position: pbd_core::drops::scattered(at, id),
+            made_s,
+        };
+        self.drops.insert(id, drop);
+        self.hands.push((author.clone(), None, carried.clone()));
+        Some(drop)
     }
 }
 
@@ -191,6 +292,30 @@ pub struct Player {
     pub vitals: Option<pbd_core::survival::Vitals>,
     /// Seconds of play since the vitals were last journaled.
     pub since_vitals_s: f32,
+    /// Where they were last seen (design 24), and the server's clock then.
+    pub pose: Option<pbd_core::net::protocol::Pose>,
+    pub pose_s: f64,
+    /// Their own character (`player-character` 4.3), once sent.
+    pub look: Option<pbd_core::townsfolk::look::Look>,
+}
+
+/// A failed cheat check (design 30): what was seen, and the limit.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Flagged {
+    /// Moved this fast, m/s, past the limit.
+    Speed { mps: f64, limit: f32 },
+    /// Reached this far, m, past the limit.
+    Reach { m: f64, limit: f32 },
+}
+
+/// The cheat checks a dedicated server runs (design 30), each off unless
+/// set. The in-process server never sets them.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Cheats {
+    /// The fastest a player may move between poses, m/s.
+    pub max_speed_mps: Option<f32>,
+    /// The farthest a request's target may be from the player, m.
+    pub reach_m: Option<f32>,
 }
 
 /// A world's crew missions as the server counts them: the chain and the
@@ -207,11 +332,24 @@ pub struct Server {
     players: BTreeMap<u32, Player>,
     /// Players' install keys to their numbers, kept across leaving.
     known: Vec<([u8; 16], u32)>,
+    /// The slots a player left with, by number, given back on a rejoin
+    /// while this server runs (design 22; the save keeps them with design
+    /// 10's player record).
+    away: BTreeMap<u32, Slots>,
     clock_s: f64,
     since_clock_s: f64,
     outbox: Vec<(To, ToClient)>,
     /// The crew missions counted, when the world has them.
     crew: Option<Crew>,
+    /// Farming's tuning, for harvests (design 26).
+    farm: pbd_core::farming::FarmSettings,
+    /// Where the digest rotation is: the next region after this one
+    /// (design 29).
+    digest_after: Option<u32>,
+    /// The cheat checks this server runs (design 30).
+    cheats: Cheats,
+    /// Every failed check, in order: the player and what was seen.
+    pub flagged: Vec<(u32, Flagged)>,
 }
 
 impl Server {
@@ -221,11 +359,100 @@ impl Server {
             world,
             players: BTreeMap::new(),
             known: Vec::new(),
+            away: BTreeMap::new(),
             clock_s,
             since_clock_s: 0.0,
             outbox: Vec::new(),
             crew: None,
+            farm: pbd_core::farming::FarmSettings::default(),
+            digest_after: None,
+            cheats: Cheats::default(),
+            flagged: Vec::new(),
         }
+    }
+
+    /// Send the next region's digest, in a fixed rotation over every region
+    /// with an edit, to every player (design 29): the host's loop calls it
+    /// every [`DIGEST_EVERY_S`]. The region sent, if any.
+    pub fn send_digest(&mut self, store: &impl Store) -> Option<u32> {
+        let regions = store.ledger().regions().regions();
+        let next = regions
+            .iter()
+            .copied()
+            .find(|r| self.digest_after.is_none_or(|after| *r > after))
+            .or_else(|| regions.first().copied())?;
+        self.digest_after = Some(next);
+        let (seq, digest) = (store.ledger().seq(next), store.ledger().digest(next));
+        self.broadcast(ToClient::Digest {
+            region: next,
+            seq,
+            digest,
+        });
+        Some(next)
+    }
+
+    /// Run these cheat checks from here on (design 30): a dedicated
+    /// server's flags. Never called for the in-process server.
+    pub fn set_cheats(&mut self, cheats: Cheats) {
+        self.cheats = cheats;
+    }
+
+    fn flag(&mut self, player: u32, seen: Flagged) {
+        match seen {
+            Flagged::Speed { mps, limit } => {
+                eprintln!("CHEAT player {player}: moved {mps:.1} m/s, past {limit} m/s")
+            }
+            Flagged::Reach { m, limit } => {
+                eprintln!("CHEAT player {player}: reached {m:.1} m, past {limit} m")
+            }
+        }
+        self.flagged.push((player, seen));
+    }
+
+    /// Whether `target` (the body's frame, m) is within the reach check of
+    /// `player`'s last pose. No check set, or no pose yet: within.
+    fn within_reach(&mut self, player: u32, target: glam::DVec3) -> bool {
+        let (Some(reach), Some(pose)) = (
+            self.cheats.reach_m,
+            self.players.get(&player).and_then(|p| p.pose),
+        ) else {
+            return true;
+        };
+        let d = (target - pose.at.pos).length();
+        if d <= f64::from(reach) {
+            return true;
+        }
+        self.flag(player, Flagged::Reach { m: d, limit: reach });
+        false
+    }
+
+    /// Where a request acts, in the body's frame, if it acts somewhere.
+    fn target_of(&self, store: &impl Store, request: &Request) -> Option<glam::DVec3> {
+        let radius = f64::from(self.world.terrain.radius_m);
+        let at_cell = |cell: u32, layer: Option<u16>| {
+            let d = pbd_core::cell_key::key_direction(cell)?
+                .as_dvec3()
+                .normalize();
+            let up = layer.map_or(0.0, |l| f64::from(column::layer_altitude(usize::from(l))));
+            Some(d * (radius + up))
+        };
+        match *request {
+            Request::Dig { cell, layer } | Request::Place { cell, layer, .. } => {
+                at_cell(cell, Some(layer))
+            }
+            Request::Plant { cell, layer, .. } => at_cell(cell, Some(layer)),
+            Request::Harvest { cell } => at_cell(cell, None),
+            Request::Pick { drop } => store.drop(drop).map(|d| d.position),
+            Request::Toss { at_mm, .. } => {
+                Some(glam::DVec3::new(at_mm[0] as f64, at_mm[1] as f64, at_mm[2] as f64) / 1000.0)
+            }
+            Request::Pack(_) => None,
+        }
+    }
+
+    /// Farming's tuning, as the world's config has it (design 26).
+    pub fn set_farm(&mut self, farm: pbd_core::farming::FarmSettings) {
+        self.farm = farm;
     }
 
     /// Count the crew chain `chain` from here on, from `progress` as the
@@ -297,6 +524,12 @@ impl Server {
             self.reject(connection, JoinRefusal::Full);
             return None;
         }
+        // A player already known keeps what they carry: still in (a game
+        // restarted before its old connection closed), or away (design 22).
+        let slots = match self.players.get(&number) {
+            Some(player) => player.slots.clone(),
+            None => self.away.remove(&number).unwrap_or(slots),
+        };
         self.players.insert(
             number,
             Player {
@@ -305,6 +538,9 @@ impl Server {
                 joined_s: self.clock_s,
                 vitals: None,
                 since_vitals_s: 0.0,
+                pose: None,
+                pose_s: 0.0,
+                look: None,
             },
         );
         self.send(
@@ -317,6 +553,17 @@ impl Server {
                 topology: self.world.versions.topology,
             },
         );
+        self.send_slots(number);
+        // Everyone already in, as they chose to look (`player-character`).
+        let looks: Vec<(u32, pbd_core::townsfolk::look::Look)> = self
+            .players
+            .iter()
+            .filter(|(n, _)| **n != number)
+            .filter_map(|(n, p)| p.look.map(|l| (*n, l)))
+            .collect();
+        for (player, look) in looks {
+            self.send(To::Player(number), ToClient::Look { player, look });
+        }
         Some(number)
     }
 
@@ -350,7 +597,68 @@ impl Server {
 
     /// A player left.
     pub fn leave(&mut self, player: u32) -> Option<Player> {
-        self.players.remove(&player)
+        let left = self.players.remove(&player)?;
+        self.away.insert(player, left.slots.clone());
+        // Everyone still in stops drawing them (design 24).
+        self.broadcast(ToClient::Gone { player });
+        Some(left)
+    }
+
+    /// `player`'s own character (`player-character` 4.3): kept, and passed to
+    /// every other player. A look the townsfolk cannot draw is ignored.
+    pub fn look(&mut self, player: u32, look: pbd_core::townsfolk::look::Look) {
+        if !pbd_core::townsfolk::character::valid(&look) {
+            return;
+        }
+        let Some(p) = self.players.get_mut(&player) else {
+            return;
+        };
+        p.look = Some(look);
+        let others: Vec<u32> = self
+            .players
+            .keys()
+            .copied()
+            .filter(|&n| n != player)
+            .collect();
+        for to in others {
+            self.send(To::Player(to), ToClient::Look { player, look });
+        }
+    }
+
+    /// Where `player` is now (design 24): kept, and passed to every other
+    /// player, never back to them. The host's own player's comes this way
+    /// too, so the host is seen as any player is.
+    pub fn presence(&mut self, player: u32, pose: pbd_core::net::protocol::Pose) {
+        let now_s = self.clock_s;
+        let Some(p) = self.players.get(&player) else {
+            return;
+        };
+        if let (Some(max), Some(last)) = (self.cheats.max_speed_mps, p.pose) {
+            let dt = (now_s - p.pose_s).max(TICK_S);
+            let speed = (pose.at.pos - last.at.pos).length() / dt;
+            if speed > f64::from(max) {
+                self.flag(
+                    player,
+                    Flagged::Speed {
+                        mps: speed,
+                        limit: max,
+                    },
+                );
+                return;
+            }
+        }
+        let p = self.players.get_mut(&player).expect("checked");
+        p.pose = Some(pose);
+        p.pose_s = now_s;
+        let others: Vec<u32> = self
+            .players
+            .keys()
+            .copied()
+            .filter(|&n| n != player)
+            .collect();
+        for to in others {
+            self.send(To::Player(to), ToClient::Presence { player, pose });
+        }
     }
 
     /// One message from a joined player.
@@ -362,6 +670,10 @@ impl Server {
             ToServer::Request { id, request } => {
                 // What floats out becomes a drop record with task 8.2.
                 let _ = self.request(store, player, id, request);
+                // Taken or refused, the player's slots as the server holds
+                // them: what a dig gave, or a prediction put back (design
+                // 22, 15.3).
+                self.send_slots(player);
             }
             ToServer::Resync { region } => {
                 let snap = store.ledger().snapshot(region, store.edits());
@@ -376,6 +688,8 @@ impl Server {
             }
             // Subscription, presence, transactions and chat come with their
             // tasks (6.3, 8.1, 8.5).
+            ToServer::Presence { pose } => self.presence(player, pose),
+            ToServer::Look { look } => self.look(player, look),
             _ => {}
         }
     }
@@ -434,6 +748,11 @@ impl Server {
         id: u32,
         request: Request,
     ) -> Result<Decided, Refusal> {
+        if let Some(target) = self.target_of(store, &request)
+            && !self.within_reach(player, target)
+        {
+            return Err(self.refuse_hands(player, id, Refusal::Cheat));
+        }
         let (cell, layer, material, hands, slot) = match request {
             Request::Dig { cell, layer } => (cell, layer, Material::Air, Hands::Take, None),
             Request::Place { cell, layer, slot } => {
@@ -450,6 +769,56 @@ impl Server {
                 return self
                     .pack(store, player, id, mv, slots)
                     .map(|slots| Decided {
+                        sequenced: Sequenced {
+                            region: pbd_core::net::ledger::NO_REGION,
+                            seq: 0,
+                            edit: Edit {
+                                cell: 0,
+                                layer: 0,
+                                material: Material::Air,
+                            },
+                        },
+                        slots,
+                        floats: None,
+                    });
+            }
+            Request::Plant { cell, layer, slot } => {
+                let slots = self.players[&player].slots.clone();
+                let made_s = self.clock_s;
+                return self
+                    .plant(
+                        store,
+                        player,
+                        id,
+                        (cell, layer, usize::from(slot)),
+                        made_s,
+                        slots,
+                    )
+                    .map(no_edit);
+            }
+            Request::Harvest { cell } => {
+                let slots = self.players[&player].slots.clone();
+                let made_s = self.clock_s;
+                return self
+                    .harvest(store, player, id, cell, made_s, slots)
+                    .map(no_edit);
+            }
+            Request::Toss { slot, count, at_mm } => {
+                let slots = self.players[&player].slots.clone();
+                let at =
+                    glam::DVec3::new(at_mm[0] as f64, at_mm[1] as f64, at_mm[2] as f64) / 1000.0;
+                let made_s = self.clock_s;
+                return self
+                    .toss(
+                        store,
+                        player,
+                        id,
+                        (usize::from(slot), count),
+                        at,
+                        made_s,
+                        slots,
+                    )
+                    .map(|(slots, _)| Decided {
                         sequenced: Sequenced {
                             region: pbd_core::net::ledger::NO_REGION,
                             seq: 0,
@@ -555,6 +924,10 @@ impl Server {
                 return Err(self.refuse(store, player, id, cell, reason));
             }
         };
+        // What floats out is a drop, written on the dig's line (design 23).
+        let made = taken.floats.and_then(|item| {
+            store.floating(&Author::Player(player), item, cell, layer, self.clock_s)
+        });
         // Made durable and numbered before anything is answered: a store
         // that refuses leaves the world as it was.
         let Some(sequenced) = store.commit(&Author::Player(player), edit, &taken.slots) else {
@@ -587,6 +960,9 @@ impl Server {
                 material,
             },
         });
+        if let Some(drop) = made {
+            self.broadcast(ToClient::Drop { drop });
+        }
         Ok(Decided {
             sequenced,
             slots: taken.slots,
@@ -658,7 +1034,142 @@ impl Server {
                 seq: 0,
             },
         );
+        // Everyone's copy of the drop follows (design 23).
+        self.broadcast(ToClient::DropLeft { id: drop_id, left });
         Ok((taken, left))
+    }
+
+    /// Decide a toss by `player` from `slots` (design 25): `count` of what
+    /// slot `what.0` holds, to land at `at` (the body's frame), made at
+    /// `made_s`. The store writes the toss line; everyone is told of the drop.
+    #[allow(clippy::too_many_arguments)]
+    pub fn toss(
+        &mut self,
+        store: &mut impl Store,
+        player: u32,
+        id: u32,
+        what: (usize, u16),
+        at: glam::DVec3,
+        made_s: f64,
+        slots: Slots,
+    ) -> Result<(Slots, ItemDrop), Refusal> {
+        if !self.players.contains_key(&player) || !at.is_finite() {
+            return Err(Refusal::Cheat);
+        }
+        let Ok((after, stack)) = accept::toss(&slots, what.0, what.1) else {
+            return Err(self.refuse_hands(player, id, Refusal::EmptySlot));
+        };
+        let Some(drop) = store.commit_toss(&Author::Player(player), stack, at, made_s, &after)
+        else {
+            return Err(self.refuse_hands(player, id, Refusal::NotSaved));
+        };
+        self.players.get_mut(&player).expect("checked").slots = after.clone();
+        self.send(
+            To::Player(player),
+            ToClient::Accepted {
+                id,
+                region: 0,
+                seq: 0,
+            },
+        );
+        self.broadcast(ToClient::Drop { drop });
+        Ok((after, drop))
+    }
+
+    /// Decide a sowing by `player` from `slots` (design 26): the seed in
+    /// slot `at.2` on the tilled soil at cell `at.0`'s layer `at.1`, sown at
+    /// `now_s`. The plot record is written with the slots and sent to all.
+    pub fn plant(
+        &mut self,
+        store: &mut impl Store,
+        player: u32,
+        id: u32,
+        at: (u32, u16, usize),
+        now_s: f64,
+        slots: Slots,
+    ) -> Result<Slots, Refusal> {
+        let (cell, layer, slot) = at;
+        if !self.players.contains_key(&player) {
+            return Err(Refusal::Cheat);
+        }
+        let Some(column) = self.column(store.edits(), cell) else {
+            return Err(self.refuse_hands(player, id, Refusal::OutOfWorld));
+        };
+        let l = usize::from(layer);
+        let (ground, over) = (column.material(l), column.material(l + 1));
+        let growing = plot_of(store, cell).is_some_and(|p| {
+            let pl = usize::from(p.layer);
+            p.crop().is_some()
+                && column.material(pl) == Material::Tilled
+                && column.material(pl + 1) == Material::Air
+        });
+        let climate = pbd_core::cell_key::key_direction(cell).and_then(|d| {
+            let height = column::layer_altitude(l) + 1.0;
+            pbd_core::farming::Climate::of(pbd_core::planet_gen::biome_at(
+                &self.world.terrain,
+                d,
+                height,
+            ))
+        });
+        let (plot, after, _) = match pbd_core::farming::accept::plant(
+            ground, over, growing, climate, &slots, slot, layer, now_s,
+        ) {
+            Ok(done) => done,
+            Err(refused) => return Err(self.refuse_hands(player, id, refused.into())),
+        };
+        self.commit_plot(store, player, id, cell, &plot, after)
+    }
+
+    /// Decide a harvest of `cell` by `player` from `slots` (design 26).
+    pub fn harvest(
+        &mut self,
+        store: &mut impl Store,
+        player: u32,
+        id: u32,
+        cell: u32,
+        now_s: f64,
+        slots: Slots,
+    ) -> Result<Slots, Refusal> {
+        if !self.players.contains_key(&player) {
+            return Err(Refusal::Cheat);
+        }
+        let Some(plot) = plot_of(store, cell) else {
+            return Err(self.refuse_hands(player, id, Refusal::NoCrop));
+        };
+        let (bare, after, ..) =
+            match pbd_core::farming::accept::harvest(&plot, &self.farm, &slots, now_s) {
+                Ok(done) => done,
+                Err(refused) => return Err(self.refuse_hands(player, id, refused.into())),
+            };
+        self.commit_plot(store, player, id, cell, &bare, after)
+    }
+
+    /// Write a plot with the slots after, answer, and send the record to all.
+    fn commit_plot(
+        &mut self,
+        store: &mut impl Store,
+        player: u32,
+        id: u32,
+        cell: u32,
+        plot: &pbd_core::farming::Plot,
+        after: Slots,
+    ) -> Result<Slots, Refusal> {
+        use pbd_core::farming::{PLOT_KIND, PLOT_SCHEMA};
+        let record = Record::of(PLOT_KIND, u64::from(cell), PLOT_SCHEMA, plot);
+        if !store.commit_record_with_hands(&Author::Player(player), record.clone(), &after) {
+            return Err(self.refuse_hands(player, id, Refusal::NotSaved));
+        }
+        self.players.get_mut(&player).expect("checked").slots = after.clone();
+        self.send(
+            To::Player(player),
+            ToClient::Accepted {
+                id,
+                region: 0,
+                seq: 0,
+            },
+        );
+        self.broadcast(ToClient::Record { record });
+        Ok(after)
     }
 
     /// Refuse a request about the hands. The slots go back with the
@@ -694,6 +1205,17 @@ impl Server {
         reason
     }
 
+    /// Send a remote player their own slots (design 22). The host's own
+    /// player, 0, holds the app's slots already (design 18).
+    fn send_slots(&mut self, player: u32) {
+        if player == 0 {
+            return;
+        }
+        if let Some(slots) = self.players.get(&player).map(|p| p.slots.clone()) {
+            self.send(To::Player(player), ToClient::Slots { slots });
+        }
+    }
+
     fn reject(&mut self, connection: u64, reason: JoinRefusal) {
         self.send(To::Connection(connection), ToClient::Rejected { reason });
     }
@@ -707,6 +1229,30 @@ impl Server {
         for player in players {
             self.send(To::Player(player), message.clone());
         }
+    }
+}
+
+/// A cell's plot record, read (design 26).
+fn plot_of(store: &impl Store, cell: u32) -> Option<pbd_core::farming::Plot> {
+    store
+        .record(pbd_core::farming::PLOT_KIND, u64::from(cell))?
+        .read()
+}
+
+/// A decision that changed the hands only, as a [`Decided`].
+fn no_edit(slots: Slots) -> Decided {
+    Decided {
+        sequenced: Sequenced {
+            region: pbd_core::net::ledger::NO_REGION,
+            seq: 0,
+            edit: Edit {
+                cell: 0,
+                layer: 0,
+                material: Material::Air,
+            },
+        },
+        slots,
+        floats: None,
     }
 }
 

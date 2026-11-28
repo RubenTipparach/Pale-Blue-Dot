@@ -1,0 +1,11 @@
+# The server image's build context is the repository root
+# (deploy/fly/Dockerfile): only the workspace and the assets it compiles in.
+*
+!Cargo.toml
+!Cargo.lock
+!crates/
+!assets/config/
+!assets/climate/
+!assets/locale/
+!assets/shaders/
+crates/*/target

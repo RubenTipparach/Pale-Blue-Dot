@@ -411,6 +411,193 @@ impl Plot {
     }
 }
 
+/// Sowing and harvesting as the server decides them (`multiplayer` design
+/// 26): one rule for single player and for every joined player.
+pub mod accept {
+    use super::{Climate, Crop, FarmSettings, Plot, Stage};
+    use crate::inventory::{Item, Slots};
+    use crate::terrain::Material;
+
+    /// Why a sowing or a harvest was refused.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum Refused {
+        /// The ground is not tilled soil with air over it.
+        NotTilled,
+        /// A crop already grows there.
+        Growing,
+        /// The crop does not grow in this climate.
+        Climate,
+        /// The slot holds no seed.
+        EmptySlot,
+        /// Nothing growing there to harvest.
+        NoCrop,
+        /// The crop is not ripe yet.
+        NotRipe,
+        /// The pack has no room for all the harvest gives.
+        NoRoom,
+    }
+
+    /// Sow the seed in `slot` on the tilled soil at `layer`: the plot sown at
+    /// `now_s`, and the slots with one seed taken. `ground` and `over` are the
+    /// cell's materials at the layer and the one above; `growing` whether a
+    /// live crop is on it.
+    pub fn plant(
+        ground: Material,
+        over: Material,
+        growing: bool,
+        climate: Option<Climate>,
+        slots: &Slots,
+        slot: usize,
+        layer: u16,
+        now_s: f64,
+    ) -> Result<(Plot, Slots, Crop), Refused> {
+        let crop = match slots.get(slot).map(|s| s.item) {
+            Some(Item::Good(good)) => Crop::of_seed(good).ok_or(Refused::EmptySlot)?,
+            _ => return Err(Refused::EmptySlot),
+        };
+        if ground != Material::Tilled || over != Material::Air {
+            return Err(Refused::NotTilled);
+        }
+        if growing {
+            return Err(Refused::Growing);
+        }
+        if !crop.grows_in(climate) {
+            return Err(Refused::Climate);
+        }
+        let mut after = slots.clone();
+        if after.take(slot, 1) != 1 {
+            return Err(Refused::EmptySlot);
+        }
+        Ok((Plot::sown(layer, crop, now_s), after, crop))
+    }
+
+    /// What a harvest gives: the bare plot, the slots with its produce and
+    /// seeds, and how many of each. All of it fits, or nothing is given.
+    pub fn harvest(
+        plot: &Plot,
+        farm: &FarmSettings,
+        slots: &Slots,
+        now_s: f64,
+    ) -> Result<(Plot, Slots, Crop, u16, u16), Refused> {
+        let crop = plot.crop().ok_or(Refused::NoCrop)?;
+        if farm.stage(crop, plot.planted_s, now_s) != Stage::Ripe {
+            return Err(Refused::NotRipe);
+        }
+        let row = crop.row();
+        let produce = plot.produce(farm, crop);
+        let seeds = farm.of(crop).seeds;
+        let mut after = slots.clone();
+        let left =
+            after.give(Item::Good(row.produce), produce) + after.give(Item::Good(row.seed), seeds);
+        if left > 0 {
+            return Err(Refused::NoRoom);
+        }
+        Ok((Plot::bare(plot.layer), after, crop, produce, seeds))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn seeds(count: u16) -> Slots {
+            let mut slots = Slots::new();
+            slots.give(Item::Good(Crop::WHEAT.row().seed), count);
+            slots
+        }
+
+        /// Design 26: each refusal of a sowing, and a sowing that takes one
+        /// seed and sows the crop.
+        #[test]
+        fn a_sowing_is_refused_for_each_reason_and_takes_one_seed() {
+            let climate = Crop::WHEAT.row().climates.first().copied();
+            let s = seeds(3);
+            let ok = |g, o, grow, c| plant(g, o, grow, c, &s, 0, 7, 10.0);
+            assert_eq!(
+                ok(Material::Dirt, Material::Air, false, climate).err(),
+                Some(Refused::NotTilled)
+            );
+            assert_eq!(
+                ok(Material::Tilled, Material::Stone, false, climate).err(),
+                Some(Refused::NotTilled)
+            );
+            assert_eq!(
+                ok(Material::Tilled, Material::Air, true, climate).err(),
+                Some(Refused::Growing)
+            );
+            assert_eq!(
+                ok(Material::Tilled, Material::Air, false, None).err(),
+                Some(Refused::Climate)
+            );
+            assert_eq!(
+                plant(
+                    Material::Tilled,
+                    Material::Air,
+                    false,
+                    climate,
+                    &s,
+                    5,
+                    7,
+                    10.0
+                )
+                .err(),
+                Some(Refused::EmptySlot)
+            );
+            let (plot, after, crop) = ok(Material::Tilled, Material::Air, false, climate).unwrap();
+            assert_eq!(crop, Crop::WHEAT);
+            assert_eq!(plot, Plot::sown(7, Crop::WHEAT, 10.0));
+            assert_eq!(after.get(0).map(|s| s.count), Some(2));
+        }
+
+        /// Design 26: a harvest before ripe or with no room is refused; a
+        /// ripe one gives the produce and the seeds, and bares the plot.
+        #[test]
+        fn a_harvest_gives_when_ripe_and_there_is_room() {
+            let farm = FarmSettings::default();
+            let plot = Plot::sown(7, Crop::WHEAT, 0.0);
+            let empty = Slots::new();
+            assert_eq!(
+                harvest(&plot, &farm, &empty, 0.0).err(),
+                Some(Refused::NotRipe)
+            );
+            let ripe_s = 1.0e9;
+            let (bare, after, crop, produce, seed_count) =
+                harvest(&plot, &farm, &empty, ripe_s).expect("ripe");
+            assert_eq!(bare, Plot::bare(7));
+            assert_eq!(crop, Crop::WHEAT);
+            assert_eq!(produce, farm.of(crop).produce);
+            assert_eq!(seed_count, farm.of(crop).seeds);
+            let row = crop.row();
+            let held = |item| {
+                after
+                    .iter()
+                    .flatten()
+                    .filter(|s| s.item == item)
+                    .map(|s| s.count)
+                    .sum::<u16>()
+            };
+            assert_eq!(held(Item::Good(row.produce)), produce);
+            let mut full = Slots::new();
+            for i in 0..crate::inventory::CARRIED {
+                full.set(
+                    i,
+                    Some(crate::inventory::Stack::new(
+                        Item::Block(Material::Stone),
+                        1,
+                    )),
+                );
+            }
+            assert_eq!(
+                harvest(&plot, &farm, &full, ripe_s).err(),
+                Some(Refused::NoRoom)
+            );
+            assert_eq!(
+                harvest(&Plot::bare(7), &farm, &empty, ripe_s).err(),
+                Some(Refused::NoCrop)
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

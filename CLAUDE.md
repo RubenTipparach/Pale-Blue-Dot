@@ -398,8 +398,17 @@ the same step that first publishes it, and the page carries an "All Pale Blue
 Dot mockups (the tracker)" link near its top. Approvals are the owner's, read
 back with `ArtifactData` (collection `reviews`) and recorded in
 `docs/mockups/mockup-work.md` and the mockup's OpenSpec change; an approval
-for the game still waits for a request before any game code. The
+is the request to build (see "Approved means build"). The
 `mockup-tracker` skill (`.claude/skills/mockup-tracker`) says how.
+
+## Approved means build (owner, 2026-11-28)
+
+**Standing instruction from the user:** "approved = build" (after
+"character creator approved" was answered with a question about whether to
+build it). When the owner approves a mockup or a plan, in chat or on the
+tracker, that is the request to build it: start the game code in the same
+turn, after its write-up, without asking again. Record the approval as
+always (the tracker, `docs/mockups/mockup-work.md`, the change).
 
 ## Saved games survive every change (owner, 2026-09-28)
 

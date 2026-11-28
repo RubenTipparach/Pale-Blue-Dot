@@ -1,0 +1,71 @@
+name: Multiplayer server - Fly.io deploy
+
+# The persistent multiplayer server (`openspec/changes/multiplayer` design
+# 27), deployed the way Tenebris's .github/workflows/server.yml does it.
+#
+# NOTHING TRIGGERS THIS BUT A PERSON, like the itch deploy. Untick "deploy"
+# for a build-only dry run: the server image is built and nothing reaches Fly.
+#
+# Needs the FLY_API_TOKEN secret: a deploy token for the app
+#   fly tokens create deploy -a pale-blue-dot
+# and, once, a dedicated IPv4 address for UDP:
+#   fly ips allocate-v4 -a pale-blue-dot
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy to Fly.io (untick for a build-only dry run)'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+# One server deploy at a time.
+concurrency:
+  group: fly-server
+  cancel-in-progress: false
+
+jobs:
+  server:
+    name: Build and deploy the server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build the server image (the check every run makes)
+        run: docker build -f deploy/fly/Dockerfile -t pbd-server .
+
+      - name: Check for the Fly token
+        if: ${{ inputs.deploy }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::error::FLY_API_TOKEN secret is not set - create one with: fly tokens create deploy -a pale-blue-dot"
+            exit 1
+          fi
+
+      - name: Set up flyctl
+        if: ${{ inputs.deploy }}
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # The world's volume: made here the first time, so a new app needs no
+      # CLI setup. Already there, nothing happens.
+      - name: Make sure the pbd_worlds volume exists
+        if: ${{ inputs.deploy }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -e
+          if ! flyctl volumes list -a pale-blue-dot | grep -q pbd_worlds; then
+            flyctl volumes create pbd_worlds -a pale-blue-dot -r ord --size 1 --yes
+          fi
+
+      - name: Deploy
+        if: ${{ inputs.deploy }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: flyctl deploy --config deploy/fly/fly.toml --dockerfile deploy/fly/Dockerfile --ha=false --remote-only
