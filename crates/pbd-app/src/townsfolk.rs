@@ -24,7 +24,7 @@
 #[cfg(test)]
 mod tests;
 
-use crate::field_light::{Faded, LitByField, LitLikeTerrain};
+use crate::field_light::{CrossFaded, Faded, LitByField, LitLikeTerrain};
 use crate::planet::PlanetRenderFrame;
 use bevy::asset::RenderAssetUsages;
 use bevy::math::{Affine3A, DQuat, DVec3};
@@ -33,6 +33,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use pbd_core::furniture::walk::{Doorway, Route};
 use pbd_core::townsfolk::face::{self, Act, Chosen, Expression, Face, FacePose, Mood, Mouth, Seen};
+use pbd_core::townsfolk::face_card::{self, CardLook, FaceLod};
 use pbd_core::townsfolk::figure::{self, Figure, Part};
 use pbd_core::townsfolk::motion::{Body, Doing, Pose};
 use pbd_core::townsfolk::{Person, PersonId, Placed, Work, look, people_of};
@@ -49,6 +50,12 @@ pub const DRAW_M: f32 = 60.0;
 pub const FADE_S: f32 = 0.8;
 /// How fast a person turns to the way they go, s (decision 23).
 const TURN_S: f64 = 0.12;
+/// The far face card's depth bias, in the depth buffer's own steps
+/// (`townsfolk` 15.2): a small push toward the eye over the 1 cm it already
+/// stands proud of the head.
+const CARD_DEPTH_BIAS: f32 = 1.0;
+/// The card's number among a figure's parts ([`pose_parts`]).
+const CARD: usize = 27;
 
 /// A drawn person, on their figure's root.
 #[derive(Component, Clone, Debug, PartialEq)]
@@ -552,6 +559,8 @@ struct Kit {
     swatch: HashMap<u32, [f32; 2]>,
     solid: Handle<StandardMaterial>,
     masked: Handle<StandardMaterial>,
+    /// The far face card's: the solid one with a depth bias.
+    card: Handle<StandardMaterial>,
     /// The face's shared pieces.
     white: Handle<Mesh>,
     pupil: Handle<Mesh>,
@@ -618,6 +627,87 @@ pub fn atlas_pixels(colours: &[u32]) -> (Vec<u8>, HashMap<u32, [f32; 2]>) {
         );
     }
     (px, swatch)
+}
+
+/// A face card (`townsfolk` 15.1 and 15.2): a baked tile drawn as one flat
+/// mesh over the card's area, each run of same-coloured texels in a row one
+/// quad whose corners sit on its colour's swatch, so every texel is exactly
+/// its colour and nothing is drawn where the tile has none. One piece at
+/// one depth, in the person's own skin, brows and blush.
+fn card_mesh(kit: &Kit, tile: &[Option<u32>], px: usize) -> Mesh {
+    let (w, [y0, y1]) = (face_card::CARD_W, face_card::CARD_Y);
+    let (sx, sy) = (w / px as f32, (y1 - y0) / px as f32);
+    let (mut positions, mut uvs) = (Vec::new(), Vec::new());
+    for (j, row) in tile.chunks(px).enumerate() {
+        let (top, bottom) = (y1 - j as f32 * sy, y1 - (j + 1) as f32 * sy);
+        let mut i = 0;
+        while i < row.len() {
+            let Some(c) = row[i] else {
+                i += 1;
+                continue;
+            };
+            let start = i;
+            while i < row.len() && row[i] == Some(c) {
+                i += 1;
+            }
+            let (x0, x1) = (-w / 2.0 + start as f32 * sx, -w / 2.0 + i as f32 * sx);
+            for [x, y] in [
+                [x0, bottom],
+                [x1, bottom],
+                [x1, top],
+                [x0, bottom],
+                [x1, top],
+                [x0, top],
+            ] {
+                positions.push([x, y, 0.0]);
+                uvs.push(kit.uv(c));
+            }
+        }
+    }
+    let normals = vec![[0.0, 0.0, 1.0]; positions.len()];
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+}
+
+/// A person's ten face cards, one per expression in [`Expression::ALL`]'s
+/// order, baked from each expression's resting face on their own look.
+fn card_meshes(kit: &Kit, meshes: &mut Assets<Mesh>, who: &CardLook) -> Vec<Handle<Mesh>> {
+    Expression::ALL
+        .iter()
+        .map(|e| {
+            let tile = face_card::bake_tile(&face_card::resting_pose(*e), who, face_card::TILE_PX);
+            meshes.add(card_mesh(kit, &tile, face_card::TILE_PX))
+        })
+        .collect()
+}
+
+/// Which face a person shows far off: talking shows Talking's tile, asleep
+/// Sleepy's, else their expression's.
+fn card_expression(chosen: Expression, talking: bool, asleep: bool) -> Expression {
+    if talking {
+        Expression::Talking
+    } else if asleep {
+        Expression::Sleepy
+    } else {
+        chosen
+    }
+}
+
+/// Whether part `k` of [`pose_parts`] is drawn, `posed` whether its pose
+/// shows it and `card` the far card's share ([`FaceLod`]): the face's
+/// pieces while the card is not whole, the card while it shows at all,
+/// everything else as posed.
+fn part_drawn(k: usize, posed: bool, card: f32) -> bool {
+    match k {
+        6..=26 => posed && card < 1.0,
+        CARD => card > 0.0,
+        _ => posed,
+    }
 }
 
 /// A quad of the atlas: a cell's pixels on a `w` x `h` quad centred at its
@@ -696,10 +786,15 @@ fn setup(
     };
     let solid = materials.add(base(AlphaMode::Opaque));
     let masked = materials.add(base(AlphaMode::Mask(0.5)));
+    let card = materials.add(StandardMaterial {
+        depth_bias: CARD_DEPTH_BIAS,
+        ..base(AlphaMode::Opaque)
+    });
     let mut kit = Kit {
         swatch,
         solid,
         masked,
+        card,
         white: Handle::default(),
         pupil: Handle::default(),
         glint: Handle::default(),
@@ -737,6 +832,8 @@ struct Parts {
     /// Per side, a blush per level.
     blush: [[Entity; 3]; 2],
     mouth: Entity,
+    /// The far face card (`townsfolk` 15.2).
+    card: Entity,
 }
 
 /// One drawn figure.
@@ -747,6 +844,12 @@ struct Slot {
     who: Option<PersonId>,
     shown: f32,
     mouth: Mouth,
+    /// Its person's face cards, in [`Expression::ALL`]'s order, and the
+    /// one shown.
+    cards: Vec<Handle<Mesh>>,
+    card_shows: Expression,
+    /// Near pieces or far card, from the first frame it is posed.
+    lod: Option<FaceLod>,
 }
 
 /// A figure: its root at `at`, its parts built from `look`.
@@ -757,7 +860,7 @@ fn spawn_figure(
     person: &Person,
     at: Transform,
     proxy: bool,
-) -> (Entity, Parts, Figure) {
+) -> (Entity, Parts, Figure, Vec<Handle<Mesh>>) {
     let mut figure = Figure::of(&person.look);
     if person.spear {
         figure.with_spear();
@@ -793,21 +896,20 @@ fn spawn_figure(
             role: person.role.clone(),
         });
     }
-    let mut part = |mesh: Handle<Mesh>, masked: bool| {
+    let mut piece = |mesh: Handle<Mesh>, material: &Handle<StandardMaterial>| {
         commands
             .spawn((
                 Mesh3d(mesh),
-                MeshMaterial3d(if masked {
-                    kit.masked.clone()
-                } else {
-                    kit.solid.clone()
-                }),
+                MeshMaterial3d(material.clone()),
                 bevy::light::NotShadowCaster,
                 Transform::default(),
                 Visibility::Inherited,
                 ChildOf(root),
             ))
             .id()
+    };
+    let mut part = |mesh: Handle<Mesh>, masked: bool| {
+        piece(mesh, if masked { &kit.masked } else { &kit.solid })
     };
     let own = |meshes: &mut Assets<Mesh>, p: &Part| meshes.add(kit.mesh(p));
     let body = part(own(meshes, &figure.body), false);
@@ -831,20 +933,34 @@ fn spawn_figure(
     let brows = [0, 1].map(|_| part(brow.clone(), false));
     let blush = [0, 1].map(|_| blushes.clone().map(|b| part(b, false)));
     let mouth = part(kit.mouths[&Mouth::Smile].clone(), true);
-    (
-        root,
-        Parts {
-            body,
-            legs,
-            arms,
-            head,
-            eyes,
-            brows,
-            blush,
-            mouth,
-        },
-        figure,
-    )
+    // The far card, one mesh per expression baked from this person's own
+    // look (`townsfolk` 15.1 and 15.2), hidden until it is far.
+    let cards = card_meshes(kit, meshes, &CardLook::of(&person.look, &figure));
+    let resting = Expression::ALL
+        .iter()
+        .position(|e| *e == person.look.resting)
+        .unwrap_or(0);
+    let card = piece(cards[resting].clone(), &kit.card);
+    let parts = Parts {
+        body,
+        legs,
+        arms,
+        head,
+        eyes,
+        brows,
+        blush,
+        mouth,
+        card,
+    };
+    for k in 6..=26 {
+        commands
+            .entity(parts.get(k))
+            .insert(CrossFaded::Leaving(0.0));
+    }
+    commands
+        .entity(card)
+        .insert((CrossFaded::Coming(0.0), Visibility::Hidden));
+    (root, parts, figure, cards)
 }
 
 /// Where each part goes this frame, in the root's space: the mockup's
@@ -965,6 +1081,11 @@ fn pose_parts(
         26,
         Some(fc * t(Vec3::new(face.mouth_x, figure::MOUTH_Y, 0.002))),
     ));
+    // The far card, in the head's frame so it turns and nods with it.
+    out.push((
+        CARD,
+        Some(fc * t(Vec3::new(0.0, 0.0, face_card::CARD_PROUD_M))),
+    ));
     out
 }
 
@@ -979,6 +1100,7 @@ impl Parts {
             6..=17 => self.eyes[(k - 6) / 6][(k - 6) % 6],
             18 | 19 => self.brows[k - 18],
             20..=25 => self.blush[(k - 20) / 3][(k - 20) % 3],
+            CARD => self.card,
             _ => self.mouth,
         }
     }
@@ -1036,13 +1158,15 @@ fn prewarm(
     };
     let person = proxy_person();
     let at = Transform::from_translation(eye).with_scale(Vec3::splat(1e-4));
-    let (_, parts, _) = spawn_figure(&mut commands, &kit, &mut meshes, &person, at, true);
-    // Every piece shown, the arcs and blush too, so both materials draw.
+    let (_, parts, _, _) = spawn_figure(&mut commands, &kit, &mut meshes, &person, at, true);
+    // Every piece shown, the arcs, blush and far card too, so all three
+    // materials draw.
     for e in parts
         .eyes
         .iter()
         .flatten()
         .chain(parts.blush.iter().flatten())
+        .chain(std::iter::once(&parts.card))
     {
         commands.entity(*e).insert(Visibility::Inherited);
     }
@@ -1087,6 +1211,7 @@ fn step(
     mut visibility: Query<&mut Visibility>,
     mut faded: Query<&mut Faded>,
     mut mesh3d: Query<&mut Mesh3d>,
+    mut crossed: Query<&mut CrossFaded>,
 ) {
     let (Some(mut folk), Some(kit)) = (folk, kit) else {
         return;
@@ -1185,7 +1310,7 @@ fn step(
             continue;
         }
         let Some(l) = folk.live(*id) else { continue };
-        let (root, parts, figure) = spawn_figure(
+        let (root, parts, figure, cards) = spawn_figure(
             &mut commands,
             &kit,
             &mut meshes,
@@ -1200,6 +1325,9 @@ fn step(
             who: Some(*id),
             shown: 0.0,
             mouth: Mouth::Smile,
+            card_shows: l.person.look.resting,
+            cards,
+            lod: None,
         };
         match free {
             Some(f) => {
@@ -1264,8 +1392,15 @@ fn step(
             ]
         });
         // Lying in a bed is asleep, unless they are being talked to.
-        l.face
-            .set_asleep(matches!(l.posture, Some(Posture::Lie { .. })) && !l.talking);
+        let asleep = matches!(l.posture, Some(Posture::Lie { .. })) && !l.talking;
+        l.face.set_asleep(asleep);
+        // Near pieces or far card (`townsfolk` 15.3), by the eye's distance
+        // from the face.
+        let eye_m = to_eye.length() as f32;
+        let card = slot
+            .lod
+            .get_or_insert_with(|| FaceLod::new(eye_m))
+            .step(dt, eye_m);
         let face_pose = l.face.step(dt, l.chosen, look_at, l.talking);
         let doing = match l.posture {
             Some(Posture::Sit { seat_m }) => {
@@ -1306,8 +1441,18 @@ fn step(
         }
         for (k, at) in pose_parts(&slot.figure, &pose, &face_pose, &l.person.look) {
             let e = slot.parts.get(k);
+            if let Ok(mut c) = crossed.get_mut(e) {
+                let want = if k == CARD {
+                    CrossFaded::Coming(card)
+                } else {
+                    CrossFaded::Leaving(card)
+                };
+                if *c != want {
+                    *c = want;
+                }
+            }
             if let Ok(mut v) = visibility.get_mut(e) {
-                let want = if at.is_some() {
+                let want = if part_drawn(k, at.is_some(), card) {
                     Visibility::Inherited
                 } else {
                     Visibility::Hidden
@@ -1327,6 +1472,14 @@ fn step(
         {
             m.0 = kit.mouths[&face_pose.mouth].clone();
             slot.mouth = face_pose.mouth;
+        }
+        let shows = card_expression(l.chosen.expression, l.talking, asleep);
+        if shows != slot.card_shows
+            && let Some(i) = Expression::ALL.iter().position(|e| *e == shows)
+            && let Ok(mut m) = mesh3d.get_mut(slot.parts.card)
+        {
+            m.0 = slot.cards[i].clone();
+            slot.card_shows = shows;
         }
     }
 }

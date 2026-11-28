@@ -227,6 +227,22 @@ details.about[open]{display:grid;gap:10px}
 .ktrack{flex:none;position:relative;cursor:pointer}
 .kthumb{position:absolute;cursor:grab;touch-action:none}
 @media (max-width:760px){.tk-stage{height:72vh !important;min-height:420px;display:block}.tk-stage canvas{height:100%}}
+/* face LOD tab (version 14; townsfolk design "Faces far off are one baked card"): one 3D view, the baked atlas beside it */
+.fl-row{display:grid;grid-template-columns:minmax(0,1fr) 176px;gap:10px;align-items:start}
+.fl-atlas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;border:1px solid var(--line);border-radius:6px;background:var(--panel-solid);padding:8px}
+.fl-ak{grid-column:1 / -1;font:600 12px var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.fl-tile{display:grid;gap:2px;margin:0;justify-items:stretch;min-width:0}
+.fl-tile canvas{width:100%;aspect-ratio:1;height:auto;image-rendering:pixelated;image-rendering:crisp-edges;background:#2a241c;border-radius:3px;display:block}
+.fl-tile figcaption{font:500 10.5px var(--mono);color:var(--muted);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fl-ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:8px 14px;border:1px solid var(--line);border-radius:6px;background:var(--panel-solid);padding:10px 12px}
+.fl-ctl .fc-grp .btn{padding:4px 8px;font-size:13.5px}
+.fl-ctl input[type=range]{flex:1 1 100px;min-width:80px;accent-color:var(--amber);margin:0}
+.fl-val{font:600 13px var(--mono);font-variant-numeric:tabular-nums;width:54px;text-align:right;flex:none}
+.fl-labels span{position:absolute;transform:translate(-50%,-100%);font:500 11px var(--mono);color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:0 4px;white-space:nowrap}
+.fl-labels span.ring{color:var(--sky);transform:translate(-50%,-50%)}
+.fl-labels span.at{color:var(--amber)}
+@media (max-width:760px){.fl-row{grid-template-columns:minmax(0,1fr)}.fl-atlas{grid-template-columns:repeat(5,minmax(0,1fr))}}
+@media (max-width:560px){.fl-stage .fc-tri{bottom:auto;top:10px}}
 #err{position:fixed;left:8px;bottom:8px;max-width:60ch;background:#400;color:#fff;font:12px var(--mono);padding:6px;white-space:pre-wrap;z-index:9}
 </style>
 
@@ -242,7 +258,7 @@ details.about[open]{display:grid;gap:10px}
   </header>
 
   <nav class="tabs" role="tablist" aria-label="Parts of the mockup">
-    <button role="tab" data-tab="square">The square at night</button><button role="tab" data-tab="people">Peoples</button><button role="tab" data-tab="jobs">Roles</button><button role="tab" data-tab="figures">Character sheets</button><button role="tab" data-tab="days">Daily schedules</button><button role="tab" data-tab="talk">Talk and trade</button><button role="tab" data-tab="towns">In towns</button><button role="tab" data-tab="decisions">Decisions</button><button role="tab" data-tab="faces">Faces</button>
+    <button role="tab" data-tab="square">The square at night</button><button role="tab" data-tab="people">Peoples</button><button role="tab" data-tab="jobs">Roles</button><button role="tab" data-tab="figures">Character sheets</button><button role="tab" data-tab="days">Daily schedules</button><button role="tab" data-tab="talk">Talk and trade</button><button role="tab" data-tab="towns">In towns</button><button role="tab" data-tab="decisions">Decisions</button><button role="tab" data-tab="faces">Faces</button><button role="tab" data-tab="facelod">Face LOD</button>
   </nav>
 
   <section id="tab-square" class="tabpanel" role="tabpanel" aria-labelledby="sq-h">
@@ -363,6 +379,29 @@ details.about[open]{display:grid;gap:10px}
     </div>
   </section>
 
+  <section id="tab-facelod" class="tabpanel" role="tabpanel" aria-labelledby="fl-h" hidden>
+    <div class="sec-head fc-head"><div class="eyebrow">10 &middot; Face LOD</div><h2 id="fl-h">Faces far off</h2><button class="btn fc-info" id="flInfo" aria-haspopup="dialog" title="About this tab">i &middot; About</button></div>
+    <div class="fl-row">
+      <div class="stage fc-stage fl-stage" id="flStage" data-fit data-reserve="190">
+        <canvas id="fl" tabindex="0" aria-label="A village street at night lit by its lamps, with townsfolk standing from 5 to 60 metres down it, their faces modelled near and a baked card far off."></canvas>
+        <div class="fc-labels fl-labels" id="flLabels"></div>
+        <div class="fc-tri" id="flRead">-</div>
+        <div class="fc-pad" id="flPad"><button class="btn" data-lpad="f" aria-label="Walk forward">&#9650;</button><button class="btn" data-lpad="l" aria-label="Step left">&#9664;</button><button class="btn" data-lpad="b" aria-label="Walk back">&#9660;</button><button class="btn" data-lpad="r" aria-label="Step right">&#9654;</button></div>
+      </div>
+      <div class="fl-atlas" id="flAtlas" aria-label="The baked face atlas, one tile an expression"><div class="fl-ak" id="flAk">Atlas</div></div>
+    </div>
+    <div class="fl-ctl">
+      <div class="fc-grp"><span class="fc-k">View</span><button class="btn" data-lview="auto" aria-pressed="true">Auto</button><button class="btn" data-lview="near" aria-pressed="false">All near</button><button class="btn" data-lview="far" aria-pressed="false">All far</button></div>
+      <div class="fc-grp"><span class="fc-k">Switch</span><input id="flAt" type="range" min="5" max="60" step="0.5" value="20" aria-label="Switch distance, metres"><span class="fl-val" id="flAtV">20 m</span></div>
+      <div class="fc-grp"><span class="fc-k">Fade</span><input id="flFade" type="range" min="0" max="1.5" step="0.05" value="0.3" aria-label="Fade time, seconds"><span class="fl-val" id="flFadeV">0.30 s</span></div>
+      <div class="fc-grp"><span class="fc-k">Band</span><input id="flBand" type="range" min="0" max="5" step="0.1" value="1" aria-label="Band, metres"><span class="fl-val" id="flBandV">1.0 m</span></div>
+      <div class="fc-grp"><span class="fc-k">Offset</span><input id="flOff" type="range" min="0.2" max="5" step="0.1" value="1" aria-label="Card offset, centimetres"><span class="fl-val" id="flOffV">1.0 cm</span></div>
+      <div class="fc-grp"><span class="fc-k">Card</span><button class="btn" data-lres="16" aria-pressed="false">16 px</button><button class="btn" data-lres="32" aria-pressed="true">32 px</button><button class="btn" data-lres="64" aria-pressed="false">64 px</button></div>
+      <div class="fc-grp"><span class="fc-k">Zoom</span><input id="flZoom" type="range" min="1" max="8" step="0.25" value="1" aria-label="Zoom"><span class="fl-val" id="flZoomV">1x</span></div>
+      <div class="fc-grp"><span class="fc-k">Show</span><button class="btn" id="flRings" aria-pressed="false">Rings</button><button class="btn" id="flBack" aria-pressed="false">Walk back</button><button class="btn" id="flReset">Reset</button><button class="btn" id="flDay" aria-pressed="false">Day</button><button class="btn" id="flNight" aria-pressed="true">Night</button></div>
+    </div>
+  </section>
+
   <footer>Mockup for the owner, 2026-11-11, redrawn 2026-11-12 to look like the game (<span class="src">docs/mockups/ART-DIRECTION.md</span>). Proposal only: nothing on this page is built behaviour. Portraits and icons are pixel art drawn in code with the balatro-pixel-art kit, the solitaire collection's style (<span class="src">tools/art/npcs_art.py</span>); walls, roofs and ground are the game's settlement textures, copied byte for byte (<span class="src">docs/mockups/building/game/README.md</span>); the kiosk's metal panel is drawn the same way for the mockup (<span class="src">tools/art/building_art.py</span>).</footer>
 </div>
 <div id="err" hidden></div>
@@ -370,7 +409,7 @@ details.about[open]{display:grid;gap:10px}
   <div class="fc-card">
     <button class="fc-x" id="tkX" aria-label="Close">&#x2715;</button>
     <h3 id="tkModalH">Talk, trade and the board: what this tab shows</h3>
-    <p>Version 13. The trade columns and the job board scroll, and each trade column filters by shelf (below). Since version 12: the owner approved the game's talk, trade and job board panels on 2026-11-22, from the in-game captures (<span class="src">docs/screenshots/townsfolk-economy/talk.jpg</span>, <span class="src">trade.jpg</span>, <span class="src">board.jpg</span>), and said "I dont see trade panel": this tab showed an older draft (Orrin Vale, Mara Quell, made-up prices). It now shows the game's panels as the game draws them (<span class="src">crates/pbd-app/src/desktop/talk.rs</span>), over a townsperson who talks while a panel is open (design 30), by day and at night.</p>
+    <p>Version 14 (this tab is as version 13 left it; version 14 adds the Face LOD tab). The trade columns and the job board scroll, and each trade column filters by shelf (below). Since version 12: the owner approved the game's talk, trade and job board panels on 2026-11-22, from the in-game captures (<span class="src">docs/screenshots/townsfolk-economy/talk.jpg</span>, <span class="src">trade.jpg</span>, <span class="src">board.jpg</span>), and said "I dont see trade panel": this tab showed an older draft (Orrin Vale, Mara Quell, made-up prices). It now shows the game's panels as the game draws them (<span class="src">crates/pbd-app/src/desktop/talk.rs</span>), over a townsperson who talks while a panel is open (design 30), by day and at night.</p>
     <h4>What changed in version 13: long lists scroll and filter</h4>
     <ul>
       <li><b>A scroll bar in case there are lots of products</b> (the owner, 2026-11-22: "opt for a scroll bar incase theres lots of products"; <span class="src">townsfolk</span> design 38b). The panel keeps one height: each trade column, and the board's list, shows a window of seven rows however long the list is, and PURSE and BACK stay fixed under it. Each column scrolls on its own: the mouse wheel over it moves one whole row a notch, and beside it, only when its rows overflow, a scroll bar in the stone kit (the <span class="src">slider-track</span> piece on end, its thumb in the rune fill the settings sliders use) whose thumb is the shown share of the list. Drag the thumb, or press the track above or below it to move a window. Arrow keys on a focused row move to the next row and scroll it into view. The trader here sells everything a desert makes, twelve goods, and the pack holds nine goods it buys, so both columns overflow; the board has seven jobs and two headings.</li>
@@ -408,11 +447,48 @@ details.about[open]{display:grid;gap:10px}
     <p>The lineup is a studio shot with its own light, so it has no night; the square at night and the Faces tab's Night show these figures by their lamps.</p>
   </div>
 </div>
+<div class="fc-modal" id="flModal" hidden role="dialog" aria-modal="true" aria-labelledby="flModalH">
+  <div class="fc-card">
+    <button class="fc-x" id="flX" aria-label="Close">&#x2715;</button>
+    <h3 id="flModalH">Faces far off: what this tab shows</h3>
+    <p>Version 14, for the owner's ask of 2026-11-27: "looks like those eyeballs are zfighting in the distance, can you bake the face poses into a texture, so that anything more than like 20 m away uses that? make a mockup for me to tune crossfade LOD face details distance". The plan is <span class="src">townsfolk</span> design, "Faces far off are one baked card". Nothing here is in the game yet: the game's code waits on the numbers you pick here.</p>
+    <h4>The street</h4>
+    <ul>
+      <li>Nine townsfolk of the Fields folk stand 5, 10, 15, 20, 25, 30, 40, 50 and 60 m from the camera, each with another expression, each by a lamp post. The camera starts at the walker's eye, 1.6 m up, with the game's 60 degree view and its near plane of 0.05 m (<span class="src">desktop.rs</span>).</li>
+      <li>Lit at night by its own lamps and windows: every lamp lights what is near it wherever the camera is, and the moon is held at 0.035 so the lamps read. Day is a button.</li>
+      <li>Drag to look; the pad, WASD or the arrows walk. Walk back moves the camera steadily away down the street, at 1.5 m/s, so people cross the line one after another; it is off until pressed. Zoom narrows the view without moving the camera, so a face 40 m off can be looked at closely while the depth buffer still sees it 40 m off. Reset puts the camera back.</li>
+      <li>Nobody here wears a beard: a beard covers the mouth, and the card's mouth would show through it. Bearded folk need the beard in their tile (a tile per beard style, or the mouth cut where a beard is), an open point for the build.</li>
+    </ul>
+    <h4>Why the eyes fight</h4>
+    <ul>
+      <li>The modelled face is separate pieces laid on the head's front, each pushed a little off the one under it, as <span class="src">townsfolk.rs</span> does: the eye white 2 mm off the head, the pupil 1 mm above the white and the catch-light 1 mm above that, the lid at 5 mm and the lash at 6, the brows at 3, the blush at 1.5, the mouth at 2. The game sets no depth bias, so neither does this tab (the Faces tab biases its pieces; this one does not).</li>
+      <li>A depth buffer stores less and less of the distance the further away a thing is. In this page's WebGL (a 24-bit depth buffer, near plane 0.05 m) one step of depth is about the distance squared over 0.05 m times 2 to the 24: half a millimetre at 20 m, 2 mm at 40 m, 4 mm at 60 m. Once a step is wider than the gap between two pieces, which piece wins changes from pixel to pixel and frame to frame. All near shows it; Zoom shows it close.</li>
+      <li>Where the game's own fight starts depends on its depth format and its GPU, not measured here (this was built in a cloud session without the game's GPU path). The numbers above are this page's. In the cloud check of this page, on a software renderer, the modelled faces did not visibly fight out to 60 m; on a desktop GPU the browser may show it sooner or later than the sum says. Zoom on the 40 to 60 m folk with All near to look.</li>
+    </ul>
+    <h4>The plan, as built here</h4>
+    <ul>
+      <li><b>Near</b>: the modelled face, as now. It blinks.</li>
+      <li><b>Far</b>: past the switch distance one quad, the size of the face's area on the head, shows the person's expression from a baked atlas, its offset (1 cm by default) proud of the head, masked so the head's own colour shows round the features. One piece at one depth: nothing left to fight.</li>
+      <li><b>The bake</b>: at load, each expression's modelled face (the same figure, eyes open and looking ahead, head straight) is drawn flat and unlit by an orthographic camera into a render target one tile in size, and read back into one atlas, sampled nearest. The strip beside the view is that atlas. Lids, blush and brows are stored in key colours that each person's card swaps for their own skin, blush and brow colour, so one tile serves every person with that expression. A person's own eye size and spacing (about a tenth either way) is not in the tile; the fade hides the difference, and if it shows a tile can be baked per person.</li>
+      <li><b>The fade is a moment in time</b>: when a person crosses the switch distance, plus or minus half the band, their two faces cross-fade by an ordered dither for the fade time, and the fade finishes. Once started it runs to its end whatever the person or the camera does; nobody is left half dithered standing near the line. Inside the band a person keeps the face they have, so standing on the line does not flip.</li>
+      <li>All near and All far force one face on everyone, so the two can be compared at one distance. Rings marks every 10 m from the camera, the switch distance and the band in amber, and tags each person with their distance and face.</li>
+      <li>What the card loses: no blink, no gaze, no talking mouth past the line. At 20 m a face is a few pixels, and a talking person far off shows the Talking tile.</li>
+    </ul>
+    <h4>What to tune</h4>
+    <ul>
+      <li>Switch distance (20 m proposed), fade time (0.3 s), band (1 m), the card's resolution a tile (32 px) and its offset (1 cm). The game takes the numbers you settle on as <span class="src">face_card_m</span>, <span class="src">face_fade_s</span> and <span class="src">face_band_m</span>.</li>
+    </ul>
+  </div>
+</div>
 <div class="fc-modal" id="fcModal" hidden role="dialog" aria-modal="true" aria-labelledby="fcModalH">
   <div class="fc-card">
     <button class="fc-x" id="fcX" aria-label="Close">&#x2715;</button>
     <h3 id="fcModalH">Friendly faces: what this tab shows</h3>
     <p>The friendly townsperson of <span class="src">townsfolk</span> design 13 to 18 and 13a, the figure the game draws since version 9 was approved for it ("People approved. Build.phase 3", 2026-11-21). Since version 10 it is the only figure on the page: the square and the Character sheets wear it too, and the hexagonal-prism figure that stood beside it here as "today" is gone, since that is no longer the game's look.</p>
+    <h4>What changed in version 14</h4>
+    <ul>
+      <li>A new tab, <b>Face LOD</b> (<span class="src">townsfolk</span> design, "Faces far off are one baked card"), for the owner's ask of 2026-11-27 on eyes that z-fight a few tens of metres off: a street of townsfolk from 5 to 60 m at night, the modelled face near and one baked card far, cross-faded by dither at a switch distance to tune, with the baked atlas beside the view. Its own About says what it shows.</li>
+    </ul>
     <h4>What changed in version 12</h4>
     <ul>
       <li><b>Ears are one shaped piece</b> (design 38), under the owner's "I can see obvious primitives ... avoid obvioud primitives": version 9's ear was a 0.05 x 0.14 x 0.1 m box stood on the head's side. Each ear is now a tapered, slightly cupped form grown out of the side face: a root sunk into the head that flares into the side like a bevel, an irregular rounded outline wider at the top and narrowing to a lobe, a rim 42 mm out leaning back at its top, and a shallow cup inside it in the skin's shade. 40 triangles an ear; the hero is 734 with its face. The roll is unchanged.</li>
@@ -882,10 +958,10 @@ const $ = id => document.getElementById(id);
 // ===================================================================
 // Tabs: one part of the mockup at a time, so only one 3D view is ever on the page (owner, 2026-11-13).
 // The open tab is the URL's bare hash (#square, #people, #jobs, #figures, #days, #talk, #towns,
-// #decisions, #faces). The square's and the lineup's renderers are each made the first time their tab opens,
+// #decisions, #faces, #facelod). The square's and the lineup's renderers are each made the first time their tab opens,
 // and each frame loop runs only while its tab is showing.
 // ===================================================================
-const TABS = ["square", "people", "jobs", "figures", "days", "talk", "towns", "decisions", "faces"];
+const TABS = ["square", "people", "jobs", "figures", "days", "talk", "towns", "decisions", "faces", "facelod"];
 const TAB_HOOKS = {};   // tab -> { show(), hide() }
 const tabOf = h => { h = String(h || "").replace(/^#/, ""); return TABS.includes(h) ? h : null; };
 let TAB = tabOf(location.hash) || "square";
@@ -1617,6 +1693,333 @@ if (FQ.has("fview")) setView(FQ.get("fview"));
 if (FQ.has("ffp")) setFP(true);
 window.__faces = { FC, FP, setFP, stepFP, setExpr, setView, setHourF, setLayer, setBeard, hero: () => hero, crowd: () => crowd, buildCrowd, play, FO, triCount };
 if (TAB === "faces") TAB_HOOKS.faces.show();
+})();
+</script>
+<script>
+"use strict";
+// ===================================================================
+// Face LOD tab (version 14; townsfolk design "Faces far off are one baked card", owner 2026-11-27): a village
+// street at night with townsfolk from 5 to 60 m, near faces modelled (the kit's friend(), its pieces at their
+// real offsets and no depth bias, as the game draws them) and far faces one card from a baked atlas, swapped by
+// a dither cross-fade that starts when a person crosses the line and finishes. One renderer, made when the tab
+// first opens; its loop runs only while the tab shows. The camera moves only on input.
+// ===================================================================
+(function () {
+const FLC = { at: 20, fade: 0.3, band: 1, res: 32, off: 1, view: "auto", rings: false, night: true, zoom: 1, back: false };
+const { HA, HW, HC, EXPR, EXPR_KEYS, friend, setExprOn, liveFace, shade, mixHex } = FK;
+const flCanvas = $("fl"); let flr = null;
+const ls = new THREE.Scene(); ls.fog = new THREE.Fog(0x0e1424, 70, 170);
+const FL_EYE = 1.6, FL_FOV = 60, FL_WALK = 8.0, FL_BACK = 1.5;   // walking.rs EYE_HEIGHT, desktop.rs fov, WalkConfig walk_speed
+const lcam = new THREE.PerspectiveCamera(FL_FOV, 1, 0.05, 300);   // the game's near plane, 0.05 m (desktop.rs); no logarithmic depth
+const lsun = new THREE.DirectionalLight(0xffffff, 1); lsun.castShadow = true; lsun.shadow.mapSize.set(4096, 4096);
+Object.assign(lsun.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, near: 1, far: 200 }); lsun.shadow.bias = -0.0004; lsun.shadow.normalBias = 0.02;
+lsun.shadow.camera.updateProjectionMatrix(); lsun.target.position.set(0, 0, -15); ls.add(lsun, lsun.target);
+const lhemi = new THREE.HemisphereLight(0xffffff, 0x1a1a22, 0.3); ls.add(lhemi);
+const LL = [];
+const LLK = { lamp: [0xffd27a, 1.6, 5.2], window: [0xffa850, 0.6, 2.6] };   // the square's lamp; a window a little stronger than its, to light the wall round it
+const addLL = (x, y, z, k) => LL.push({ x, y, z, c: lin(LLK[k][0]), p: LLK[k][1], R: LLK[k][2], kind: k });
+const lampGlow = new THREE.MeshBasicMaterial({ color: 0xffd9a0 });
+const paneOn = new THREE.MeshBasicMaterial({ color: 0x1a1a22, side: THREE.DoubleSide });
+
+// ---- the street: hex cells of the engine's size, house fronts with lit windows, a lamp post by each person
+const ZF = -74, ZB = 44;
+const DISTS = [5, 10, 15, 20, 25, 30, 40, 50, 60];
+const MOODS = ["happy", "surprised", "talking", "delighted", "worried", "sleepy", "cross", "thinking", "sad"];
+const sideOf = i => i % 2 ? -1 : 1;
+const spotOf = i => { const x = sideOf(i) * 1.1, d = DISTS[i]; return [x, -Math.sqrt(d * d - x * x)]; };
+function post(GS, x, z, s) {   // a lamp post whose arm reaches s (+1 or -1) along x
+  const p = []; for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; p.push([x + 0.09 * Math.cos(a), z + 0.09 * Math.sin(a)]); }
+  GS.prism("timber", "timber", p, 0, 2.6); GS.box("timber", x + s * 0.25, 2.55, z, 0.5, 0.06, 0.06);
+  GS.box("iron", x + s * 0.45, 2.07, z, 0.26, 0.05, 0.26); GS.box("iron", x + s * 0.45, 2.45, z, 0.26, 0.05, 0.26);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.24, 0.16), lampGlow); m.position.set(x + s * 0.45, 2.26, z); ls.add(m);
+  addLL(x + s * 0.45, 2.26, z, "lamp");
+}
+(function street() {
+  const GS = new PBD.GeoSet();
+  for (let r = -34; r <= 20; r++) for (let q = -40; q <= 40; q++) {
+    const x = hx(q, r), z = hz(q, r);
+    if (Math.abs(x) > 10.5 || z < ZF || z > ZB) continue;
+    const pts = [0, 1, 2, 3, 4, 5].map(k => corner(q, r, k));
+    GS.prism(Math.abs(x) < 3 ? "a:path" : "a:grass", "a:grassside", pts, -1, 0, { uvTop: PBD.cellUV(x, z) });
+  }
+  const rn = rng(41);
+  for (const s of [-1, 1]) for (let zc = ZB - 5; zc > ZF + 4; zc -= 9) {
+    const wx = s * 7.4, fx = s * 7.24;   // the wall's middle, and its street face
+    GS.box("plaster", wx, 0, zc, 0.3, 3.1, 7.6);
+    for (const dz of [-3.7, 3.7]) GS.box("timber", fx - s * 0.04, 0, zc + dz, 0.08, 3.1, 0.18);
+    GS.box("timber", fx - s * 0.04, 3.0, zc, 0.1, 0.16, 7.8);
+    GS.box("plank", fx - s * 0.03, 0, zc - 1.9, 0.06, 2.1, 1.0);
+    const wz = zc + 1.4, lit = rn() < 0.7;
+    GS.box("timber", fx - s * 0.05, 0.95, wz, 0.1, 0.08, 1.2); GS.box("timber", fx - s * 0.05, 1.95, wz, 0.1, 0.08, 1.2);
+    for (const dz of [-0.56, 0, 0.56]) GS.box("timber", fx - s * 0.05, 0.95, wz + dz, 0.1, 1.08, dz ? 0.08 : 0.06);
+    const pane = new THREE.Mesh(new THREE.PlaneGeometry(1.06, 0.92), lit ? paneOn : new THREE.MeshBasicMaterial({ color: 0x14141a, side: THREE.DoubleSide }));
+    pane.position.set(fx - s * 0.005, 1.49, wz); pane.rotation.y = -s * Math.PI / 2; ls.add(pane);
+    if (lit) addLL(fx - s * 0.4, 1.5, wz, "window");
+  }
+  for (let i = 0; i < DISTS.length; i++) { const [x, z] = spotOf(i), s = sideOf(i); post(GS, s * 3.0, z + 1.5, -s); }
+  post(GS, -3.0, 3.5, 1); post(GS, 3.0, 14, -1); post(GS, -3.0, 25, 1); post(GS, 3.0, 36, -1);
+  PBD.addMeshes(GS, ls);
+})();
+
+// ---- the dither: a 4 x 4 ordered threshold in screen space. uVis is how much of the card shows (0 to 1);
+// the modelled face keeps the pixels the card does not, so during a fade both are drawn and every pixel is one
+const BAYER = `
+float flB2(vec2 a) { a = floor(a); return fract(a.x * 0.5 + a.y * a.y * 0.75); }
+float flB4(vec2 a) { return flB2(0.5 * a) * 0.25 + flB2(a); }`;
+function ditherMat(m, U, side, extra) {
+  PBD.patch(m);
+  const base = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    base(sh, r); sh.uniforms.uVis = U.uVis; sh.uniforms.uSide = { value: side };
+    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nuniform float uVis; uniform float uSide;" + BAYER)
+      .replace("#include <clipping_planes_fragment>", "#include <clipping_planes_fragment>\n{ float th = flB4(gl_FragCoord.xy) + 1.0 / 32.0; if (uSide < 0.5 ? th < uVis : th >= uVis) discard; }");
+    if (extra) extra(sh);
+  };
+  m.customProgramCacheKey = () => "pbd-lit-dither" + (extra ? "-card" : "");
+  return m;
+}
+// a face piece as the game draws it: the kit's material, its depth bias taken off, dithered
+function pieceMat(orig, U) { const m = orig.clone(); m.polygonOffset = false; m.polygonOffsetFactor = m.polygonOffsetUnits = 0; return ditherMat(m, U, 0); }
+
+// ---- the bake: every expression's modelled face, flat and unlit, ortho, one tile each, into one atlas ----
+const CW = HW - 2 * HC, CY0 = 0.02, CY1 = 0.48, CH = CY1 - CY0, CYM = (CY0 + CY1) / 2;   // the face's area on the head's front
+const BAKE_SPEC = { build: "round", h: 1.55, head: 1, eye: 0.98, gap: 0.1, nose: "none", hair: "bald", beard: "none", ears: false,
+  skin: 0xe2ac80, hairC: 0x8a5a2a, shirt: 0x5c9a46, pants: 0x7a5a3a, shoe: 0x4a3428, hatC: 0xb0884a };
+const KEY = { lid: new THREE.Color(1, 0, 1), blush: new THREE.Color(0, 1, 0), brow: new THREE.Color(0, 0, 1) };
+const ATLAS = { tex: null, res: 0, data: null };
+let bakeF = null, bakeScene = null;
+const bakeCam = new THREE.OrthographicCamera(-CW / 2, CW / 2, CY1, CY0, 0.001, 1); bakeCam.position.set(0, 0, 0.5);
+function bakeRig() {
+  if (bakeF) return;
+  bakeF = friend(BAKE_SPEC); const face = bakeF.face; face.parent.remove(face); face.position.set(0, 0, 0);
+  bakeScene = new THREE.Scene(); bakeScene.add(face);
+  const role = new Map(); for (const e of bakeF.eyes) { role.set(e.lid, "lid"); role.set(e.blush, "blush"); role.set(e.brow, "brow"); }
+  face.traverse(m => {
+    if (!m.isMesh) return; const r = role.get(m), o = m.material;
+    m.material = r ? new THREE.MeshBasicMaterial({ color: KEY[r] }) : o.map ? new THREE.MeshBasicMaterial({ map: o.map, alphaTest: 0.5 }) : new THREE.MeshBasicMaterial({ color: o.color.clone() });
+  });
+}
+function poseForBake(F, k) {
+  setExprOn(F, k, true); F.look = null; F.talkE = false; F.blinkT = -1; F.nextBlink = 1e9; liveFace(F, 0);
+}
+function bake() {
+  bakeRig();
+  const res = FLC.res, N = EXPR_KEYS.length, data = new Uint8Array(N * res * res * 4), buf = new Uint8Array(res * res * 4);
+  const rt = new THREE.WebGLRenderTarget(res, res, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, format: THREE.RGBAFormat, encoding: THREE.sRGBEncoding });
+  const prevC = new THREE.Color(); flr.getClearColor(prevC); const prevA = flr.getClearAlpha();
+  flr.setClearColor(0x000000, 0);
+  EXPR_KEYS.forEach((k, t) => {
+    poseForBake(bakeF, k);
+    flr.setRenderTarget(rt); flr.clear(); flr.render(bakeScene, bakeCam);
+    flr.readRenderTargetPixels(rt, 0, 0, res, res, buf);
+    for (let y = 0; y < res; y++) data.set(buf.subarray(y * res * 4, (y + 1) * res * 4), (y * N * res + t * res) * 4);
+  });
+  flr.setRenderTarget(null); flr.setClearColor(prevC, prevA); rt.dispose();
+  const tex = new THREE.DataTexture(data, N * res, res, THREE.RGBAFormat);
+  tex.magFilter = tex.minFilter = THREE.NearestFilter; tex.generateMipmaps = false; tex.encoding = THREE.sRGBEncoding; tex.needsUpdate = true;
+  if (ATLAS.tex) ATLAS.tex.dispose();
+  Object.assign(ATLAS, { tex, res, data });
+  for (const P of PEOPLE) { P.card.material.map = tex; P.card.material.needsUpdate = true; }
+  drawStrip();
+}
+// the strip: each tile as the card shows it on the bake's own face (keys swapped for its skin, blush and brows)
+const stripTiles = [];
+(function strip() {
+  const box = $("flAtlas");
+  for (const k of EXPR_KEYS) { const f = document.createElement("figure"); f.className = "fl-tile"; const c = document.createElement("canvas"); const cap = document.createElement("figcaption"); cap.textContent = k; f.append(c, cap); box.appendChild(f); stripTiles.push(c); }
+})();
+function drawStrip() {
+  const { res, data } = ATLAS, N = EXPR_KEYS.length, sk = new THREE.Color(BAKE_SPEC.skin), br = new THREE.Color(shade(BAKE_SPEC.hairC, 0.62));
+  $("flAk").textContent = `Atlas ${N} x ${res} px`;
+  EXPR_KEYS.forEach((k, t) => {
+    const c = stripTiles[t]; c.width = c.height = res; const cx = c.getContext("2d"), im = cx.createImageData(res, res);
+    const bl = new THREE.Color(mixHex(BAKE_SPEC.skin, 0xf27a7a, 0.55 * (EXPR[k].blush || 0)));
+    for (let y = 0; y < res; y++) for (let x = 0; x < res; x++) {
+      const s = ((y * N * res) + t * res + x) * 4, d = ((res - 1 - y) * res + x) * 4;
+      let r = data[s], g = data[s + 1], b = data[s + 2], a = data[s + 3];
+      const key = r > 230 && g < 25 && b > 230 ? sk : g > 230 && r < 25 && b < 25 ? bl : b > 230 && r < 25 && g < 25 ? br : null;
+      if (key) { r = key.r * 255; g = key.g * 255; b = key.b * 255; }
+      if (a < 128) { r = sk.r * 255; g = sk.g * 255; b = sk.b * 255; a = 255; }
+      im.data[d] = r; im.data[d + 1] = g; im.data[d + 2] = b; im.data[d + 3] = a;
+    }
+    cx.putImageData(im, 0, 0);
+  });
+}
+
+// ---- the card: one quad on the head's front, its tile's texels, keys swapped for this person's colours ----
+function cardMat(P) {
+  const m = new THREE.MeshStandardMaterial({ map: ATLAS.tex, color: 0xffffff, roughness: 0.95, metalness: 0, alphaTest: 0.5, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  return ditherMat(m, P.U, 1, sh => {
+    Object.assign(sh.uniforms, { uSkin: { value: P.skin }, uBrow: { value: P.brow }, uBlush: { value: P.blush } });
+    sh.fragmentShader = sh.fragmentShader.replace("#include <common>", "#include <common>\nuniform vec3 uSkin; uniform vec3 uBrow; uniform vec3 uBlush;")
+      .replace("#include <map_fragment>", `#ifdef USE_MAP
+  vec4 texelColor = texture2D(map, vUv);
+  vec3 kc = texelColor.rgb;
+  texelColor = mapTexelToLinear(texelColor);
+  if (kc.r > 0.9 && kc.g < 0.1 && kc.b > 0.9) texelColor.rgb = uSkin;
+  else if (kc.g > 0.9 && kc.r < 0.1 && kc.b < 0.1) texelColor.rgb = uBlush;
+  else if (kc.b > 0.9 && kc.r < 0.1 && kc.g < 0.1) texelColor.rgb = uBrow;
+  diffuseColor *= texelColor;
+#endif`);
+  });
+}
+function cardGeo(t) {
+  const g = new THREE.PlaneGeometry(CW, CH), N = EXPR_KEYS.length, u0 = t / N, u1 = (t + 1) / N, uv = g.attributes.uv;
+  uv.setXY(0, u0, 1); uv.setXY(1, u1, 1); uv.setXY(2, u0, 0); uv.setXY(3, u1, 0); uv.needsUpdate = true; return g;
+}
+
+// ---- the people ---------------------------------------------------------------------------------------
+const PEOPLE = [], FL_SEED = 11;
+const peopleG = new THREE.Group(); ls.add(peopleG);
+for (let i = 0; i < DISTS.length; i++) {
+  const S = FK.genSpec(FL_SEED, i, PEOPLES.fields); S.beard = "none"; S.mood = MOODS[i];
+  const F = friend(S); setExprOn(F, S.mood, true);
+  const [x, z] = spotOf(i); F.g.position.set(x, 0, z); F.g.rotation.y = Math.atan2(-x, -z); peopleG.add(F.g);
+  const P = { F, i, U: { uVis: { value: 0 } }, skin: lin(S.skin), brow: lin(shade(S.hairC, 0.62)), blush: lin(mixHex(S.skin, 0xf27a7a, 0.55 * (EXPR[S.mood].blush || 0))),
+    state: 0, fade: null, d: DISTS[i], headW: new THREE.Vector3(), tag: document.createElement("span") };
+  const swap = new Map();
+  F.face.traverse(m => { if (!m.isMesh) return; let n = swap.get(m.material); if (!n) { n = pieceMat(m.material, P.U); swap.set(m.material, n); } m.material = n; });
+  for (const e of F.eyes) e.blushM = e.blush.material;
+  P.card = new THREE.Mesh(cardGeo(EXPR_KEYS.indexOf(S.mood)), cardMat(P)); P.card.position.set(0, CYM, HA + FLC.off / 100); P.card.visible = false; P.card.receiveShadow = true; F.head.add(P.card);
+  $("flLabels").appendChild(P.tag); P.tag.hidden = true;
+  PEOPLE.push(P);
+}
+ls.updateMatrixWorld(true);
+for (const P of PEOPLE) P.F.head.localToWorld(P.headW.set(0, FK.EYE_Y, HA));
+
+// ---- rings every 10 m round the camera, and the switch distance with its band in amber ----------------
+const ringGeo = (() => { const p = []; for (let k = 0; k <= 160; k++) { const a = k / 160 * Math.PI * 2; p.push(Math.cos(a), 0, Math.sin(a)); } const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(p, 3)); return g; })();
+const ringsG = new THREE.Group(); ringsG.visible = false; ls.add(ringsG);
+const ringM = new THREE.LineBasicMaterial({ color: 0x8fc3d8, fog: false });
+const atM = new THREE.LineBasicMaterial({ color: 0xf0b43c, fog: false });
+const RING_R = [10, 20, 30, 40, 50, 60], ringTags = [];
+for (const r of RING_R) { const l = new THREE.Line(ringGeo, ringM); l.scale.setScalar(r); ringsG.add(l); const s = document.createElement("span"); s.className = "ring"; s.textContent = r + " m"; s.hidden = true; $("flLabels").appendChild(s); ringTags.push([r, s]); }
+const atRings = [new THREE.Line(ringGeo, atM), new THREE.Line(ringGeo, atM)]; ringsG.add(...atRings);
+const atTag = document.createElement("span"); atTag.className = "ring at"; atTag.hidden = true; $("flLabels").appendChild(atTag);
+
+// ---- the camera: the walker's eye, moved only by the viewer (or Walk back, off until pressed) ----------
+const CAM0 = { x: 0, z: 0, yaw: 0, pitch: -0.03 };
+const CAM = Object.assign({ keys: new Set() }, CAM0);
+function placeLCam() { lcam.position.set(CAM.x, FL_EYE, CAM.z); lcam.rotation.set(CAM.pitch, CAM.yaw, 0, "YXZ"); }
+function setZoom(z) { FLC.zoom = z; lcam.fov = 2 * Math.atan(Math.tan(FL_FOV / 2 * Math.PI / 180) / z) * 180 / Math.PI; lcam.updateProjectionMatrix(); $("flZoom").value = z; $("flZoomV").textContent = (Math.round(z * 100) / 100) + "x"; }
+(function look(el) {
+  const pts = new Map();
+  el.addEventListener("pointerdown", e => { el.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); });
+  el.addEventListener("pointermove", e => { const p = pts.get(e.pointerId); if (!p || pts.size > 1) return; const k = 0.0045 / FLC.zoom; CAM.yaw -= (e.clientX - p[0]) * k; CAM.pitch = clamp(CAM.pitch - (e.clientY - p[1]) * k, -1.35, 1.35); p[0] = e.clientX; p[1] = e.clientY; });
+  const up = e => pts.delete(e.pointerId); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+  el.addEventListener("wheel", e => { e.preventDefault(); setZoom(clamp(FLC.zoom * Math.exp(-e.deltaY * 0.0015), 1, 8)); }, { passive: false });
+  el.addEventListener("contextmenu", e => e.preventDefault());
+})(flCanvas);
+const LKEY = { KeyW: "f", ArrowUp: "f", KeyS: "b", ArrowDown: "b", KeyA: "l", ArrowLeft: "l", KeyD: "r", ArrowRight: "r" };
+addEventListener("keydown", e => { if (TAB !== "facelod" || !LKEY[e.code] || (e.target.closest && e.target.closest("input,textarea,select"))) return; e.preventDefault(); CAM.keys.add(LKEY[e.code]); });
+addEventListener("keyup", e => { if (LKEY[e.code]) CAM.keys.delete(LKEY[e.code]); });
+addEventListener("blur", () => CAM.keys.clear());
+document.querySelectorAll("[data-lpad]").forEach(b => { const k = b.dataset.lpad, off = () => CAM.keys.delete(k); b.addEventListener("pointerdown", e => { e.preventDefault(); b.setPointerCapture(e.pointerId); CAM.keys.add(k); }); b.addEventListener("pointerup", off); b.addEventListener("pointercancel", off); b.addEventListener("lostpointercapture", off); });
+function stepCam(dt) {
+  const K = CAM.keys, f = (K.has("f") ? 1 : 0) - (K.has("b") ? 1 : 0), r = (K.has("r") ? 1 : 0) - (K.has("l") ? 1 : 0);
+  if (f || r) { const n = Math.hypot(f, r), sy = Math.sin(CAM.yaw), cy = Math.cos(CAM.yaw), s = FL_WALK * dt / n; CAM.x += (-sy * f + cy * r) * s; CAM.z += (-cy * f - sy * r) * s; }
+  if (FLC.back) { CAM.z += FL_BACK * dt; if (CAM.z >= ZB - 3) setBack(false); }
+  for (const P of PEOPLE) { const dx = CAM.x - P.F.g.position.x, dz = CAM.z - P.F.g.position.z, d = Math.hypot(dx, dz); if (d < 0.45) { if (d > 1e-4) { CAM.x = P.F.g.position.x + dx * 0.45 / d; CAM.z = P.F.g.position.z + dz * 0.45 / d; } else CAM.z += 0.45; } }
+  CAM.x = clamp(CAM.x, -6.6, 6.6); CAM.z = clamp(CAM.z, ZF + 2, ZB - 3);
+}
+
+// ---- the switch: near, far, or fading with a start time; a fade once started runs to its end ------------
+function stepLOD(P, now) {
+  P.d = lcam.position.distanceTo(P.headW);
+  if (FLC.view !== "auto") { P.state = FLC.view === "far" ? 1 : 0; P.fade = null; }
+  else {
+    if (P.fade && now - P.fade.t0 >= FLC.fade) { P.state = P.fade.to; P.fade = null; }
+    const h = FLC.band / 2, want = P.d > FLC.at + h ? 1 : P.d < FLC.at - h ? 0 : (P.fade ? P.fade.to : P.state);
+    if (!P.fade && want !== P.state) { if (FLC.fade > 0 && P.seen) P.fade = { to: want, t0: now }; else P.state = want; }
+  }
+  P.seen = true;
+  const k = P.fade ? clamp((now - P.fade.t0) / FLC.fade, 0, 1) : 0, v = P.fade ? (P.fade.to ? k : 1 - k) : P.state;
+  P.U.uVis.value = v; P.F.face.visible = v < 1; P.card.visible = v > 0;
+  return P.fade ? "fade" : P.state ? "card" : "near";
+}
+
+// ---- day and night ------------------------------------------------------------------------------------
+function setNight(on) {
+  FLC.night = on; $("flNight").setAttribute("aria-pressed", on); $("flDay").setAttribute("aria-pressed", !on);
+  const bg = new THREE.Color(on ? 0x0e1424 : 0x9fc6e2); ls.background = bg; ls.fog.color.copy(bg);
+  if (on) { lsun.color.set(0x8fa6d8); lsun.intensity = 0.035; lsun.position.set(-0.4, 0.7, 0.55).normalize().multiplyScalar(60).add(lsun.target.position); }
+  else { lsun.color.setHSL(0.09, 0.5, 0.85); lsun.intensity = 1.8; lsun.position.set(0.55, 0.75, 0.35).normalize().multiplyScalar(60).add(lsun.target.position); }
+  lhemi.intensity = on ? 0.008 : 0.57; lhemi.color.copy(bg).lerp(new THREE.Color(0xffffff), 0.35); lhemi.groundColor.set(on ? 0x1a1a22 : 0x5a5040);
+  PBD.LU.uLamp.value = on ? 0.85 : 0;
+  lampGlow.color.set(on ? 0xffd9a0 : 0x6a655a); paneOn.color.setRGB(...(on ? [1.0, 0.72, 0.36] : [0.12, 0.13, 0.16]));
+}
+
+// ---- controls -----------------------------------------------------------------------------------------
+function setLView(v) { FLC.view = v; document.querySelectorAll("[data-lview]").forEach(b => b.setAttribute("aria-pressed", b.dataset.lview === v)); }
+function setBack(on) { FLC.back = on; $("flBack").setAttribute("aria-pressed", on); }
+function setRings(on) { FLC.rings = on; ringsG.visible = on; $("flRings").setAttribute("aria-pressed", on); }
+function setRes(r) { FLC.res = r; document.querySelectorAll("[data-lres]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.lres === r)); if (flr) bake(); }
+function setOff(cm) { FLC.off = cm; for (const P of PEOPLE) P.card.position.z = HA + cm / 100; $("flOff").value = cm; $("flOffV").textContent = cm.toFixed(1) + " cm"; }
+const slider = (id, key, fmt) => { const el = $(id); el.addEventListener("input", () => { FLC[key] = +el.value; $(id + "V").textContent = fmt(FLC[key]); }); };
+slider("flAt", "at", v => (v % 1 ? v.toFixed(1) : v) + " m"); slider("flFade", "fade", v => v.toFixed(2) + " s"); slider("flBand", "band", v => v.toFixed(1) + " m");
+$("flOff").addEventListener("input", e => setOff(+e.target.value));
+$("flZoom").addEventListener("input", e => setZoom(+e.target.value));
+document.querySelectorAll("[data-lview]").forEach(b => b.addEventListener("click", () => setLView(b.dataset.lview)));
+document.querySelectorAll("[data-lres]").forEach(b => b.addEventListener("click", () => setRes(+b.dataset.lres)));
+$("flRings").addEventListener("click", () => setRings(!FLC.rings));
+$("flBack").addEventListener("click", () => setBack(!FLC.back));
+$("flReset").addEventListener("click", () => { setBack(false); Object.assign(CAM, CAM0); setZoom(1); });
+$("flDay").addEventListener("click", () => setNight(false));
+$("flNight").addEventListener("click", () => setNight(true));
+const lmodal = $("flModal");
+$("flInfo").addEventListener("click", () => { lmodal.hidden = false; $("flX").focus(); });
+$("flX").addEventListener("click", () => { lmodal.hidden = true; });
+lmodal.addEventListener("click", e => { if (e.target === lmodal) lmodal.hidden = true; });
+addEventListener("keydown", e => { if (e.key === "Escape" && !lmodal.hidden) lmodal.hidden = true; });
+
+// ---- the frame ----------------------------------------------------------------------------------------
+function lResize() { const w = flCanvas.clientWidth, h = flCanvas.clientHeight; if (!flr || !w) return; flr.setSize(w, h, false); lcam.aspect = w / h; lcam.updateProjectionMatrix(); }
+addEventListener("resize", lResize);
+const LV = new THREE.Vector3();
+// a label at a world point; hidden off screen, or where it would cover a label already placed this frame
+const PLACED = [];
+function tagAt(el, x, y, z) {
+  LV.set(x, y, z).project(lcam); let off = LV.z > 1 || Math.abs(LV.x) > 1.05 || Math.abs(LV.y) > 1.05;
+  const sx = (LV.x + 1) / 2 * flCanvas.clientWidth, sy = (1 - LV.y) / 2 * flCanvas.clientHeight, w = el.textContent.length * 6.8 + 12;
+  if (!off) for (const [a, b, c] of PLACED) if (Math.abs(sx - a) < (w + c) / 2 && Math.abs(sy - b) < 18) { off = true; break; }
+  el.hidden = off; if (off) return; PLACED.push([sx, sy, w]); el.style.left = sx + "px"; el.style.top = sy + "px";
+}
+let lLast = 0, lRun = false, lRaf = 0;
+function lFrame(now) {
+  if (!lRun) return;
+  const dt = clamp((now - lLast) / 1000, 0, 0.05); lLast = now; const t = now / 1000;
+  stepCam(dt); placeLCam(); lcam.updateMatrixWorld();
+  const n = { near: 0, fade: 0, card: 0 };
+  for (const P of PEOPLE) {
+    const s = stepLOD(P, t); n[s]++;
+    if (P.F.face.visible) liveFace(P.F, dt);
+    P.tag.textContent = `${P.d.toFixed(0)} m ${s}`;
+  }
+  PLACED.length = 0;
+  if (FLC.rings) {
+    ringsG.position.set(CAM.x, 0.03, CAM.z);
+    const h = Math.max(FLC.band / 2, 0.02); atRings[0].scale.setScalar(Math.max(0.1, FLC.at - h)); atRings[1].scale.setScalar(FLC.at + h);
+    const fx = -Math.sin(CAM.yaw), fz = -Math.cos(CAM.yaw), rx = -fz, rz = fx;   // forward, and right of it
+    for (const [r, s] of ringTags) { const a = Math.asin(clamp(2.4 / r, -1, 1)); tagAt(s, CAM.x + (fx * Math.cos(a) - rx * Math.sin(a)) * r, 0.05, CAM.z + (fz * Math.cos(a) - rz * Math.sin(a)) * r); }
+    const aa = Math.asin(clamp(2.4 / FLC.at, -1, 1));
+    atTag.textContent = `switch ${FLC.at} m`; tagAt(atTag, CAM.x + (fx * Math.cos(aa) + rx * Math.sin(aa)) * FLC.at, 0.05, CAM.z + (fz * Math.cos(aa) + rz * Math.sin(aa)) * FLC.at);
+    for (const P of PEOPLE) tagAt(P.tag, P.F.g.position.x, P.F.spec.h + 0.35, P.F.g.position.z);
+  } else { for (const [, s] of ringTags) s.hidden = true; atTag.hidden = true; for (const P of PEOPLE) P.tag.hidden = true; }
+  $("flRead").textContent = `near ${n.near} \u00b7 fading ${n.fade} \u00b7 card ${n.card}`;
+  flr.render(ls, lcam);
+  lRaf = requestAnimationFrame(lFrame);
+}
+TAB_HOOKS.facelod = {
+  show() {
+    if (!flr) { flr = new THREE.WebGLRenderer({ canvas: flCanvas, antialias: true }); flr.setPixelRatio(Math.min(2, devicePixelRatio)); flr.outputEncoding = THREE.sRGBEncoding; flr.shadowMap.enabled = true; flr.shadowMap.type = THREE.PCFSoftShadowMap; bake(); }
+    PBD.setLights(LL); setNight(FLC.night); lResize();
+    if (!lRun) { lRun = true; lLast = performance.now(); lRaf = requestAnimationFrame(lFrame); }
+  },
+  hide() { lRun = false; CAM.keys.clear(); setBack(false); cancelAnimationFrame(lRaf); PBD.setLights(LIGHTS); setHour(STATE.hour); },
+};
+setZoom(1);
+window.__facelod = { FLC, CAM, PEOPLE, setLView, setRings, setRes, setOff, setZoom, setNight, setBack, bake, ATLAS };
+if (TAB === "facelod") TAB_HOOKS.facelod.show();
 })();
 </script>
 <script src="npcs/talk-assets.js?v=13"></script>
