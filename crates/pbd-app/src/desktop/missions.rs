@@ -103,7 +103,14 @@ pub fn spawn(mut commands: Commands, kit: Res<UiKit>) {
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::FlexStart,
                 row_gap: px(3),
-                padding: UiRect::axes(px(10), px(8)),
+                // The frame's bottom edge is thicker than its top, so the
+                // last line (often the dim hint) needs more room under it.
+                padding: UiRect {
+                    left: px(10),
+                    right: px(10),
+                    top: px(8),
+                    bottom: px(13),
+                },
                 min_width: px(150),
                 ..default()
             },
