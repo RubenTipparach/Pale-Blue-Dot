@@ -143,6 +143,9 @@ pub fn input(
                     line.typed(&event.logical_key);
                 }
             }
+            // Every key typed is the line's: the pack, the map, the
+            // missions and the rest, read after this, do not see it.
+            keys.clear();
         }
         _ => typed.clear(),
     }
